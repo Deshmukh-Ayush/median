@@ -1,0 +1,9 @@
+dist/
+node_modules/
+.next/
+.turbo/
+coverage/
+package-lock.json
+apps/web/drizzle/
+next-env.d.ts
+AGENTS.md

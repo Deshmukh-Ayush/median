@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/ledger",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@workspace/eslint-config": "*",
+    "@workspace/typescript-config": "*",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}
