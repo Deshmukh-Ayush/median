@@ -10,6 +10,7 @@
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md}\"",
     "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
     "analyze": "cross-env ANALYZE=true next build --webpack",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -49,7 +50,8 @@
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   },
   "engines": {
     "node": ">=22"
