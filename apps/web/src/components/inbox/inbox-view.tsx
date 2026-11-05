@@ -271,7 +271,7 @@ export function InboxView({
                   <input
                     type="checkbox"
                     aria-label={`Select ${row.narration}`}
-                    className="mt-1 size-4 shrink-0 accent-[var(--color-accent-button)]"
+                    className="mt-1 size-4 shrink-0"
                     checked={checked.has(row.id)}
                     onChange={() => toggle(row.id)}
                   />
