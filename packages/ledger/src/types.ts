@@ -1,4 +1,4 @@
-import type { Money } from "./money.js"
+import type { Money } from "./money"
 
 export type AccountType =
   "asset" | "liability" | "equity" | "income" | "expense"

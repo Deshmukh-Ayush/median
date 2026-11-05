@@ -1,5 +1,5 @@
-import { InvalidMoneyError, paise } from "./money.js"
-import type { Money } from "./money.js"
+import { InvalidMoneyError, paise } from "./money"
+import type { Money } from "./money"
 
 /**
  * Groups the digits of a non-negative integer string the Indian way:

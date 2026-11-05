@@ -1,6 +1,6 @@
-import { ZERO, addMoney } from "./money.js"
-import type { Money } from "./money.js"
-import type { JournalEntry } from "./types.js"
+import { ZERO, addMoney } from "./money"
+import type { Money } from "./money"
+import type { JournalEntry } from "./types"
 
 export type EntryValidationError =
   | { readonly code: "NO_LINES" }

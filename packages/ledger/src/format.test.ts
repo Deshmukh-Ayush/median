@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { formatInr, parseRupees } from "./format.js"
-import { InvalidMoneyError, paise } from "./money.js"
+import { formatInr, parseRupees } from "./format"
+import { InvalidMoneyError, paise } from "./money"
 
 describe("formatInr", () => {
   it("uses lakh/crore grouping", () => {
