@@ -9,9 +9,11 @@ import { auditLog, ledgerAccounts, organizationSettings } from "../db/schema"
 
 /**
  * Organisation metadata the app may pass to Better Auth's createOrganization,
- * e.g. `metadata: { industry: "d2c" }`. Unknown or missing → SaaS template.
+ * e.g. `metadata: { businessType: "d2c" }` (`industry` is still accepted).
+ * Unknown or missing → SaaS template.
  */
 const orgMetadataSchema = z.object({
+  businessType: z.enum(INDUSTRIES).optional(),
   industry: z.enum(INDUSTRIES).optional(),
 })
 
@@ -25,7 +27,9 @@ export function industryFromMetadata(metadata: unknown): Industry {
     }
   }
   const parsed = orgMetadataSchema.safeParse(value ?? {})
-  return parsed.success ? (parsed.data.industry ?? "saas") : "saas"
+  return parsed.success
+    ? (parsed.data.businessType ?? parsed.data.industry ?? "saas")
+    : "saas"
 }
 
 /**
@@ -57,7 +61,10 @@ export async function seedOrganization(input: {
   const [, inserted] = await db.batch([
     db
       .insert(organizationSettings)
-      .values({ organizationId: input.orgId, industry: input.industry })
+      .values({
+        organizationId: input.orgId,
+        businessType: input.industry,
+      })
       .onConflictDoNothing(),
     db
       .insert(ledgerAccounts)
@@ -73,7 +80,7 @@ export async function seedOrganization(input: {
       entity: "organization",
       entityId: input.orgId,
       before: null,
-      after: { industry: input.industry, accounts: rows.length },
+      after: { businessType: input.industry, accounts: rows.length },
       source: "org_setup",
     }),
   ])
