@@ -1,16 +1,23 @@
 import * as React from "react"
 import { cn } from "cn"
-import type { Money as MoneyValue } from "@workspace/ledger"
+import type { Money as MoneyValue } from "@workspace/contracts"
 
 import { formatMoney } from "@workspace/ui/lib/format-money"
 
 type MoneyProps = Omit<React.ComponentProps<"data">, "value" | "children"> & {
   /** Integer paise. */
   value: MoneyValue
-  /** Lakh/crore form from 1 lakh up (₹1.5 L). The full amount stays available. */
+  /**
+   * Lakh/crore form from 1 lakh up (₹1.5 L), rounded to the rupee below that.
+   * For headline numbers (StatCard, dashboard). The exact amount stays in the
+   * tooltip and for screen readers.
+   */
   compact?: boolean
-  /** Show paise. Default false (rounded to the rupee, display only). */
-  paise?: boolean
+  /**
+   * Round to the nearest rupee (₹1,23,457). Default false: exact paise
+   * (₹1,23,456.78), which is what tables and ledgers should show.
+   */
+  roundToRupee?: boolean
   /** `ledger` puts negatives in brackets for CA views. */
   variant?: "default" | "ledger"
   /**
@@ -20,20 +27,21 @@ type MoneyProps = Omit<React.ComponentProps<"data">, "value" | "children"> & {
   tone?: "default" | "danger"
 }
 
-/** An amount of money: ₹1,23,45,678, tabular figures, true minus sign. */
+/** An amount of money: exact by default (₹1,23,456.78), tabular figures, true minus sign. */
 function Money({
   value,
   compact = false,
-  paise = false,
+  roundToRupee = false,
   variant = "default",
   tone = "default",
   className,
   ...props
 }: MoneyProps) {
   const ledger = variant === "ledger"
-  const full = formatMoney(value, { paise, ledger })
-  const shown = compact ? formatMoney(value, { compact, paise, ledger }) : full
-  const isCompacted = shown !== full
+  const exact = formatMoney(value, { ledger })
+  const shown = formatMoney(value, { compact, roundToRupee, ledger })
+  const isCompacted = shown !== exact
+  const full = exact
   return (
     <data
       data-slot="money"

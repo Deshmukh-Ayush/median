@@ -34,7 +34,7 @@
   /* Borders */
   --border-subtle: #e6e6e8;
   --border-default: #dcdce0;
-  --border-input: #b9b9c0;
+  --border-input: #8e8e96;
 
   /* Brand accent. Only Button's primary variant and the logo may use these
      (enforced by src/lib/accent-usage.test.ts). */

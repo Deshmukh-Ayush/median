@@ -1,8 +1,8 @@
 import * as React from "react"
 import { cn } from "cn"
 import { ArrowDownRightIcon, ArrowUpRightIcon, MinusIcon } from "lucide-react"
+import type { Money as MoneyValue } from "@workspace/contracts"
 import { paise } from "@workspace/ledger"
-import type { Money as MoneyValue } from "@workspace/ledger"
 
 import { Money } from "@workspace/ui/components/money"
 import { Skeleton } from "@workspace/ui/components/skeleton"
@@ -23,6 +23,7 @@ type StatCardProps = Omit<React.ComponentProps<"div">, "children"> & {
   change?: StatChange
   /** Where the number clicks through to (the entries behind it). */
   href?: string
+  /** Lakh/crore form (₹18.42 L). Without it the value is rounded to the rupee. */
   compact?: boolean
   /** `danger` only for a real problem, like negative cash. */
   tone?: "default" | "danger"
@@ -99,6 +100,7 @@ function StatCard({
             <Money
               value={value}
               compact={compact}
+              roundToRupee
               tone={tone}
               className="text-lg leading-7 font-semibold"
             />

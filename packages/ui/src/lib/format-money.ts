@@ -1,5 +1,5 @@
+import type { Money } from "@workspace/contracts"
 import { formatInr, paise } from "@workspace/ledger"
-import type { Money } from "@workspace/ledger"
 
 /** U+2212 MINUS SIGN: same width as digits, read as "minus". */
 export const MINUS = "−"
@@ -10,13 +10,15 @@ const CRORE_PAISE = 1_00_00_000n * 100n
 
 export interface FormatMoneyOptions {
   /**
-   * Show paise (₹1,234.50). Default false: rounds to the nearest rupee,
-   * half away from zero. This is display only; stored amounts never change.
+   * Round to the nearest rupee, half away from zero (₹1,23,457). Off by
+   * default: amounts show exact paise (₹1,23,456.78). Display only; stored
+   * amounts never change. For headline numbers like StatCard, not tables.
    */
-  readonly paise?: boolean
+  readonly roundToRupee?: boolean
   /**
-   * Compact Indian form from 1 lakh up: ₹1.5 L, ₹12.35 Cr. Below 1 lakh the
-   * full amount is shown. Two decimals at most, trailing zeros dropped.
+   * Compact Indian form from 1 lakh up: ₹1.5 L, ₹12.35 Cr (two decimals at
+   * most, trailing zeros dropped). Below 1 lakh the amount is rounded to the
+   * rupee. Off by default.
    */
   readonly compact?: boolean
   /** Negatives in brackets, (₹1,000), for ledger and CA views. */
@@ -30,8 +32,8 @@ function divRound(value: bigint, divisor: bigint): bigint {
   return (value + divisor / 2n) / divisor
 }
 
-function rupees(absPaise: bigint, showPaise: boolean): string {
-  if (showPaise) return formatInr(paise(absPaise), { symbol: false })
+function rupees(absPaise: bigint, round: boolean): string {
+  if (!round) return formatInr(paise(absPaise), { symbol: false })
   const whole = divRound(absPaise, 100n)
   return formatInr(paise(whole * 100n), { symbol: false, paise: false })
 }
@@ -54,8 +56,9 @@ function compactRupees(absPaise: bigint): string | null {
 }
 
 /**
- * Formats integer paise for display with Indian grouping: ₹1,23,45,678.
- * Negatives use a true minus (−₹1,000), or brackets with `ledger`.
+ * Formats integer paise for display with Indian grouping, exact by default:
+ * ₹1,23,45,678.90. Negatives use a true minus (−₹1,000.00), or brackets
+ * with `ledger`. Rounding and the lakh/crore form are explicit options.
  */
 export function formatMoney(
   amount: Money,
@@ -67,7 +70,7 @@ export function formatMoney(
   const symbol = options.symbol === false ? "" : "₹"
   const body =
     (options.compact ? compactRupees(abs) : null) ??
-    rupees(abs, options.paise ?? false)
+    rupees(abs, options.compact === true || options.roundToRupee === true)
   const unsigned = `${symbol}${body}`
   const isZero = /^[₹]?0(\.0+)?$/.test(unsigned)
   if (!negative || isZero) return unsigned

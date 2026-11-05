@@ -53,7 +53,7 @@ export const text = [
 export const borders = [
   { name: "--border-subtle", value: "#e6e6e8", use: "Dividers" },
   { name: "--border-default", value: "#dcdce0", use: "Cards, tables" },
-  { name: "--border-input", value: "#b9b9c0", use: "Input outlines" },
+  { name: "--border-input", value: "#8e8e96", use: "Input outlines" },
 ] as const satisfies readonly ColorToken[]
 
 export const accent = [
@@ -160,6 +160,15 @@ export const contrastPairs: readonly ContrastPair[] = [
   // Money in danger text can sit in hovered or selected rows.
   { fg: "--status-danger", bg: "--bg-hover" },
   { fg: "--status-danger", bg: "--bg-selected" },
+]
+
+/**
+ * Non-text pairs that must meet WCAG 1.4.11 (3:1): the input outline is what
+ * identifies a field, so it has to be visible on every surface a field sits on.
+ */
+export const uiContrastPairs: readonly ContrastPair[] = [
+  { fg: "--border-input", bg: "--bg-surface" },
+  { fg: "--border-input", bg: "--bg-app" },
 ]
 
 export const typeScale = [

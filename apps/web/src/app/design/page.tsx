@@ -886,9 +886,12 @@ export default function DesignPage() {
               <thead>
                 <tr className="text-xs text-fg-secondary">
                   <th className="pb-2 text-left font-medium">Case</th>
-                  <th className="pb-2 text-right font-medium">Default</th>
                   <th className="pb-2 text-right font-medium">
-                    Compact (lakh/crore)
+                    Default (exact)
+                  </th>
+                  <th className="pb-2 text-right font-medium">roundToRupee</th>
+                  <th className="pb-2 text-right font-medium">
+                    compact (lakh/crore)
                   </th>
                   <th className="pb-2 text-right font-medium">Ledger</th>
                 </tr>
@@ -898,20 +901,16 @@ export default function DesignPage() {
                   <tr key={sample.label} className="border-t border-subtle">
                     <td className="py-1.5 text-fg-secondary">{sample.label}</td>
                     <td className="py-1.5 text-right">
-                      <Money
-                        value={sample.value}
-                        paise={sample.label === "With paise"}
-                      />
+                      <Money value={sample.value} />
+                    </td>
+                    <td className="py-1.5 text-right">
+                      <Money value={sample.value} roundToRupee />
                     </td>
                     <td className="py-1.5 text-right">
                       <Money value={sample.value} compact />
                     </td>
                     <td className="py-1.5 text-right">
-                      <Money
-                        value={sample.value}
-                        variant="ledger"
-                        paise={sample.label === "With paise"}
-                      />
+                      <Money value={sample.value} variant="ledger" />
                     </td>
                   </tr>
                 ))}
@@ -919,7 +918,7 @@ export default function DesignPage() {
                   <td className="py-1.5 text-fg-secondary">
                     Real problem (overdue)
                   </td>
-                  <td className="py-1.5 text-right" colSpan={3}>
+                  <td className="py-1.5 text-right" colSpan={4}>
                     <Money value={stats.cash.change} tone="danger" />
                   </td>
                 </tr>

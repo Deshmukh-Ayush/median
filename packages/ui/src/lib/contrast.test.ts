@@ -2,8 +2,17 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-import { AA_NORMAL_TEXT, contrastRatio } from "@workspace/ui/lib/contrast"
-import { allColors, contrastPairs, tokenValue } from "@workspace/ui/lib/tokens"
+import {
+  AA_NON_TEXT,
+  AA_NORMAL_TEXT,
+  contrastRatio,
+} from "@workspace/ui/lib/contrast"
+import {
+  allColors,
+  contrastPairs,
+  tokenValue,
+  uiContrastPairs,
+} from "@workspace/ui/lib/tokens"
 
 describe("contrastRatio", () => {
   it("matches known WCAG values", () => {
@@ -22,6 +31,17 @@ describe("design tokens meet WCAG AA", () => {
         ratio,
         `${fg} on ${bg} is ${ratio.toFixed(2)}:1`
       ).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
+    }
+  )
+
+  it.each(uiContrastPairs.map((pair) => [pair.fg, pair.bg] as const))(
+    "%s on %s is at least 3:1 (non-text, WCAG 1.4.11)",
+    (fg, bg) => {
+      const ratio = contrastRatio(tokenValue(fg), tokenValue(bg))
+      expect(
+        ratio,
+        `${fg} on ${bg} is ${ratio.toFixed(2)}:1`
+      ).toBeGreaterThanOrEqual(AA_NON_TEXT)
     }
   )
 

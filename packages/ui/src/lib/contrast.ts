@@ -20,3 +20,6 @@ export function contrastRatio(a: string, b: string): number {
 
 /** WCAG AA minimum for normal-size text. */
 export const AA_NORMAL_TEXT = 4.5
+
+/** WCAG 2.1 SC 1.4.11 minimum for UI component boundaries (non-text). */
+export const AA_NON_TEXT = 3

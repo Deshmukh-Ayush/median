@@ -1,4 +1,5 @@
 import * as React from "react"
+import { CONFIDENCE_HIGH, CONFIDENCE_MEDIUM } from "@workspace/contracts"
 
 import {
   StatusChip,
@@ -13,10 +14,13 @@ const LEVELS: Record<ConfidenceLevel, { label: string; tone: StatusTone }> = {
   low: { label: "Low confidence", tone: "danger" },
 }
 
-/** Maps a 0–1 model score to a level. The thresholds are a product choice. */
+/**
+ * Maps a 0–1 model score to a level using the shared contract thresholds, so
+ * a "high" badge means the same as the backend's auto-post rule.
+ */
 function confidenceLevel(score: number): ConfidenceLevel {
-  if (score >= 0.9) return "high"
-  if (score >= 0.7) return "medium"
+  if (score >= CONFIDENCE_HIGH) return "high"
+  if (score >= CONFIDENCE_MEDIUM) return "medium"
   return "low"
 }
 

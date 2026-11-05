@@ -1,5 +1,5 @@
+import type { Money } from "@workspace/contracts"
 import { paise } from "@workspace/ledger"
-import type { Money } from "@workspace/ledger"
 
 /** Fake data for the /design review page only. */
 
@@ -94,5 +94,5 @@ export const moneySamples: readonly { label: string; value: Money }[] = [
   { label: "One lakh", value: rupees(1_00_000) },
   { label: "Crores", value: rupees(12_34_56_789) },
   { label: "Negative", value: rupees(-45_250) },
-  { label: "With paise", value: paise(1_23_45_678_90n) },
+  { label: "Paise", value: paise(1_23_456_78n) },
 ]
