@@ -6,6 +6,7 @@ import { Button, buttonVariants } from "@workspace/ui/components/button"
 import { Logo } from "@workspace/ui/components/logo"
 
 import { authErrorMessage } from "@/lib/auth-errors"
+import type { PagePropsWith } from "@/lib/page-props"
 import { ROLE_LABELS, isOrgRole } from "@/lib/permissions"
 import { getAuth } from "@/server/auth"
 
@@ -25,7 +26,7 @@ function Frame({ children }: { children: React.ReactNode }) {
 }
 
 export default async function AcceptInvitationPage(
-  props: PageProps<"/accept-invitation/[id]">
+  props: PagePropsWith<{ id: string }>
 ) {
   const { id } = await props.params
   const { error: errorParam } = await props.searchParams

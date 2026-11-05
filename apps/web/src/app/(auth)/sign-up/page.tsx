@@ -2,11 +2,14 @@ import type { Metadata } from "next"
 import Link from "next/link"
 
 import { SignUpForm } from "@/components/auth/sign-up-form"
+import type { SearchParams } from "@/lib/page-props"
 import { safeRedirect } from "@/lib/safe-redirect"
 
 export const metadata: Metadata = { title: "Create an account · Median" }
 
-export default async function SignUpPage(props: PageProps<"/sign-up">) {
+export default async function SignUpPage(props: {
+  searchParams: SearchParams
+}) {
   const { redirectTo } = await props.searchParams
   const next = safeRedirect(redirectTo, "/onboarding")
   const signInHref =
