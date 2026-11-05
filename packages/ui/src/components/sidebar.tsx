@@ -15,6 +15,25 @@ interface SidebarSection {
   items: readonly SidebarItem[]
 }
 
+/** The props Sidebar passes to its link component. */
+interface SidebarLinkProps {
+  href: string
+  className: string
+  "aria-current": "page" | undefined
+  "data-slot": string
+  children: React.ReactNode
+}
+
+/** A link component, e.g. a Next.js Link wrapper, for client-side navigation. */
+type SidebarLink = React.ComponentType<SidebarLinkProps>
+
+function DefaultLink(props: SidebarLinkProps) {
+  return <a {...props} />
+}
+
+const ITEM_CLASS =
+  "flex h-7 items-center gap-2 rounded-md px-2 text-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg active:bg-selected aria-disabled:pointer-events-none aria-disabled:text-fg-disabled aria-[current=page]:bg-selected aria-[current=page]:font-medium aria-[current=page]:text-fg [&>svg]:size-4 [&>svg]:shrink-0"
+
 function isActive(href: string, current: string | undefined): boolean {
   if (!current) return false
   if (href === "/") return current === "/"
@@ -28,6 +47,7 @@ function Sidebar({
   currentHref,
   footer,
   label = "Main",
+  linkComponent: LinkComponent = DefaultLink,
   className,
   ...props
 }: Omit<React.ComponentProps<"div">, "children"> & {
@@ -38,6 +58,8 @@ function Sidebar({
   footer?: React.ReactNode
   /** Accessible name of the nav landmark. */
   label?: string
+  /** Renders items with this instead of <a>, e.g. Next.js Link. */
+  linkComponent?: SidebarLink
 }) {
   return (
     <div
@@ -64,23 +86,37 @@ function Sidebar({
             <ul className="flex flex-col gap-px">
               {section.items.map((item) => {
                 const active = isActive(item.href, currentHref)
+                const content = (
+                  <>
+                    {item.icon}
+                    <span className="truncate">{item.label}</span>
+                    {item.count ? (
+                      <span className="ml-auto text-xs text-fg-secondary tabular">
+                        {item.count}
+                      </span>
+                    ) : null}
+                  </>
+                )
                 return (
                   <li key={item.href}>
-                    <a
-                      href={item.disabled ? undefined : item.href}
-                      aria-current={active ? "page" : undefined}
-                      aria-disabled={item.disabled || undefined}
-                      data-slot="sidebar-item"
-                      className="flex h-7 items-center gap-2 rounded-md px-2 text-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg active:bg-selected aria-disabled:pointer-events-none aria-disabled:text-fg-disabled aria-[current=page]:bg-selected aria-[current=page]:font-medium aria-[current=page]:text-fg [&>svg]:size-4 [&>svg]:shrink-0"
-                    >
-                      {item.icon}
-                      <span className="truncate">{item.label}</span>
-                      {item.count ? (
-                        <span className="ml-auto text-xs text-fg-secondary tabular">
-                          {item.count}
-                        </span>
-                      ) : null}
-                    </a>
+                    {item.disabled ? (
+                      <span
+                        aria-disabled
+                        data-slot="sidebar-item"
+                        className={ITEM_CLASS}
+                      >
+                        {content}
+                      </span>
+                    ) : (
+                      <LinkComponent
+                        href={item.href}
+                        aria-current={active ? "page" : undefined}
+                        data-slot="sidebar-item"
+                        className={ITEM_CLASS}
+                      >
+                        {content}
+                      </LinkComponent>
+                    )}
                   </li>
                 )
               })}
@@ -96,4 +132,4 @@ function Sidebar({
 }
 
 export { Sidebar }
-export type { SidebarItem, SidebarSection }
+export type { SidebarItem, SidebarLink, SidebarLinkProps, SidebarSection }

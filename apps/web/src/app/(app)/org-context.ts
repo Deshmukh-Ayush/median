@@ -4,6 +4,7 @@ import { isServiceError } from "@workspace/contracts"
 import { redirect } from "next/navigation"
 import { connection } from "next/server"
 
+import { canOpen } from "@/lib/navigation"
 import { requireOrgContext } from "@/server/services"
 import type { OrgContext } from "@/server/services"
 
@@ -30,4 +31,15 @@ export async function getOrgContextOrRedirect(): Promise<OrgContext> {
     }
     throw error
   }
+}
+
+/**
+ * The org context for a page in the main navigation, or null when the role
+ * can't open it. Hiding a link isn't enough: this guards direct URLs too.
+ */
+export async function getPageContext(
+  href: string
+): Promise<{ ctx: OrgContext; allowed: boolean }> {
+  const ctx = await getOrgContextOrRedirect()
+  return { ctx, allowed: canOpen(ctx.role, href) }
 }
