@@ -65,12 +65,6 @@ export const accountType = pgEnum("account_type", [
   "expense",
 ])
 
-export const industryTemplate = pgEnum("industry_template", [
-  "saas",
-  "d2c",
-  "agency",
-])
-
 export const partyKind = pgEnum("party_kind", ["customer", "vendor"])
 
 export const journalSourceType = pgEnum("journal_source_type", [
@@ -84,16 +78,20 @@ export const journalSourceType = pgEnum("journal_source_type", [
   "opening_balance",
 ])
 
-export const connectionProvider = pgEnum("connection_provider", [
-  "razorpay",
-  "bank",
-])
-
 export const connectionStatus = pgEnum("connection_status", [
-  "active",
+  "connected",
+  "syncing",
   "error",
   "disconnected",
 ])
+
+export const connectorAuthType = pgEnum("connector_auth_type", [
+  "api_key",
+  "oauth",
+  "file",
+])
+
+export const businessType = pgEnum("business_type", ["saas", "d2c", "agency"])
 
 export const sourceRecordKind = pgEnum("source_record_kind", [
   "payment",
@@ -102,6 +100,10 @@ export const sourceRecordKind = pgEnum("source_record_kind", [
   "settlement",
   "payout",
   "bank_line",
+  "order",
+  "invoice",
+  "party",
+  "opening_balance",
 ])
 
 export const flowDirection = pgEnum("flow_direction", ["inflow", "outflow"])
@@ -147,6 +149,27 @@ export const invoiceStatus = pgEnum("invoice_status", [
   "cancelled",
 ])
 
+export const supplyType = pgEnum("supply_type", [
+  "intrastate",
+  "interstate",
+  "export_with_payment",
+  "export_lut",
+  "sez",
+])
+
+export const gstRateMappingKind = pgEnum("gst_rate_mapping_kind", [
+  "product",
+  "stream",
+])
+
+export const creditNoteReason = pgEnum("credit_note_reason", [
+  "refund",
+  "sales_return",
+  "post_sale_discount",
+  "deficiency_in_service",
+  "correction",
+])
+
 // ---------------------------------------------------------------------------
 // Organisation settings (one row per Better Auth organisation)
 
@@ -160,7 +183,14 @@ export const organizationSettings = pgTable(
     gstin: text(),
     /** Two-digit GST state code, e.g. "29" for Karnataka. */
     stateCode: text(),
-    industry: industryTemplate().notNull().default("saas"),
+    businessType: businessType().notNull().default("saas"),
+    // GST profile. Unregistered (the default until onboarding sets it) means
+    // no GST is charged or split anywhere.
+    gstRegistered: boolean().notNull().default(false),
+    /** Composition dealers issue bills of supply and collect no GST. */
+    compositionScheme: boolean().notNull().default(false),
+    /** Rate for sales with no invoice or mapping, in basis points. Null → inbox. */
+    defaultGstRateBps: integer(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -168,6 +198,52 @@ export const organizationSettings = pgTable(
     check(
       "organization_settings_state_code_check",
       sql`${t.stateCode} is null or ${t.stateCode} ~ '^[0-9]{2}$'`
+    ),
+    check(
+      "organization_settings_default_rate_check",
+      sql`${t.defaultGstRateBps} is null or ${t.defaultGstRateBps} between 0 and 10000`
+    ),
+    check(
+      "organization_settings_gstin_when_registered_check",
+      sql`not ${t.gstRegistered} or ${t.gstin} is not null`
+    ),
+  ]
+)
+
+/**
+ * GST rate for things sold without an invoice (Razorpay payments), keyed by
+ * a product id or a revenue stream name the payment carries.
+ */
+export const gstRateMappings = pgTable(
+  "gst_rate_mappings",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    kind: gstRateMappingKind().notNull(),
+    /** Razorpay item/plan id for products; a stream name such as "subscriptions". */
+    key: text().notNull(),
+    label: text().notNull(),
+    hsnSac: text(),
+    gstRateBps: integer().notNull(),
+    /** Revenue account to credit; null → the org's default revenue account. */
+    revenueAccountId: uuid(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("gst_rate_mappings_org_kind_key_uq").on(
+      t.organizationId,
+      t.kind,
+      t.key
+    ),
+    foreignKey({
+      name: "gst_rate_mappings_revenue_account_fk",
+      columns: [t.organizationId, t.revenueAccountId],
+      foreignColumns: [ledgerAccounts.organizationId, ledgerAccounts.id],
+    }),
+    check(
+      "gst_rate_mappings_rate_check",
+      sql`${t.gstRateBps} between 0 and 10000`
     ),
   ]
 )
@@ -399,7 +475,9 @@ export const connections = pgTable(
   {
     id: id(),
     organizationId: organizationId(),
-    provider: connectionProvider().notNull(),
+    /** Connector id from integrations/registry.ts, e.g. "razorpay". */
+    provider: text().notNull(),
+    authType: connectorAuthType().notNull(),
     /** Display label, e.g. "HDFC current a/c" or "Razorpay live". */
     label: text().notNull(),
     /** AES-256-GCM ciphertext (base64). Null for bank CSV imports. */
@@ -408,10 +486,10 @@ export const connections = pgTable(
     keyHint: text(),
     /** Bank connections post to this ledger account. */
     ledgerAccountId: uuid(),
-    status: connectionStatus().notNull().default("active"),
+    status: connectionStatus().notNull().default("connected"),
     lastSyncedAt: timestamp({ withTimezone: true }),
-    /** Provider-specific sync position, e.g. { "payments": 1730000000 }. */
-    syncCursor: jsonb().$type<Record<string, number | string>>(),
+    /** Connector-specific sync position, e.g. { "payments": 1730000000 }. */
+    cursor: jsonb().$type<Record<string, number | string>>(),
     lastError: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -433,9 +511,15 @@ export const sourceRecords = pgTable(
     id: id(),
     organizationId: organizationId(),
     connectionId: uuid().notNull(),
-    provider: connectionProvider().notNull(),
-    externalId: text().notNull(),
+    /** Connector id, as on the connection. */
+    provider: text().notNull(),
+    /** The provider's id. Null for file rows, which use dedupe_hash instead. */
+    externalId: text(),
+    /** Content hash for rows with no stable id (bank statement lines). */
+    dedupeHash: text(),
     kind: sourceRecordKind().notNull(),
+    /** ISO 4217, e.g. "INR". */
+    currency: text().notNull().default("INR"),
     direction: flowDirection().notNull(),
     /** Always a non-negative magnitude; `direction` carries the sign. */
     amountPaise: paise().notNull(),
@@ -451,11 +535,20 @@ export const sourceRecords = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
+    unique("source_records_org_id_uq").on(t.organizationId, t.id),
     unique("source_records_org_provider_external_uq").on(
       t.organizationId,
       t.provider,
       t.externalId
     ),
+    uniqueIndex("source_records_org_dedupe_hash_uq")
+      .on(t.organizationId, t.dedupeHash)
+      .where(sql`${t.dedupeHash} is not null`),
+    check(
+      "source_records_identity_check",
+      sql`${t.externalId} is not null or ${t.dedupeHash} is not null`
+    ),
+    check("source_records_currency_check", sql`${t.currency} ~ '^[A-Z]{3}$'`),
     index("source_records_org_kind_occurred_idx").on(
       t.organizationId,
       t.kind,
@@ -598,10 +691,17 @@ export const invoices = pgTable(
     dueDate: isoDate().notNull(),
     /** Two-digit GST state code of the place of supply. */
     placeOfSupply: text().notNull(),
+    supplyType: supplyType().notNull(),
+    /** Recipient pays the GST; the invoice charges none. */
+    reverseCharge: boolean().notNull().default(false),
     taxablePaise: paise().notNull(),
     cgstPaise: paise().notNull(),
     sgstPaise: paise().notNull(),
     igstPaise: paise().notNull(),
+    /** Rounds the total to the rupee: -50 to +50 paise, posted to Round-off. */
+    roundOffPaise: paise()
+      .notNull()
+      .default(sql`0`),
     totalPaise: paise().notNull(),
     paidPaise: paise()
       .notNull()
@@ -615,7 +715,11 @@ export const invoices = pgTable(
   },
   (t) => [
     unique("invoices_org_id_uq").on(t.organizationId, t.id),
-    unique("invoices_org_number_uq").on(t.organizationId, t.number),
+    unique("invoices_org_fy_number_uq").on(
+      t.organizationId,
+      t.financialYear,
+      t.number
+    ),
     index("invoices_org_date_idx").on(t.organizationId, t.invoiceDate, t.id),
     index("invoices_org_party_date_idx").on(
       t.organizationId,
@@ -639,11 +743,16 @@ export const invoices = pgTable(
     }),
     check(
       "invoices_amounts_check",
-      sql`${t.taxablePaise} >= 0 and ${t.cgstPaise} >= 0 and ${t.sgstPaise} >= 0 and ${t.igstPaise} >= 0 and ${t.paidPaise} >= 0 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise}`
+      sql`${t.taxablePaise} >= 0 and ${t.cgstPaise} >= 0 and ${t.sgstPaise} >= 0 and ${t.igstPaise} >= 0 and ${t.paidPaise} >= 0 and ${t.roundOffPaise} between -50 and 50 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise} + ${t.roundOffPaise}`
     ),
     check(
       "invoices_place_of_supply_check",
       sql`${t.placeOfSupply} ~ '^[0-9]{2}$'`
+    ),
+    // GST rule: at most 16 characters, unique per financial year.
+    check(
+      "invoices_number_length_check",
+      sql`char_length(${t.number}) between 1 and 16`
     ),
   ]
 )
@@ -688,6 +797,213 @@ export const invoiceLines = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// Credit notes (against a sales invoice)
+
+/** Next credit note number per organisation and financial year. */
+export const creditNoteSeries = pgTable(
+  "credit_note_series",
+  {
+    organizationId: organizationId(),
+    financialYear: text().notNull(),
+    prefix: text().notNull(),
+    nextNumber: integer().notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.organizationId, t.financialYear] }),
+    check(
+      "credit_note_series_fy_check",
+      sql`${t.financialYear} ~ '^[0-9]{4}-[0-9]{2}$'`
+    ),
+  ]
+)
+
+export const creditNotes = pgTable(
+  "credit_notes",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    number: text().notNull(),
+    financialYear: text().notNull(),
+    invoiceId: uuid().notNull(),
+    partyId: uuid().notNull(),
+    creditNoteDate: isoDate().notNull(),
+    reason: creditNoteReason().notNull(),
+    /** Copied from the invoice: a credit note follows its invoice's GST treatment. */
+    placeOfSupply: text().notNull(),
+    supplyType: supplyType().notNull(),
+    reverseCharge: boolean().notNull().default(false),
+    taxablePaise: paise().notNull(),
+    cgstPaise: paise().notNull(),
+    sgstPaise: paise().notNull(),
+    igstPaise: paise().notNull(),
+    roundOffPaise: paise()
+      .notNull()
+      .default(sql`0`),
+    totalPaise: paise().notNull(),
+    /** The Razorpay refund that caused it, if any. */
+    sourceRecordId: uuid(),
+    notes: text(),
+    journalEntryId: uuid(),
+    createdBy: text().references(() => user.id, { onDelete: "restrict" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("credit_notes_org_id_uq").on(t.organizationId, t.id),
+    unique("credit_notes_org_fy_number_uq").on(
+      t.organizationId,
+      t.financialYear,
+      t.number
+    ),
+    index("credit_notes_org_date_idx").on(
+      t.organizationId,
+      t.creditNoteDate,
+      t.id
+    ),
+    index("credit_notes_org_invoice_idx").on(t.organizationId, t.invoiceId),
+    uniqueIndex("credit_notes_org_source_record_uq")
+      .on(t.organizationId, t.sourceRecordId)
+      .where(sql`${t.sourceRecordId} is not null`),
+    foreignKey({
+      name: "credit_notes_invoice_fk",
+      columns: [t.organizationId, t.invoiceId],
+      foreignColumns: [invoices.organizationId, invoices.id],
+    }),
+    foreignKey({
+      name: "credit_notes_party_fk",
+      columns: [t.organizationId, t.partyId],
+      foreignColumns: [parties.organizationId, parties.id],
+    }),
+    foreignKey({
+      name: "credit_notes_source_record_fk",
+      columns: [t.organizationId, t.sourceRecordId],
+      foreignColumns: [sourceRecords.organizationId, sourceRecords.id],
+    }),
+    foreignKey({
+      name: "credit_notes_entry_fk",
+      columns: [t.organizationId, t.journalEntryId],
+      foreignColumns: [journalEntries.organizationId, journalEntries.id],
+    }),
+    check(
+      "credit_notes_amounts_check",
+      sql`${t.taxablePaise} >= 0 and ${t.cgstPaise} >= 0 and ${t.sgstPaise} >= 0 and ${t.igstPaise} >= 0 and ${t.roundOffPaise} between -50 and 50 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise} + ${t.roundOffPaise}`
+    ),
+    check(
+      "credit_notes_number_length_check",
+      sql`char_length(${t.number}) between 1 and 16`
+    ),
+    check(
+      "credit_notes_place_of_supply_check",
+      sql`${t.placeOfSupply} ~ '^[0-9]{2}$'`
+    ),
+  ]
+)
+
+export const creditNoteLines = pgTable(
+  "credit_note_lines",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    creditNoteId: uuid().notNull(),
+    lineNo: integer().notNull(),
+    /** The invoice line being credited, when it maps to one. */
+    invoiceLineId: uuid(),
+    description: text().notNull(),
+    hsnSac: text().notNull(),
+    quantityMilli: bigint({ mode: "bigint" }).notNull(),
+    unitPricePaise: paise().notNull(),
+    gstRateBps: integer().notNull(),
+    taxablePaise: paise().notNull(),
+    cgstPaise: paise().notNull(),
+    sgstPaise: paise().notNull(),
+    igstPaise: paise().notNull(),
+    totalPaise: paise().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("credit_note_lines_org_note_line_uq").on(
+      t.organizationId,
+      t.creditNoteId,
+      t.lineNo
+    ),
+    foreignKey({
+      name: "credit_note_lines_note_fk",
+      columns: [t.organizationId, t.creditNoteId],
+      foreignColumns: [creditNotes.organizationId, creditNotes.id],
+    }),
+    check(
+      "credit_note_lines_amounts_check",
+      sql`${t.quantityMilli} > 0 and ${t.unitPricePaise} >= 0 and ${t.gstRateBps} between 0 and 10000 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise}`
+    ),
+  ]
+)
+
+// ---------------------------------------------------------------------------
+// Consent and data rights
+
+/** A user accepting a version of the data-processing consent for an org. */
+export const consents = pgTable(
+  "consents",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    consentVersion: text().notNull(),
+    acceptedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    ipAddress: text(),
+    userAgent: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("consents_org_user_version_uq").on(
+      t.organizationId,
+      t.userId,
+      t.consentVersion
+    ),
+    index("consents_org_version_accepted_idx").on(
+      t.organizationId,
+      t.consentVersion,
+      t.acceptedAt
+    ),
+  ]
+)
+
+/**
+ * Record of an organisation's data deletion. Deliberately has no foreign key
+ * to `organization`, so it survives the deletion it describes.
+ */
+export const deletionTombstones = pgTable(
+  "deletion_tombstones",
+  {
+    id: id(),
+    organizationId: text().notNull(),
+    organizationName: text().notNull(),
+    /** User id at request time (the user row may be gone later). */
+    requestedBy: text().notNull(),
+    requestedAt: timestamp({ withTimezone: true }).notNull(),
+    deletedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** What was removed immediately, with row counts per table. */
+    deleted: jsonb().notNull(),
+    /** What was kept read-only for legal retention. */
+    retained: jsonb().notNull(),
+    /** 8 years from the end of the last financial year with books. */
+    retentionUntil: isoDate().notNull(),
+    purgedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("deletion_tombstones_org_idx").on(t.organizationId),
+    index("deletion_tombstones_retention_idx")
+      .on(t.retentionUntil)
+      .where(sql`${t.purgedAt} is null`),
+  ]
+)
+
+// ---------------------------------------------------------------------------
 // Relations (for the relational query API)
 
 export const journalEntriesRelations = relations(
@@ -723,3 +1039,25 @@ export const invoiceLinesRelations = relations(invoiceLines, ({ one }) => ({
     references: [invoices.id],
   }),
 }))
+
+export const creditNotesRelations = relations(creditNotes, ({ one, many }) => ({
+  invoice: one(invoices, {
+    fields: [creditNotes.invoiceId],
+    references: [invoices.id],
+  }),
+  party: one(parties, {
+    fields: [creditNotes.partyId],
+    references: [parties.id],
+  }),
+  lines: many(creditNoteLines),
+}))
+
+export const creditNoteLinesRelations = relations(
+  creditNoteLines,
+  ({ one }) => ({
+    creditNote: one(creditNotes, {
+      fields: [creditNoteLines.creditNoteId],
+      references: [creditNotes.id],
+    }),
+  })
+)
