@@ -1,12 +1,12 @@
 import "server-only"
 
+import { pageOptionsSchema, parseInput } from "@workspace/contracts"
+import type { IsoTimestamp, Page, PageOptions } from "@workspace/contracts"
 import { z } from "zod"
 
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { timestampDaysAgo } from "./stub-data"
-import { pageOptionsSchema, parseInput } from "./types"
-import type { IsoTimestamp, Page, PageOptions } from "./types"
 
 export interface AuditLogEntry {
   readonly id: string

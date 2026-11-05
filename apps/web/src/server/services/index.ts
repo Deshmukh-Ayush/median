@@ -4,9 +4,9 @@
 
 export type { OrgContext } from "./context"
 export { assertCan, requireOrgContext } from "./context"
-export type { ServiceErrorCode } from "./errors"
-export { ServiceError, isServiceError } from "./errors"
-export * from "./types"
+// Shared types and schemas live in @workspace/contracts; re-exported here so
+// existing imports from "@/server/services" keep working.
+export * from "@workspace/contracts"
 
 export * from "./accounts"
 export * from "./audit"

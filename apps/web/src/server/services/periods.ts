@@ -1,9 +1,9 @@
 import "server-only"
 
+import { parseInput, periodSchema } from "@workspace/contracts"
+import type { IsoTimestamp, Period } from "@workspace/contracts"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
-import { parseInput, periodSchema } from "./types"
-import type { IsoTimestamp, Period } from "./types"
 
 export interface PeriodLock {
   readonly period: Period

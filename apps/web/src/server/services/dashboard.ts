@@ -1,11 +1,11 @@
 import "server-only"
 
+import type { IsoTimestamp, Money, Period } from "@workspace/contracts"
 import { paise } from "@workspace/ledger"
 
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { currentPeriod } from "./stub-data"
-import type { IsoTimestamp, Money, Period } from "./types"
 
 export interface DashboardSummary {
   readonly asOf: IsoTimestamp

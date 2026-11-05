@@ -1,12 +1,12 @@
 import "server-only"
 
+import { parseInput } from "@workspace/contracts"
+import type { IsoTimestamp } from "@workspace/contracts"
 import { z } from "zod"
 
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { timestampDaysAgo } from "./stub-data"
-import { parseInput } from "./types"
-import type { IsoTimestamp } from "./types"
 
 export type ConnectionStatus = "active" | "error" | "disconnected"
 
