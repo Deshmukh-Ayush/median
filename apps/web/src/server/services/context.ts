@@ -1,5 +1,6 @@
 import "server-only"
 
+import { ServiceError } from "@workspace/contracts"
 import { and, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { cache } from "react"
@@ -9,7 +10,6 @@ import { roles } from "../auth/permissions"
 import type { OrgRole, statements } from "../auth/permissions"
 import { getDb } from "../db"
 import { member } from "../db/schema"
-import { ServiceError } from "./errors"
 
 /**
  * Who is calling a service, and for which organisation. Every service takes

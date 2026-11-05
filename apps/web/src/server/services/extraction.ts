@@ -1,5 +1,6 @@
 import "server-only"
 
+import { idSchema, parseInput } from "@workspace/contracts"
 import { paise, parseRupees } from "@workspace/ledger"
 import { z } from "zod"
 
@@ -7,7 +8,6 @@ import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import type { InboxItem } from "./inbox"
 import { STUB_ACCOUNTS, STUB_PARTIES } from "./stub-data"
-import { idSchema, parseInput } from "./types"
 
 const amountText = z
   .string()

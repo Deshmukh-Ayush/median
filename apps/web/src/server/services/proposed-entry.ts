@@ -1,10 +1,9 @@
 // The shape of an entry waiting in the approval inbox. Stored in
 // inbox_items.proposed_entry as JSON, with amounts as integer-paise strings.
 
+import { idSchema, isoDateSchema, moneyJsonSchema } from "@workspace/contracts"
+import type { IsoDate, Money } from "@workspace/contracts"
 import { z } from "zod"
-
-import type { IsoDate, Money } from "./types"
-import { idSchema, isoDateSchema, moneyJsonSchema } from "./types"
 
 export interface ProposedLine {
   readonly accountId: string
