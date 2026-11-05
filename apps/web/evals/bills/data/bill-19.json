@@ -1,0 +1,45 @@
+{
+  "id": "bill-19",
+  "file": "bill-19.pdf",
+  "mediaType": "application/pdf",
+  "layout": "service",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "1 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Malabar Coworking Spaces Pvt Ltd",
+      "gstin": "32AAECM8830B1ZV",
+      "stateCode": "32"
+    },
+    "billNumber": "INV-25622",
+    "billDate": "2026-07-09",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "25,449.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "25,449.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "4,580.82",
+      "total": "30,029.82"
+    }
+  }
+}

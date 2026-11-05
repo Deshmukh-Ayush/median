@@ -7,3 +7,4 @@ package-lock.json
 apps/web/drizzle/
 next-env.d.ts
 AGENTS.md
+apps/web/evals/bills/data/

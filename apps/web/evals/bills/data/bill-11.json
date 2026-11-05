@@ -1,0 +1,78 @@
+{
+  "id": "bill-11",
+  "file": "bill-11.pdf",
+  "mediaType": "application/pdf",
+  "layout": "summary",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "4 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Charminar Courier Services",
+      "gstin": "36AAJFC3348P1ZY",
+      "stateCode": "36"
+    },
+    "billNumber": "CCS-10722",
+    "billDate": "2026-10-05",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Courier and delivery services",
+        "hsnSac": "996812",
+        "quantity": "1",
+        "rate": "6,407.00",
+        "taxableAmount": "6,407.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Ergonomic office chair",
+        "hsnSac": "94013000",
+        "quantity": "7",
+        "rate": "10,572.00",
+        "taxableAmount": "74,004.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": "0.5",
+        "rate": "15,926.00",
+        "taxableAmount": "7,963.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "1.5",
+        "rate": "41,209.00",
+        "taxableAmount": "61,813.50",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "1,50,187.50",
+      "cgst": null,
+      "sgst": null,
+      "igst": "27,033.75",
+      "total": "1,77,221.25"
+    }
+  }
+}

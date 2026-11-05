@@ -11,6 +11,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,md}\"",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "eval:bills:generate": "vitest run --config evals/vitest.config.ts evals/bills/generate",
+    "eval:bills": "vitest run --config evals/vitest.config.ts evals/bills/run",
     "analyze": "cross-env ANALYZE=true next build --webpack",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

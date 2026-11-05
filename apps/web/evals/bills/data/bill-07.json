@@ -1,0 +1,78 @@
+{
+  "id": "bill-07",
+  "file": "bill-07.pdf",
+  "mediaType": "application/pdf",
+  "layout": "summary",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "4 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Saffron Lane Office Supplies",
+      "gstin": "27ABHFS2093N1ZL",
+      "stateCode": "27"
+    },
+    "billNumber": "25783/2026-27",
+    "billDate": "2026-09-20",
+    "dueDate": "2026-10-20",
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Courier and delivery services",
+        "hsnSac": "996812",
+        "quantity": "2",
+        "rate": "1,710.00",
+        "taxableAmount": "3,420.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Printed brochures",
+        "hsnSac": "49011010",
+        "quantity": "2",
+        "rate": "24.00",
+        "taxableAmount": "48.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": "2",
+        "rate": "1,08,575.00",
+        "taxableAmount": "2,17,150.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Pantry snacks assortment",
+        "hsnSac": "21069099",
+        "quantity": "2",
+        "rate": "2,176.00",
+        "taxableAmount": "4,352.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "2,24,970.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "39,922.60",
+      "total": "2,64,892.60"
+    }
+  }
+}

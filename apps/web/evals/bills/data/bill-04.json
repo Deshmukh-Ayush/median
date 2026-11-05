@@ -1,0 +1,79 @@
+{
+  "id": "bill-04",
+  "file": "bill-04.pdf",
+  "mediaType": "application/pdf",
+  "layout": "classic",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "4 line(s)",
+    "interstate (IGST)",
+    "missing HSN on some lines"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Saffron Lane Office Supplies",
+      "gstin": "27ABHFS2093N1ZL",
+      "stateCode": "27"
+    },
+    "billNumber": "11179/2026-27",
+    "billDate": "2026-08-03",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Ergonomic office chair",
+        "hsnSac": null,
+        "quantity": "12",
+        "rate": "8,686.00",
+        "taxableAmount": "1,04,232.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "18,761.76"
+      },
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": "2",
+        "rate": "1,70,558.00",
+        "taxableAmount": "3,41,116.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "61,400.88"
+      },
+      {
+        "description": "USB-C charging cable, 1.5 m",
+        "hsnSac": null,
+        "quantity": "10",
+        "rate": "544.00",
+        "taxableAmount": "5,440.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "979.20"
+      },
+      {
+        "description": "Cotton T-shirts, printed (merch)",
+        "hsnSac": "61091000",
+        "quantity": "3",
+        "rate": "320.00",
+        "taxableAmount": "960.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "48.00"
+      }
+    ],
+    "printedTotals": {
+      "taxable": "4,51,748.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "81,189.84",
+      "total": "5,32,937.84"
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "bill-28",
+  "file": "bill-28.png",
+  "mediaType": "image/png",
+  "layout": "receipt",
+  "quality": "image-clean",
+  "supply": "inter",
+  "notes": [
+    "3 line(s)",
+    "interstate (IGST)",
+    "no printed taxable subtotal"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Kaveri Packaging Works",
+      "gstin": "33AARFK5320D1ZL",
+      "stateCode": "33"
+    },
+    "billNumber": "KPW/26-27/0269",
+    "billDate": "2026-05-02",
+    "dueDate": "2026-06-01",
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "2",
+        "rate": "69,858.00",
+        "taxableAmount": "1,39,716.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": "1.5",
+        "rate": "8,791.00",
+        "taxableAmount": "13,186.50",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Pantry snacks assortment",
+        "hsnSac": "21069099",
+        "quantity": "14",
+        "rate": "2,400.00",
+        "taxableAmount": "33,600.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": null,
+      "cgst": null,
+      "sgst": null,
+      "igst": "29,202.45",
+      "total": "2,15,704.95"
+    }
+  }
+}

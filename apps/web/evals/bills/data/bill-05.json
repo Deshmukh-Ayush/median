@@ -1,0 +1,45 @@
+{
+  "id": "bill-05",
+  "file": "bill-05.pdf",
+  "mediaType": "application/pdf",
+  "layout": "classic",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "1 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Brightwater Legal LLP",
+      "gstin": "07AAKFB7781C1ZD",
+      "stateCode": "07"
+    },
+    "billNumber": "INV-18824",
+    "billDate": "2026-04-14",
+    "dueDate": "2026-04-29",
+    "placeOfSupply": "Delhi",
+    "placeOfSupplyStateCode": "07",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Laptop stand, aluminium",
+        "hsnSac": "84733099",
+        "quantity": "8",
+        "rate": "2,343.00",
+        "taxableAmount": "18,744.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "1,686.96",
+        "sgstAmount": "1,686.96",
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "18,744.00",
+      "cgst": "1,686.96",
+      "sgst": "1,686.96",
+      "igst": null,
+      "total": "22,117.92"
+    }
+  }
+}

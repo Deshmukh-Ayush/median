@@ -1,0 +1,101 @@
+{
+  "id": "bill-01",
+  "file": "bill-01.pdf",
+  "mediaType": "application/pdf",
+  "layout": "classic",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "6 line(s)",
+    "intrastate (CGST+SGST)",
+    "round-off"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Lotus Peak Cloud Pvt Ltd",
+      "gstin": "29AAACL4417K1ZD",
+      "stateCode": "29"
+    },
+    "billNumber": "24607/2026-27",
+    "billDate": "2026-05-07",
+    "dueDate": null,
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": "1",
+        "rate": "12,166.00",
+        "taxableAmount": "12,166.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "1,094.94",
+        "sgstAmount": "1,094.94",
+        "igstAmount": null
+      },
+      {
+        "description": "Laptop stand, aluminium",
+        "hsnSac": "84733099",
+        "quantity": "21",
+        "rate": "2,478.00",
+        "taxableAmount": "52,038.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "4,683.42",
+        "sgstAmount": "4,683.42",
+        "igstAmount": null
+      },
+      {
+        "description": "Pantry snacks assortment",
+        "hsnSac": "21069099",
+        "quantity": "21",
+        "rate": "1,133.00",
+        "taxableAmount": "23,793.00",
+        "gstRatePercent": "5",
+        "cgstAmount": "594.83",
+        "sgstAmount": "594.83",
+        "igstAmount": null
+      },
+      {
+        "description": "Corrugated shipping boxes",
+        "hsnSac": "48191010",
+        "quantity": "11",
+        "rate": "40.00",
+        "taxableAmount": "440.00",
+        "gstRatePercent": "5",
+        "cgstAmount": "11.00",
+        "sgstAmount": "11.00",
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "4",
+        "rate": "47,823.00",
+        "taxableAmount": "1,91,292.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "17,216.28",
+        "sgstAmount": "17,216.28",
+        "igstAmount": null
+      },
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "2",
+        "rate": "28,243.00",
+        "taxableAmount": "56,486.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "5,083.74",
+        "sgstAmount": "5,083.74",
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "3,36,215.00",
+      "cgst": "28,684.21",
+      "sgst": "28,684.21",
+      "igst": null,
+      "total": "3,93,583.00"
+    }
+  }
+}

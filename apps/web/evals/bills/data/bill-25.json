@@ -1,0 +1,56 @@
+{
+  "id": "bill-25",
+  "file": "bill-25.png",
+  "mediaType": "image/png",
+  "layout": "classic",
+  "quality": "image-clean",
+  "supply": "intra",
+  "notes": [
+    "2 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Gomti Furniture House",
+      "gstin": "09ABMFG9021R1ZK",
+      "stateCode": "09"
+    },
+    "billNumber": "35492/2026-27",
+    "billDate": "2026-04-25",
+    "dueDate": "2026-06-09",
+    "placeOfSupply": "09-Uttar Pradesh",
+    "placeOfSupplyStateCode": "09",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "2",
+        "rate": "27,323.00",
+        "taxableAmount": "54,646.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "4,918.14",
+        "sgstAmount": "4,918.14",
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "3",
+        "rate": "43,062.00",
+        "taxableAmount": "1,29,186.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "11,626.74",
+        "sgstAmount": "11,626.74",
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "1,83,832.00",
+      "cgst": "16,544.88",
+      "sgst": "16,544.88",
+      "igst": null,
+      "total": "2,16,921.76"
+    }
+  }
+}

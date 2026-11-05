@@ -1,0 +1,101 @@
+{
+  "id": "bill-08",
+  "file": "bill-08.pdf",
+  "mediaType": "application/pdf",
+  "layout": "summary",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "6 line(s)",
+    "intrastate (CGST+SGST)",
+    "round-off"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Lotus Peak Cloud Pvt Ltd",
+      "gstin": "29AAACL4417K1ZD",
+      "stateCode": "29"
+    },
+    "billNumber": "LPC/26-27/0622",
+    "billDate": "2026-09-25",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Ergonomic office chair",
+        "hsnSac": "94013000",
+        "quantity": "22",
+        "rate": "12,774.00",
+        "taxableAmount": "2,81,028.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "2",
+        "rate": "62,830.00",
+        "taxableAmount": "1,25,660.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Performance marketing - campaign management",
+        "hsnSac": "998365",
+        "quantity": "3",
+        "rate": "1,24,730.00",
+        "taxableAmount": "3,74,190.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Printed brochures",
+        "hsnSac": "49011010",
+        "quantity": "8",
+        "rate": "18.00",
+        "taxableAmount": "144.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Cotton T-shirts, printed (merch)",
+        "hsnSac": "61091000",
+        "quantity": "15",
+        "rate": "337.00",
+        "taxableAmount": "5,055.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": "1.5",
+        "rate": "9,420.00",
+        "taxableAmount": "14,130.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "8,00,207.00",
+      "cgst": "71,680.70",
+      "sgst": "71,680.70",
+      "igst": null,
+      "total": "9,43,568.00"
+    }
+  }
+}

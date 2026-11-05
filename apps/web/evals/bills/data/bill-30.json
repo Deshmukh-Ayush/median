@@ -1,0 +1,70 @@
+{
+  "id": "bill-30",
+  "file": "bill-30.jpg",
+  "mediaType": "image/jpeg",
+  "layout": "receipt",
+  "quality": "image-low",
+  "supply": "inter",
+  "notes": [
+    "3 line(s)",
+    "interstate (IGST)",
+    "round-off",
+    "no printed taxable subtotal",
+    "low-quality rasterised scan"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Gomti Furniture House",
+      "gstin": "09ABMFG9021R1ZK",
+      "stateCode": "09"
+    },
+    "billNumber": "INV-29858",
+    "billDate": "2026-07-27",
+    "dueDate": null,
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Laptop stand, aluminium",
+        "hsnSac": "84733099",
+        "quantity": "7",
+        "rate": "2,531.00",
+        "taxableAmount": "17,717.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Corrugated shipping boxes",
+        "hsnSac": "48191010",
+        "quantity": "24",
+        "rate": "37.00",
+        "taxableAmount": "888.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Cotton T-shirts, printed (merch)",
+        "hsnSac": "61091000",
+        "quantity": "20",
+        "rate": "384.00",
+        "taxableAmount": "7,680.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": null,
+      "cgst": null,
+      "sgst": null,
+      "igst": "3,617.46",
+      "total": "29,902.00"
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "bill-16",
+  "file": "bill-16.pdf",
+  "mediaType": "application/pdf",
+  "layout": "minimal",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "3 line(s)",
+    "interstate (IGST)",
+    "missing HSN on some lines"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Aravalli Talent Partners Pvt Ltd",
+      "gstin": "06AAGCA1187T1Z3",
+      "stateCode": "06"
+    },
+    "billNumber": "16573/2026-27",
+    "billDate": "2026-10-20",
+    "dueDate": "2026-12-04",
+    "placeOfSupply": "Karnataka (29)",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Printed brochures",
+        "hsnSac": null,
+        "quantity": "12",
+        "rate": "37.00",
+        "taxableAmount": "444.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Courier and delivery services",
+        "hsnSac": "996812",
+        "quantity": "1",
+        "rate": "7,337.00",
+        "taxableAmount": "7,337.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": null,
+        "quantity": "1.5",
+        "rate": "51,626.00",
+        "taxableAmount": "77,439.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "85,220.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "15,281.88",
+      "total": "1,00,501.88"
+    }
+  }
+}

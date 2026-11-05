@@ -1,0 +1,79 @@
+{
+  "id": "bill-10",
+  "file": "bill-10.pdf",
+  "mediaType": "application/pdf",
+  "layout": "summary",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "4 line(s)",
+    "intrastate (CGST+SGST)",
+    "missing HSN on some lines"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Aravalli Talent Partners Pvt Ltd",
+      "gstin": "06AAGCA1187T1Z3",
+      "stateCode": "06"
+    },
+    "billNumber": "39993/2026-27",
+    "billDate": "2026-07-03",
+    "dueDate": null,
+    "placeOfSupply": "Haryana",
+    "placeOfSupplyStateCode": "06",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Cloud hosting - compute instances",
+        "hsnSac": null,
+        "quantity": "4",
+        "rate": "34,389.00",
+        "taxableAmount": "1,37,556.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": "2",
+        "rate": "8,948.00",
+        "taxableAmount": "17,896.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Performance marketing - campaign management",
+        "hsnSac": null,
+        "quantity": "1.5",
+        "rate": "1,20,906.00",
+        "taxableAmount": "1,81,359.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "0.5",
+        "rate": "89,875.00",
+        "taxableAmount": "44,937.50",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "3,81,748.50",
+      "cgst": "34,357.37",
+      "sgst": "34,357.37",
+      "igst": null,
+      "total": "4,50,463.24"
+    }
+  }
+}
