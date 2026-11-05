@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { InvalidMoneyError, paise } from "./money.js"
-import type { Money } from "./money.js"
-import type { JournalLine } from "./types.js"
-import { validateEntry } from "./validate-entry.js"
+import { InvalidMoneyError, paise } from "./money"
+import type { Money } from "./money"
+import type { JournalLine } from "./types"
+import { validateEntry } from "./validate-entry"
 
 const dr = (accountId: string, amount: bigint): JournalLine => ({
   accountId,
