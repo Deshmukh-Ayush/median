@@ -39,6 +39,7 @@ Read their types from the code once merged; don't guess.
 1. Design tokens on the Base UI Nova preset: one accent colour, type scale, spacing, light/dark.
 2. `formatINR` and lakh/crore helpers in `src/lib`, with tests.
 3. Sign up, sign in, create organization (pick business type: SaaS, D2C, agency), invite member, role-aware navigation using `permissions.ts`.
+   - Org onboarding also collects GSTIN, state, GST registered (yes/no), composition scheme (yes/no) and default GST rate.
 4. App shell: sidebar with Home, AI inbox, Revenue, Cash, Invoices, Bills, GST, Reports, Ledger, Settings; Ctrl+K command bar.
 5. After the contract merges: Home screen wired to `getDashboardSummary` (stub data is fine).
 
@@ -46,15 +47,19 @@ Read their types from the code once merged; don't guess.
 1. In `src/server/ai`: Zod schemas for bill extraction (vendor, GSTIN, invoice number, date, line items, HSN/SAC, taxable value, tax rates as printed) using `generateObject` with `fastModel`. The AI extracts; it never computes totals.
 2. An eval script: run 30 sample bills (fake or anonymised) and report field-level accuracy. Save results to `docs/evals/`.
 3. Settings → Connections: Razorpay key form calling `connectRazorpay`, sync button calling `syncRazorpay`, last synced time.
+4. Settings → GST rates: map each product/stream to a GST rate (the default per-line rate in the invoice builder).
 
 **Day 3: AI inbox and bank upload**
 1. AI inbox: cursor-paginated list, detail panel with the source document, confidence and reason, approve / edit / reject, bulk approve, keyboard shortcuts (j/k, a, r).
+   - Each inbox item shows the GST split (taxable value, CGST/SGST or IGST) and any TDS deducted, all editable before approval. The split comes from extraction and backend services; the UI doesn't compute tax.
 2. Bank statement upload: CSV goes straight to `importBankRows`; PDF statements are extracted by the AI into the same row shape first.
 3. Show matching results: matched, needs review.
 
 **Day 4: bills and invoices**
 1. Bills: upload (Vercel Blob) → AI extraction → `createInboxItemFromExtraction` → appears in the inbox.
 2. Invoice builder UI calling `createInvoice`; GST-compliant invoice PDF with @react-pdf/renderer, rendered server-side only; download button.
+   - Builder fields: supply type (intra/inter-state, set automatically from place of supply, can be overridden), export / SEZ / reverse-charge flags, and a GST rate on each line. Supply type and tax amounts come from backend services, not UI maths.
+   - Credit note flow: raise a credit note from an existing invoice.
 3. Invoices list with receivables ageing (current, 30, 60, 90+ days).
 
 **Day 5: reports and money screens**
