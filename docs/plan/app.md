@@ -46,13 +46,13 @@ Read their types from the code once merged; don't guess.
 **Day 2: AI extraction and connections**
 1. In `src/server/ai`: Zod schemas for bill extraction (vendor, GSTIN, invoice number, date, line items, HSN/SAC, taxable value, tax rates as printed) using `generateObject` with `fastModel`. The AI extracts; it never computes totals.
 2. An eval script: run 30 sample bills (fake or anonymised) and report field-level accuracy. Save results to `docs/evals/`.
-3. Settings → Connections: Razorpay key form calling `connectRazorpay`, sync button calling `syncRazorpay`, last synced time.
+3. Settings → Integrations: a gallery from `listConnectors()`, grouped by category (Payments, Banks, Accounting, Sales channels, Payroll). Each card shows status, last synced, sync now and disconnect. Connectors not built yet show "Coming soon". The connect flow depends on each connector's `authType`: an API key form, a file upload, or OAuth (later).
 4. Settings → GST rates: map each product/stream to a GST rate (the default per-line rate in the invoice builder).
 
 **Day 3: AI inbox and bank upload**
 1. AI inbox: cursor-paginated list, detail panel with the source document, confidence and reason, approve / edit / reject, bulk approve, keyboard shortcuts (j/k, a, r).
    - Each inbox item shows the GST split (taxable value, CGST/SGST or IGST) and any TDS deducted, all editable before approval. The split comes from extraction and backend services; the UI doesn't compute tax.
-2. Bank statement upload: CSV goes straight to `importBankRows`; PDF statements are extracted by the AI into the same row shape first.
+2. Bank statement upload, using the same file-connector flow as Settings → Integrations: CSV goes straight to `importBankRows`; PDF statements are extracted by the AI into the same row shape first.
 3. Show matching results: matched, needs review.
 
 **Day 4: bills and invoices**
@@ -70,10 +70,11 @@ Read their types from the code once merged; don't guess.
 **Day 6: GST, CA review, polish**
 1. GST screen: monthly summary from `getGstSummary`, download buttons, deadlines.
 2. CA review screen: lock period, Tally export download, audit log viewer.
-3. Polish: empty states, skeletons, error states; check every page for client bundle size and Lighthouse performance; fix regressions.
+3. "Move from Tally or Zoho Books" import flow: upload file → preview what will be imported → run → show the trial-balance check (matches / difference).
+4. Polish: empty states, skeletons, error states; check every page for client bundle size and Lighthouse performance; fix regressions.
 
 **Day 7: onboarding and launch**
-1. Onboarding flow: business type → connect Razorpay → upload a bank statement → see the dashboard.
+1. Onboarding flow: business type → GST profile → connect Razorpay → upload a bank statement or import from Tally → see the dashboard.
 2. Re-run the bill eval; note accuracy.
 3. Click through every screen with the demo org, fix bugs, deploy.
 
