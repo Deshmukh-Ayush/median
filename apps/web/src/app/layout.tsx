@@ -1,13 +1,16 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Inter } from "next/font/google"
 
 import "@workspace/ui/globals.css"
-import { cn } from "@workspace/ui/lib/utils"
 
-import { ThemeProvider } from "@/components/theme-provider"
-
-const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
-const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
+// Inter with its optical-size axis: text sizes get Inter's text cut, and
+// `font-display` (opsz 32) gives Inter Display for page titles. One file.
+const inter = Inter({
+  subsets: ["latin"],
+  axes: ["opsz"],
+  variable: "--font-inter",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "Median",
@@ -20,18 +23,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en-IN"
-      suppressHydrationWarning
-      className={cn(
-        "font-sans antialiased",
-        fontSans.variable,
-        fontMono.variable
-      )}
-    >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+    <html lang="en-IN" className={inter.variable}>
+      <body className="font-sans">{children}</body>
     </html>
   )
 }

@@ -18,7 +18,9 @@ export default function HomePage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button className="w-full">Get started</Button>
+          <Button variant="primary" className="w-full">
+            Get started
+          </Button>
         </CardContent>
       </Card>
     </main>

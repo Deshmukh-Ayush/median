@@ -6,11 +6,15 @@
   "scripts": {
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx,css}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@workspace/contracts": "*",
+    "@workspace/ledger": "*",
     "class-variance-authority": "^0.7.1",
+    "cmdk": "^1.1.1",
     "cn": "^0.5.2",
     "lucide-react": "^1.68.0",
     "next-themes": "^0.4.6",
@@ -30,7 +34,8 @@
     "@workspace/typescript-config": "*",
     "eslint": "^10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^5.1.0"
   },
   "exports": {
     "./globals.css": "./src/styles/globals.css",
