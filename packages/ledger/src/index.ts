@@ -12,3 +12,5 @@ export type {
   EntryValidationResult,
 } from "./validate-entry.js"
 export { validateEntry } from "./validate-entry.js"
+export type { FormatInrOptions } from "./format.js"
+export { formatInr, parseRupees } from "./format.js"
