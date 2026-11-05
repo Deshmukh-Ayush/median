@@ -35,3 +35,27 @@ export type {
   PostingResult,
 } from "./post-entry"
 export { buildReversal, checkPosting, isIsoDate, periodOf } from "./post-entry"
+export type {
+  DocumentTotals,
+  GstSplit,
+  LineInput,
+  LineTax,
+  RateBps,
+  ResolvedSupply,
+  SupplyType,
+  SupplyTypeInput,
+  TdsMatch,
+} from "./gst"
+export {
+  TDS_RATES_BPS,
+  computeLine,
+  documentTotals,
+  financialYearOf,
+  isValidDocumentNumber,
+  lineTaxable,
+  matchTdsReceipt,
+  resolveSupply,
+  splitInclusive,
+  splitTax,
+  taxOn,
+} from "./gst"
