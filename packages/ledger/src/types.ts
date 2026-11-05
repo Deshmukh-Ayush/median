@@ -1,4 +1,4 @@
-import type { Money } from "./money.js"
+import type { Money } from "./money"
 
 export type AccountType =
   "asset" | "liability" | "equity" | "income" | "expense"
@@ -17,6 +17,8 @@ export interface Account {
  */
 export interface JournalLine {
   readonly accountId: string
+  /** Customer or vendor the line relates to (receivables, payables). */
+  readonly partyId?: string | null
   readonly debit: Money
   readonly credit: Money
   readonly description?: string

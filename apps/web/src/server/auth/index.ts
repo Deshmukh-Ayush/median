@@ -8,6 +8,10 @@ import { organization } from "better-auth/plugins"
 import { getDb } from "../db"
 import * as schema from "../db/schema"
 import { getServerEnv } from "../env"
+import {
+  industryFromMetadata,
+  seedOrganization,
+} from "../services/organizations"
 import { ac, roles } from "./permissions"
 
 function createAuth() {
@@ -21,6 +25,18 @@ function createAuth() {
         ac,
         roles,
         creatorRole: "owner",
+        // Books must be kept: an organisation with a ledger can't be deleted.
+        disableOrganizationDeletion: true,
+        organizationHooks: {
+          // Seed the chart of accounts from metadata.industry (default SaaS).
+          afterCreateOrganization: async ({ organization, user }) => {
+            await seedOrganization({
+              orgId: organization.id,
+              industry: industryFromMetadata(organization.metadata),
+              actorId: user.id,
+            })
+          },
+        },
       }),
       // Must stay last: lets server actions set auth cookies.
       nextCookies(),
