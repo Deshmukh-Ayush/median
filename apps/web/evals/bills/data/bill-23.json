@@ -1,0 +1,56 @@
+{
+  "id": "bill-23",
+  "file": "bill-23.pdf",
+  "mediaType": "application/pdf",
+  "layout": "service",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "2 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Charminar Courier Services",
+      "gstin": "36AAJFC3348P1ZY",
+      "stateCode": "36"
+    },
+    "billNumber": "INV-19173",
+    "billDate": "2026-07-12",
+    "dueDate": "2026-07-27",
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "28,526.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "11,862.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "40,388.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "7,269.84",
+      "total": "47,657.84"
+    }
+  }
+}

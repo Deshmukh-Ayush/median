@@ -1,0 +1,81 @@
+{
+  "id": "bill-29",
+  "file": "bill-29.jpg",
+  "mediaType": "image/jpeg",
+  "layout": "receipt",
+  "quality": "image-low",
+  "supply": "intra",
+  "notes": [
+    "4 line(s)",
+    "intrastate (CGST+SGST)",
+    "round-off",
+    "no printed taxable subtotal",
+    "low-quality rasterised scan"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Kaveri Packaging Works",
+      "gstin": "33AARFK5320D1ZL",
+      "stateCode": "33"
+    },
+    "billNumber": "KPW/26-27/0936",
+    "billDate": "2026-10-27",
+    "dueDate": null,
+    "placeOfSupply": "Tamil Nadu (33)",
+    "placeOfSupplyStateCode": "33",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Performance marketing - campaign management",
+        "hsnSac": "998365",
+        "quantity": "1.5",
+        "rate": "28,502.00",
+        "taxableAmount": "42,753.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": "4",
+        "rate": "68,712.00",
+        "taxableAmount": "2,74,848.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "USB-C charging cable, 1.5 m",
+        "hsnSac": "85444299",
+        "quantity": "11",
+        "rate": "424.00",
+        "taxableAmount": "4,664.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Cloud hosting - compute instances",
+        "hsnSac": "998315",
+        "quantity": "4",
+        "rate": "32,741.00",
+        "taxableAmount": "1,30,964.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": null,
+      "cgst": "40,790.61",
+      "sgst": "40,790.61",
+      "igst": null,
+      "total": "5,34,810.00"
+    }
+  }
+}

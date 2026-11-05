@@ -1,0 +1,67 @@
+{
+  "id": "bill-12",
+  "file": "bill-12.pdf",
+  "mediaType": "application/pdf",
+  "layout": "summary",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "3 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Neem Tree Digital Media Pvt Ltd",
+      "gstin": "24AAFCN6612H1ZM",
+      "stateCode": "24"
+    },
+    "billNumber": "NTD-09752",
+    "billDate": "2026-09-20",
+    "dueDate": null,
+    "placeOfSupply": "Gujarat",
+    "placeOfSupplyStateCode": "24",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Ergonomic office chair",
+        "hsnSac": "94013000",
+        "quantity": "22",
+        "rate": "7,533.00",
+        "taxableAmount": "1,65,726.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Corrugated shipping boxes",
+        "hsnSac": "48191010",
+        "quantity": "25",
+        "rate": "56.00",
+        "taxableAmount": "1,400.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Courier and delivery services",
+        "hsnSac": "996812",
+        "quantity": "2",
+        "rate": "5,005.00",
+        "taxableAmount": "10,010.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "1,77,136.00",
+      "cgst": "15,851.24",
+      "sgst": "15,851.24",
+      "igst": null,
+      "total": "2,08,838.48"
+    }
+  }
+}

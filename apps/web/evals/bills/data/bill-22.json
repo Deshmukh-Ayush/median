@@ -1,0 +1,45 @@
+{
+  "id": "bill-22",
+  "file": "bill-22.pdf",
+  "mediaType": "application/pdf",
+  "layout": "service",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "1 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Lotus Peak Cloud Pvt Ltd",
+      "gstin": "29AAACL4417K1ZD",
+      "stateCode": "29"
+    },
+    "billNumber": "LPC/26-27/0155",
+    "billDate": "2026-08-07",
+    "dueDate": "2026-08-22",
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "17,541.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "17,541.00",
+      "cgst": "1,578.69",
+      "sgst": "1,578.69",
+      "igst": null,
+      "total": "20,698.38"
+    }
+  }
+}

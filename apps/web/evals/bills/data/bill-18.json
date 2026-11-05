@@ -1,0 +1,90 @@
+{
+  "id": "bill-18",
+  "file": "bill-18.pdf",
+  "mediaType": "application/pdf",
+  "layout": "minimal",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "5 line(s)",
+    "interstate (IGST)",
+    "round-off"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Kaveri Packaging Works",
+      "gstin": "33AARFK5320D1ZL",
+      "stateCode": "33"
+    },
+    "billNumber": "KPW/26-27/0085",
+    "billDate": "2026-04-17",
+    "dueDate": null,
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": "1",
+        "rate": "15,811.00",
+        "taxableAmount": "15,811.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": "4",
+        "rate": "1,09,459.00",
+        "taxableAmount": "4,37,836.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Cotton T-shirts, printed (merch)",
+        "hsnSac": "61091000",
+        "quantity": "9",
+        "rate": "481.00",
+        "taxableAmount": "4,329.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "1",
+        "rate": "1,15,352.00",
+        "taxableAmount": "1,15,352.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "4",
+        "rate": "47,393.00",
+        "taxableAmount": "1,89,572.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "7,62,900.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "1,36,759.23",
+      "total": "8,99,659.00"
+    }
+  }
+}

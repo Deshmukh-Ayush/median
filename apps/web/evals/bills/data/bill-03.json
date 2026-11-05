@@ -1,0 +1,45 @@
+{
+  "id": "bill-03",
+  "file": "bill-03.pdf",
+  "mediaType": "application/pdf",
+  "layout": "classic",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "1 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Hooghly Print & Press",
+      "gstin": "19ABQFH4475M1ZG",
+      "stateCode": "19"
+    },
+    "billNumber": "HP&-08561",
+    "billDate": "2026-08-01",
+    "dueDate": null,
+    "placeOfSupply": "19-West Bengal",
+    "placeOfSupplyStateCode": "19",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Courier and delivery services",
+        "hsnSac": "996812",
+        "quantity": "4",
+        "rate": "7,713.00",
+        "taxableAmount": "30,852.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "2,776.68",
+        "sgstAmount": "2,776.68",
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "30,852.00",
+      "cgst": "2,776.68",
+      "sgst": "2,776.68",
+      "igst": null,
+      "total": "36,405.36"
+    }
+  }
+}

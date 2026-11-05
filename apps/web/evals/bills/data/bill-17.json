@@ -1,0 +1,100 @@
+{
+  "id": "bill-17",
+  "file": "bill-17.pdf",
+  "mediaType": "application/pdf",
+  "layout": "minimal",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "6 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Brightwater Legal LLP",
+      "gstin": "07AAKFB7781C1ZD",
+      "stateCode": "07"
+    },
+    "billNumber": "18977/2026-27",
+    "billDate": "2026-07-16",
+    "dueDate": null,
+    "placeOfSupply": "07-Delhi",
+    "placeOfSupplyStateCode": "07",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "3",
+        "rate": "67,224.00",
+        "taxableAmount": "2,01,672.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Dedicated desk, monthly",
+        "hsnSac": "997212",
+        "quantity": "1",
+        "rate": "15,851.00",
+        "taxableAmount": "15,851.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "0.5",
+        "rate": "53,827.00",
+        "taxableAmount": "26,913.50",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Pantry snacks assortment",
+        "hsnSac": "21069099",
+        "quantity": "5",
+        "rate": "1,005.00",
+        "taxableAmount": "5,025.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": "1",
+        "rate": "1,32,280.00",
+        "taxableAmount": "1,32,280.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Laptop stand, aluminium",
+        "hsnSac": "84733099",
+        "quantity": "21",
+        "rate": "1,150.00",
+        "taxableAmount": "24,150.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "4,05,891.50",
+      "cgst": "36,203.62",
+      "sgst": "36,203.62",
+      "igst": null,
+      "total": "4,78,298.74"
+    }
+  }
+}

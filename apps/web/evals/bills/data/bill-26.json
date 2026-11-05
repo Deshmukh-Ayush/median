@@ -1,0 +1,58 @@
+{
+  "id": "bill-26",
+  "file": "bill-26.jpg",
+  "mediaType": "image/jpeg",
+  "layout": "classic",
+  "quality": "image-low",
+  "supply": "inter",
+  "notes": [
+    "2 line(s)",
+    "interstate (IGST)",
+    "round-off",
+    "low-quality rasterised scan"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Gomti Furniture House",
+      "gstin": "09ABMFG9021R1ZK",
+      "stateCode": "09"
+    },
+    "billNumber": "GFH-04868",
+    "billDate": "2026-04-04",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Ergonomic office chair",
+        "hsnSac": "94013000",
+        "quantity": "1",
+        "rate": "12,684.00",
+        "taxableAmount": "12,684.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "2,283.12"
+      },
+      {
+        "description": "Cloud hosting - compute instances",
+        "hsnSac": "998315",
+        "quantity": "3",
+        "rate": "13,295.00",
+        "taxableAmount": "39,885.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "7,179.30"
+      }
+    ],
+    "printedTotals": {
+      "taxable": "52,569.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "9,462.42",
+      "total": "62,031.00"
+    }
+  }
+}

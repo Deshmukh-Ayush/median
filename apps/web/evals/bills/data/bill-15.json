@@ -1,0 +1,89 @@
+{
+  "id": "bill-15",
+  "file": "bill-15.pdf",
+  "mediaType": "application/pdf",
+  "layout": "minimal",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "5 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Malabar Coworking Spaces Pvt Ltd",
+      "gstin": "32AAECM8830B1ZV",
+      "stateCode": "32"
+    },
+    "billNumber": "INV-96657",
+    "billDate": "2026-10-13",
+    "dueDate": null,
+    "placeOfSupply": "Kerala",
+    "placeOfSupplyStateCode": "32",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Pantry snacks assortment",
+        "hsnSac": "21069099",
+        "quantity": "14",
+        "rate": "1,644.00",
+        "taxableAmount": "23,016.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Cotton T-shirts, printed (merch)",
+        "hsnSac": "61091000",
+        "quantity": "21",
+        "rate": "328.00",
+        "taxableAmount": "6,888.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Laptop stand, aluminium",
+        "hsnSac": "84733099",
+        "quantity": "2",
+        "rate": "2,500.00",
+        "taxableAmount": "5,000.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Cloud hosting - compute instances",
+        "hsnSac": "998315",
+        "quantity": "1",
+        "rate": "37,606.00",
+        "taxableAmount": "37,606.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "USB-C charging cable, 1.5 m",
+        "hsnSac": "85444299",
+        "quantity": "15",
+        "rate": "749.00",
+        "taxableAmount": "11,235.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "83,745.00",
+      "cgst": "5,593.29",
+      "sgst": "5,593.29",
+      "igst": null,
+      "total": "94,931.58"
+    }
+  }
+}

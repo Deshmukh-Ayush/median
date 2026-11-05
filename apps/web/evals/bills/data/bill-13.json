@@ -1,0 +1,67 @@
+{
+  "id": "bill-13",
+  "file": "bill-13.pdf",
+  "mediaType": "application/pdf",
+  "layout": "minimal",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "3 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Kaveri Packaging Works",
+      "gstin": "33AARFK5320D1ZL",
+      "stateCode": "33"
+    },
+    "billNumber": "KPW/26-27/0608",
+    "billDate": "2026-09-26",
+    "dueDate": null,
+    "placeOfSupply": "Tamil Nadu",
+    "placeOfSupplyStateCode": "33",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "A4 copier paper, 75 GSM (ream)",
+        "hsnSac": "48025690",
+        "quantity": "8",
+        "rate": "409.00",
+        "taxableAmount": "3,272.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": "3",
+        "rate": "1,07,981.00",
+        "taxableAmount": "3,23,943.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "3",
+        "rate": "52,332.00",
+        "taxableAmount": "1,56,996.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "4,84,211.00",
+      "cgst": "43,578.99",
+      "sgst": "43,578.99",
+      "igst": null,
+      "total": "5,71,368.98"
+    }
+  }
+}

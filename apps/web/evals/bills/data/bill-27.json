@@ -1,0 +1,69 @@
+{
+  "id": "bill-27",
+  "file": "bill-27.jpg",
+  "mediaType": "image/jpeg",
+  "layout": "classic",
+  "quality": "image-low",
+  "supply": "intra",
+  "notes": [
+    "3 line(s)",
+    "intrastate (CGST+SGST)",
+    "missing HSN on some lines",
+    "low-quality rasterised scan"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Aravalli Talent Partners Pvt Ltd",
+      "gstin": "06AAGCA1187T1Z3",
+      "stateCode": "06"
+    },
+    "billNumber": "ATP/26-27/0011",
+    "billDate": "2026-04-17",
+    "dueDate": null,
+    "placeOfSupply": "Haryana (06)",
+    "placeOfSupplyStateCode": "06",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Cotton T-shirts, printed (merch)",
+        "hsnSac": null,
+        "quantity": "17",
+        "rate": "329.00",
+        "taxableAmount": "5,593.00",
+        "gstRatePercent": "5",
+        "cgstAmount": "139.83",
+        "sgstAmount": "139.83",
+        "igstAmount": null
+      },
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": "2",
+        "rate": "10,305.00",
+        "taxableAmount": "20,610.00",
+        "gstRatePercent": "18",
+        "cgstAmount": "1,854.90",
+        "sgstAmount": "1,854.90",
+        "igstAmount": null
+      },
+      {
+        "description": "Printed brochures",
+        "hsnSac": null,
+        "quantity": "5",
+        "rate": "14.00",
+        "taxableAmount": "70.00",
+        "gstRatePercent": "5",
+        "cgstAmount": "1.75",
+        "sgstAmount": "1.75",
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "26,273.00",
+      "cgst": "1,996.48",
+      "sgst": "1,996.48",
+      "igst": null,
+      "total": "30,265.96"
+    }
+  }
+}

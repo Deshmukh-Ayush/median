@@ -1,0 +1,56 @@
+{
+  "id": "bill-24",
+  "file": "bill-24.pdf",
+  "mediaType": "application/pdf",
+  "layout": "service",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "2 line(s)",
+    "intrastate (CGST+SGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Neem Tree Digital Media Pvt Ltd",
+      "gstin": "24AAFCN6612H1ZM",
+      "stateCode": "24"
+    },
+    "billNumber": "INV-53194",
+    "billDate": "2026-09-10",
+    "dueDate": "2026-09-25",
+    "placeOfSupply": "Gujarat (24)",
+    "placeOfSupplyStateCode": "24",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Recruitment services - engineering hire",
+        "hsnSac": "998512",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "3,93,993.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "5,686.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "3,99,679.00",
+      "cgst": "35,971.11",
+      "sgst": "35,971.11",
+      "igst": null,
+      "total": "4,71,621.22"
+    }
+  }
+}

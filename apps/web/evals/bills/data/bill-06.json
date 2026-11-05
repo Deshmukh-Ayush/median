@@ -1,0 +1,45 @@
+{
+  "id": "bill-06",
+  "file": "bill-06.pdf",
+  "mediaType": "application/pdf",
+  "layout": "classic",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "1 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Malabar Coworking Spaces Pvt Ltd",
+      "gstin": "32AAECM8830B1ZV",
+      "stateCode": "32"
+    },
+    "billNumber": "32262/2026-27",
+    "billDate": "2026-05-12",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "A4 copier paper, 75 GSM (ream)",
+        "hsnSac": "48025690",
+        "quantity": "12",
+        "rate": "287.00",
+        "taxableAmount": "3,444.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "619.92"
+      }
+    ],
+    "printedTotals": {
+      "taxable": "3,444.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "619.92",
+      "total": "4,063.92"
+    }
+  }
+}

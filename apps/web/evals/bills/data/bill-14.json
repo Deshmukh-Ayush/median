@@ -1,0 +1,68 @@
+{
+  "id": "bill-14",
+  "file": "bill-14.pdf",
+  "mediaType": "application/pdf",
+  "layout": "minimal",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "3 line(s)",
+    "interstate (IGST)",
+    "round-off"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Neem Tree Digital Media Pvt Ltd",
+      "gstin": "24AAFCN6612H1ZM",
+      "stateCode": "24"
+    },
+    "billNumber": "30375/2026-27",
+    "billDate": "2026-07-09",
+    "dueDate": null,
+    "placeOfSupply": "Karnataka (29)",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Performance marketing - campaign management",
+        "hsnSac": "998365",
+        "quantity": "4",
+        "rate": "52,488.00",
+        "taxableAmount": "2,09,952.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Pantry snacks assortment",
+        "hsnSac": "21069099",
+        "quantity": "9",
+        "rate": "2,174.00",
+        "taxableAmount": "19,566.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": "2",
+        "rate": "28,937.00",
+        "taxableAmount": "57,874.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "2,87,392.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "49,186.98",
+      "total": "3,36,579.00"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "id": "bill-02",
+  "file": "bill-02.pdf",
+  "mediaType": "application/pdf",
+  "layout": "classic",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "2 line(s)",
+    "interstate (IGST)",
+    "round-off"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Kaveri Packaging Works",
+      "gstin": "33AARFK5320D1ZL",
+      "stateCode": "33"
+    },
+    "billNumber": "27947/2026-27",
+    "billDate": "2026-10-16",
+    "dueDate": null,
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Performance marketing - campaign management",
+        "hsnSac": "998365",
+        "quantity": "2",
+        "rate": "63,983.00",
+        "taxableAmount": "1,27,966.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "23,033.88"
+      },
+      {
+        "description": "USB-C charging cable, 1.5 m",
+        "hsnSac": "85444299",
+        "quantity": "21",
+        "rate": "685.00",
+        "taxableAmount": "14,385.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": "2,589.30"
+      }
+    ],
+    "printedTotals": {
+      "taxable": "1,42,351.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "25,623.18",
+      "total": "1,67,974.00"
+    }
+  }
+}

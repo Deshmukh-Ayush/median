@@ -1,0 +1,45 @@
+{
+  "id": "bill-21",
+  "file": "bill-21.pdf",
+  "mediaType": "application/pdf",
+  "layout": "service",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "1 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Neem Tree Digital Media Pvt Ltd",
+      "gstin": "24AAFCN6612H1ZM",
+      "stateCode": "24"
+    },
+    "billNumber": "INV-77985",
+    "billDate": "2026-08-09",
+    "dueDate": "2026-08-24",
+    "placeOfSupply": "Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "70,174.50",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "70,174.50",
+      "cgst": null,
+      "sgst": null,
+      "igst": "12,631.41",
+      "total": "82,805.91"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "id": "bill-20",
+  "file": "bill-20.pdf",
+  "mediaType": "application/pdf",
+  "layout": "service",
+  "quality": "pdf",
+  "supply": "intra",
+  "notes": [
+    "1 line(s)",
+    "intrastate (CGST+SGST)",
+    "round-off"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Kaveri Packaging Works",
+      "gstin": "33AARFK5320D1ZL",
+      "stateCode": "33"
+    },
+    "billNumber": "19221/2026-27",
+    "billDate": "2026-08-06",
+    "dueDate": null,
+    "placeOfSupply": "33-Tamil Nadu",
+    "placeOfSupplyStateCode": "33",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Software subscription (annual)",
+        "hsnSac": "997331",
+        "quantity": null,
+        "rate": null,
+        "taxableAmount": "1,11,780.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "1,11,780.00",
+      "cgst": "10,060.20",
+      "sgst": "10,060.20",
+      "igst": null,
+      "total": "1,31,900.00"
+    }
+  }
+}

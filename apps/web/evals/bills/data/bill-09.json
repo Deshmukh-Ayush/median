@@ -1,0 +1,89 @@
+{
+  "id": "bill-09",
+  "file": "bill-09.pdf",
+  "mediaType": "application/pdf",
+  "layout": "summary",
+  "quality": "pdf",
+  "supply": "inter",
+  "notes": [
+    "5 line(s)",
+    "interstate (IGST)"
+  ],
+  "expected": {
+    "vendor": {
+      "name": "Neem Tree Digital Media Pvt Ltd",
+      "gstin": "24AAFCN6612H1ZM",
+      "stateCode": "24"
+    },
+    "billNumber": "13381/2026-27",
+    "billDate": "2026-05-21",
+    "dueDate": "2026-06-20",
+    "placeOfSupply": "29-Karnataka",
+    "placeOfSupplyStateCode": "29",
+    "currency": "INR",
+    "lines": [
+      {
+        "description": "Annual maintenance - air conditioners",
+        "hsnSac": "998719",
+        "quantity": "4",
+        "rate": "9,260.00",
+        "taxableAmount": "37,040.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Corrugated shipping boxes",
+        "hsnSac": "48191010",
+        "quantity": "6",
+        "rate": "40.00",
+        "taxableAmount": "240.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Printed brochures",
+        "hsnSac": "49011010",
+        "quantity": "13",
+        "rate": "30.00",
+        "taxableAmount": "390.00",
+        "gstRatePercent": "5",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "Legal consultation - shareholder agreement",
+        "hsnSac": "998211",
+        "quantity": "2",
+        "rate": "82,666.00",
+        "taxableAmount": "1,65,332.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      },
+      {
+        "description": "USB-C charging cable, 1.5 m",
+        "hsnSac": "85444299",
+        "quantity": "11",
+        "rate": "736.00",
+        "taxableAmount": "8,096.00",
+        "gstRatePercent": "18",
+        "cgstAmount": null,
+        "sgstAmount": null,
+        "igstAmount": null
+      }
+    ],
+    "printedTotals": {
+      "taxable": "2,11,098.00",
+      "cgst": null,
+      "sgst": null,
+      "igst": "37,915.74",
+      "total": "2,49,013.74"
+    }
+  }
+}
