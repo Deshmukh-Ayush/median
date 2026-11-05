@@ -47,7 +47,9 @@ Read their types from the code once merged; don't guess.
 **Day 2: AI extraction and connections**
 1. In `src/server/ai`: Zod schemas for bill extraction (vendor, GSTIN, invoice number, date, line items, HSN/SAC, taxable value, tax rates as printed) using `generateObject` with `fastModel`. The AI extracts; it never computes totals.
 2. An eval script: run 30 sample bills (fake or anonymised) and report field-level accuracy. Save results to `docs/evals/`.
-3. Settings → Integrations: a gallery from `listConnectors()`, grouped by category (Payments, Banks, Accounting, Sales channels, Payroll). Each card shows status, last synced, sync now and disconnect. Connectors not built yet show "Coming soon". The connect flow depends on each connector's `authType`: an API key form, a file upload, or OAuth (later).
+3. Settings → Integrations: a gallery from `listConnectors()`, grouped by category (Payments, Banks, Accounting, Sales channels, Payroll). Each card shows status, last synced, sync now and disconnect. Connectors not built yet show "Coming soon". The connect flow depends on each connector's `authType`: an API key form, a file upload, or OAuth.
+   - Razorpay connects by OAuth redirect: "Connect Razorpay" → Razorpay's approval screen → back to Settings → Integrations. The card shows one of three statuses: connected, reconnect needed, or revoked (reconnect needed and revoked show a "Reconnect" button). The Razorpay API-key form is shown only in test mode.
+   - Until Razorpay partner approval comes through, the Integrations screen also offers "Upload Razorpay settlement report": a file import through the same file-connector flow as bank statements.
 4. Settings → GST rates: map each product/stream to a GST rate (the default per-line rate in the invoice builder).
 
 **Day 3: AI inbox and bank upload**
