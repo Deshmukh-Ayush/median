@@ -1,28 +1,47 @@
-"use client"
-
 import * as React from "react"
 import { cn } from "cn"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  containerStyle,
+  ...props
+}: React.ComponentProps<"table"> & {
+  containerClassName?: string | undefined
+  /** e.g. { maxHeight } so the header sticks while the body scrolls. */
+  containerStyle?: React.CSSProperties | undefined
+}) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-auto", containerClassName)}
+      style={containerStyle}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn(
+          "w-full caption-bottom border-separate border-spacing-0 text-sm",
+          className
+        )}
         {...props}
       />
     </div>
   )
 }
 
-function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+function TableHeader({
+  className,
+  sticky = false,
+  ...props
+}: React.ComponentProps<"thead"> & { sticky?: boolean | undefined }) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      data-sticky={sticky ? "" : undefined}
+      className={cn(
+        "data-sticky:sticky data-sticky:top-0 data-sticky:z-10",
+        className
+      )}
       {...props}
     />
   )
@@ -32,7 +51,7 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      className={cn("[&_tr:last-child>td]:border-b-0", className)}
       {...props}
     />
   )
@@ -43,7 +62,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
     <tfoot
       data-slot="table-footer"
       className={cn(
-        "border-t bg-muted/50 font-medium [&>tr]:last:border-b-0",
+        "bg-app font-medium [&_td]:border-t [&_td]:border-default",
         className
       )}
       {...props}
@@ -56,7 +75,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "transition-colors hover:bg-hover aria-selected:bg-selected data-[state=selected]:bg-selected",
         className
       )}
       {...props}
@@ -64,12 +83,17 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+function TableHead({
+  className,
+  numeric = false,
+  ...props
+}: React.ComponentProps<"th"> & { numeric?: boolean | undefined }) {
   return (
     <th
       data-slot="table-head"
+      data-numeric={numeric ? "" : undefined}
       className={cn(
-        "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        "h-8 border-b border-default bg-surface px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-fg-secondary data-numeric:text-right",
         className
       )}
       {...props}
@@ -77,12 +101,17 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+function TableCell({
+  className,
+  numeric = false,
+  ...props
+}: React.ComponentProps<"td"> & { numeric?: boolean | undefined }) {
   return (
     <td
       data-slot="table-cell"
+      data-numeric={numeric ? "" : undefined}
       className={cn(
-        "p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "h-8 border-b border-subtle px-3 py-0 align-middle whitespace-nowrap data-numeric:text-right data-numeric:tabular",
         className
       )}
       {...props}
@@ -97,7 +126,7 @@ function TableCaption({
   return (
     <caption
       data-slot="table-caption"
-      className={cn("mt-4 text-sm text-muted-foreground", className)}
+      className={cn("mt-3 text-xs text-fg-secondary", className)}
       {...props}
     />
   )
