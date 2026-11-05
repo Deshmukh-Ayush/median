@@ -1,51 +1,131 @@
+import { headers } from "next/headers"
 import Link from "next/link"
+import { ArrowLeftRightIcon, LogOutIcon, UserPlusIcon } from "lucide-react"
 
+import { AppShell, TopBar } from "@workspace/ui/components/app-shell"
 import { Button } from "@workspace/ui/components/button"
+import type { CommandBarGroup } from "@workspace/ui/components/command-bar"
 import { Logo } from "@workspace/ui/components/logo"
+import type { SidebarSection } from "@workspace/ui/components/sidebar"
 
 import { signOut } from "@/app/(auth)/actions"
+import { AppCommandBar } from "@/components/shell/app-command-bar"
+import { AppSidebar } from "@/components/shell/app-sidebar"
 import { navigationFor } from "@/lib/navigation"
-import { ROLE_LABELS } from "@/lib/permissions"
+import { ROLE_LABELS, can } from "@/lib/permissions"
+import { getAuth } from "@/server/auth"
 
 import { getOrgContextOrRedirect } from "./org-context"
 
 /**
- * Everything behind sign-in. Signed-out visitors go to /sign-in, people
- * without an active organisation to /onboarding. The full AppShell replaces
- * this frame in the next slice.
+ * Everything behind sign-in, inside the AppShell. Signed-out visitors go to
+ * /sign-in, people without an active organisation to /onboarding. Navigation
+ * and the command bar only list what the user's role can open.
  */
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const ctx = await getOrgContextOrRedirect()
-  const sections = navigationFor(ctx.role)
+  const organizations = await getAuth().api.listOrganizations({
+    headers: await headers(),
+  })
+  const organizationName =
+    organizations.find((org) => org.id === ctx.orgId)?.name ??
+    "Your organisation"
+
+  const navigation = navigationFor(ctx.role)
+  const sections: SidebarSection[] = navigation.map((section) => ({
+    ...(section.label ? { label: section.label } : {}),
+    items: section.items.map((item) => ({
+      label: item.label,
+      href: item.href,
+      icon: <item.icon aria-hidden />,
+    })),
+  }))
+
+  const commandGroups: CommandBarGroup[] = [
+    {
+      heading: "Go to",
+      items: navigation.flatMap((section) =>
+        section.items.map((item) => ({
+          id: item.href,
+          label: item.label,
+          href: item.href,
+          icon: <item.icon aria-hidden />,
+          ...(item.keywords ? { keywords: item.keywords } : {}),
+        }))
+      ),
+    },
+    {
+      heading: "Organisation",
+      items: [
+        ...(can(ctx.role, { resource: "invitation", action: "create" })
+          ? [
+              {
+                id: "invite",
+                label: "Invite a member",
+                href: "/settings/members",
+                icon: <UserPlusIcon aria-hidden />,
+                keywords: ["team", "ca", "add"],
+              },
+            ]
+          : []),
+        {
+          id: "switch-organisation",
+          label: "Switch organisation",
+          href: "/onboarding",
+          icon: <ArrowLeftRightIcon aria-hidden />,
+        },
+      ],
+    },
+  ]
+
   return (
-    <div className="flex min-h-svh flex-col bg-app">
-      <header className="flex h-12 items-center gap-4 border-b border-subtle px-4">
-        <Logo />
-        <nav aria-label="Main" className="flex flex-1 gap-1 overflow-x-auto">
-          {sections.flatMap((section) =>
-            section.items.map((item) => (
+    <AppShell
+      sidebar={
+        <AppSidebar
+          sections={sections}
+          header={
+            <Link href="/" aria-label="Median home" className="rounded-md">
+              <Logo />
+            </Link>
+          }
+          footer={
+            <div className="flex items-center gap-2 px-2 py-1">
               <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-md px-2 py-1 text-sm whitespace-nowrap text-fg-secondary hover:bg-hover hover:text-fg"
+                href="/onboarding"
+                className="flex min-w-0 flex-1 flex-col rounded-md hover:text-fg"
+                title="Switch organisation"
               >
-                {item.label}
+                <span className="truncate text-sm font-medium">
+                  {organizationName}
+                </span>
+                <span className="text-xs text-fg-secondary">
+                  {ROLE_LABELS[ctx.role]}
+                </span>
               </Link>
-            ))
-          )}
-        </nav>
-        <span className="text-xs text-fg-secondary">
-          {ROLE_LABELS[ctx.role]}
-        </span>
-        <form action={signOut}>
-          <Button type="submit" variant="ghost" size="sm">
-            Sign out
-          </Button>
-        </form>
-      </header>
-      <main className="flex-1">{children}</main>
-    </div>
+              <form action={signOut}>
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <LogOutIcon aria-hidden />
+                </Button>
+              </form>
+            </div>
+          }
+        />
+      }
+      topBar={
+        <TopBar actions={<AppCommandBar groups={commandGroups} />}>
+          <span className="truncate text-fg">{organizationName}</span>
+        </TopBar>
+      }
+    >
+      {children}
+    </AppShell>
   )
 }
