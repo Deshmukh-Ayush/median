@@ -21,6 +21,8 @@ Goal: a working MVP live with 3–5 design-partner startups by Day 7.
 - Dev database: the `dev-backend` Neon branch.
 
 ## Accounting rules (apply everywhere)
+Every rule has tests in `packages/ledger` or in the relevant service. Any rule not finished on its day goes in that day's end-of-day summary.
+
 1. **Money:** integer paise only (bigint). No floats anywhere in calculation or storage.
 2. **Append-only ledger:** posted entries and lines are never updated or deleted; a DB trigger enforces it. Corrections are reversal entries.
 3. **Locked periods:** nothing posts into a locked period. A reversal of an entry in a locked period posts in the current open period, linked by `reverses_entry_id`, with an audit row.
@@ -68,6 +70,7 @@ DB guards in the migration: triggers blocking UPDATE and DELETE on journal_entri
 - GST and CA: `getGstSummary`, `exportGstr1(ctx, period)` → { period, gstin, payload, warnings }, `exportTally`, `lockPeriod`, `listAuditLog`
 - Consent: `recordConsent(ctx, consentVersion)` (user from session), `getConsentStatus(ctx)` → { currentVersion, accepted, acceptedAt, acceptedBy }
 - Data rights: `exportOrgData(ctx)` → zip of one CSV per table plus a JSON manifest; `deleteOrgData(ctx, { confirmation })`, two steps (request → token + summary; confirm with token + typed org name), owner only
+- **Kept for the app:** `connectRazorpay`, `syncRazorpay` and `importBankRows` stay as thin wrappers over `connect`, `syncConnection` and `importFile`, so screens built on them keep working.
 - **Consent gate:** `connect`, `syncConnection`, `importFile` and `createInboxItemFromExtraction` throw `CONSENT_REQUIRED` until consent is recorded.
 
 Every service first ships as a stub returning realistic fake data with final types. Replace stubs during the week without changing signatures; list any change in the PR and the summary.
@@ -83,6 +86,7 @@ Every service first ships as a stub returning realistic fake data with final typ
 
 **Day 2: connector framework, then Razorpay**
 1. `src/server/integrations/connector.ts`: one interface — provider, displayName, authType (api_key | oauth | file), testConnection, sync(ctx, connectionId, cursor) → SourceRecords + next cursor, parseFile for file connectors. Registry in `registry.ts`; a new connector = one folder + one registry line.
+   - SourceRecord kinds: payment, refund, fee, settlement, payout, bank_line, order, invoice, party, opening_balance. Every record has provider, external_id (or the dedupe hash), occurred_at, amount_paise, currency and payload, and is validated with Zod (schema in packages/contracts).
 2. Sync runner: idempotent upsert into source_records, saves cursor and status, manual sync plus a scheduled sync (check Vercel Hobby cron limits; fall back to daily). Credentials encrypted, never logged.
 3. Posting rules run on SourceRecords (rules 8–11), so every connector gets them.
 4. `integrations/razorpay/`: API key auth (OAuth after partner approval), payments, refunds, fees, settlements. Use the settlement reconciliation endpoint if available; otherwise infer and flag. High-confidence rule matches post; everything else goes to the inbox.
@@ -120,7 +124,7 @@ Zoho Books import, GSTR-2B reconciliation, Stripe, Cashfree, Shopify, email forw
 
 ## End of every day
 Print a summary for the user to paste to their advisor:
-- Day N: done / not done, per task
+- Day N: done / not done, per task, including each accounting rule for that day
 - PRs merged
 - Contract changes Ayush must know about (type and signature level)
 - Requests for Ayush's side
