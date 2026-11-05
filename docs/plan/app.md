@@ -14,6 +14,7 @@ Goal: a working MVP live with 3–5 design-partner startups by Day 7.
 - You own: `packages/ui`, `apps/web/src/app` (pages and route handlers that only call services), `apps/web/src/components`, `apps/web/src/server/ai`, `apps/web/src/lib` (formatting and client utilities).
 - Never edit the backend's folders (`packages/ledger`, `apps/web/src/server/db`, `src/server/integrations`, `src/server/services`, `src/server/reports`) and never generate migrations. Pages get data only by calling functions in `src/server/services`. If you need a new field or function, stop and write the request in your end-of-day summary.
 - If you need a new dependency, add it in its own small PR.
+- Import shared types from the shared types package (the backend is adding it; use its real name once merged). Never redefine those types in the app.
 - One branch and one PR per slice. Branch names: `app/<slice>`. Pull main before starting and before opening a PR. `npm run lint && npm run typecheck && npm test && npm run build` must pass before every PR.
 - Use the `dev-app` Neon branch for development.
 
@@ -69,14 +70,17 @@ Read their types from the code once merged; don't guess.
 
 **Day 6: GST, CA review, polish**
 1. GST screen: monthly summary from `getGstSummary`, download buttons, deadlines.
+   - "Download GSTR-1 (draft)" button, with a note that the CA checks it in the GST offline tool before filing.
 2. CA review screen: lock period, Tally export download, audit log viewer.
 3. "Move from Tally or Zoho Books" import flow: upload file → preview what will be imported → run → show the trial-balance check (matches / difference).
 4. Polish: empty states, skeletons, error states; check every page for client bundle size and Lighthouse performance; fix regressions.
 
 **Day 7: onboarding and launch**
-1. Onboarding flow: business type → GST profile → connect Razorpay → upload a bank statement or import from Tally → see the dashboard.
-2. Re-run the bill eval; note accuracy.
-3. Click through every screen with the demo org, fix bugs, deploy.
+1. Consent screen, shown before any real data is connected: what we store, where it's stored (region), who can see it, and how to export or delete it. Record acceptance with a timestamp and the user who accepted.
+2. Onboarding flow: business type → GST profile → consent → connect Razorpay → upload a bank statement or import from Tally → see the dashboard.
+3. Admin-only check showing which AI provider is active. In production, show a warning banner if it's the free tier.
+4. Re-run the bill eval; note accuracy.
+5. Click through every screen with the demo org, fix bugs, deploy.
 
 ## End of every day
 Print a summary for Ayush to paste to his advisor, in this format:
