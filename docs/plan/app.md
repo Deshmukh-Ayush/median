@@ -14,7 +14,7 @@ Goal: a working MVP live with 3–5 design-partner startups by Day 7.
 - You own: `packages/ui`, `apps/web/src/app` (pages and route handlers that only call services), `apps/web/src/components`, `apps/web/src/server/ai`, `apps/web/src/lib` (formatting and client utilities).
 - Never edit the backend's folders (`packages/ledger`, `apps/web/src/server/db`, `src/server/integrations`, `src/server/services`, `src/server/reports`) and never generate migrations. Pages get data only by calling functions in `src/server/services`. If you need a new field or function, stop and write the request in your end-of-day summary.
 - If you need a new dependency, add it in its own small PR.
-- Import shared types from the shared types package (the backend is adding it; use its real name once merged). Never redefine those types in the app.
+- Shared types and Zod schemas live in `packages/contracts` (the backend is adding it). Once it's on main, import every shared type and Zod schema from it. Never copy or redefine them in `apps/web`, and replace any local duplicates with imports from `packages/contracts`.
 - One branch and one PR per slice. Branch names: `app/<slice>`. Pull main before starting and before opening a PR. `npm run lint && npm run typecheck && npm test && npm run build` must pass before every PR.
 - Use the `dev-app` Neon branch for development.
 
