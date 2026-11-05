@@ -38,3 +38,22 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(date.getTime())) return iso
   return timeFormat.format(date).replace(/\s?([ap])\.?m\.?$/i, " $1m")
 }
+
+const dateFormat = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "UTC",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+})
+
+/** "2026-11-05" → "5 Nov 2026". Returns the input if it isn't a valid date. */
+export function formatDate(isoDate: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== isoDate
+  )
+    return isoDate
+  return dateFormat.format(date)
+}

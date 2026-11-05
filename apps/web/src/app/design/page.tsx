@@ -63,7 +63,10 @@ import {
 } from "@workspace/ui/lib/tokens"
 import type { ColorToken } from "@workspace/ui/lib/tokens"
 
-import { invoices, moneySamples, stats } from "./sample-data"
+import { InboxView } from "@/components/inbox/inbox-view"
+
+import { previewApprove, previewReject } from "./inbox-preview-actions"
+import { inboxRows, invoices, moneySamples, stats } from "./sample-data"
 import type { SampleInvoice } from "./sample-data"
 
 export const metadata: Metadata = {
@@ -594,6 +597,20 @@ export default function DesignPage() {
           description="Sidebar, a row of StatCards, a DataTable, and one primary button. The accent appears exactly twice: the logo and “Create invoice”."
         >
           <Dashboard />
+        </Section>
+
+        <Section
+          id="inbox"
+          title="AI inbox"
+          description="One queue for all work. j/k to move, a to approve, r to reject, x to select for bulk approval. Preview actions post nothing."
+        >
+          <InboxView
+            rows={[...inboxRows]}
+            canApprove
+            canReject
+            approveItems={previewApprove}
+            rejectItem={previewReject}
+          />
         </Section>
 
         <Section

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formatDateTime, formatPeriod } from "@/lib/format-date"
+import { formatDate, formatDateTime, formatPeriod } from "@/lib/format-date"
 
 describe("formatPeriod", () => {
   it.each([
@@ -35,5 +35,16 @@ describe("formatDateTime", () => {
 
   it("returns invalid input unchanged", () => {
     expect(formatDateTime("not a date")).toBe("not a date")
+  })
+})
+
+describe("formatDate", () => {
+  it("formats an ISO date without shifting the day", () => {
+    expect(formatDate("2026-11-05")).toBe("5 Nov 2026")
+    expect(formatDate("2026-01-31")).toBe("31 Jan 2026")
+  })
+
+  it.each(["2026-02-30", "05/11/2026", ""])("returns %j unchanged", (value) => {
+    expect(formatDate(value)).toBe(value)
   })
 })
