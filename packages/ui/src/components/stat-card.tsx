@@ -16,6 +16,13 @@ interface StatChange {
   period: string
 }
 
+/** The props StatCard passes to its link component. */
+interface StatCardLinkProps {
+  href: string
+  className: string
+  children: React.ReactNode
+}
+
 type StatCardProps = Omit<React.ComponentProps<"div">, "children"> & {
   /** Founder language: "Money in", "Owed to you", "Tax due". */
   label: string
@@ -23,6 +30,10 @@ type StatCardProps = Omit<React.ComponentProps<"div">, "children"> & {
   change?: StatChange
   /** Where the number clicks through to (the entries behind it). */
   href?: string
+  /** Renders the link with this instead of <a>, e.g. a Next.js Link wrapper. */
+  linkComponent?: React.ComponentType<StatCardLinkProps> | undefined
+  /** A line under the value: "₹2.75 L last month", "₹53,100 overdue". */
+  caption?: React.ReactNode
   /** Lakh/crore form (₹18.42 L). Without it the value is rounded to the rupee. */
   compact?: boolean
   /** `danger` only for a real problem, like negative cash. */
@@ -70,6 +81,8 @@ function StatCard({
   value,
   change,
   href,
+  linkComponent: LinkComponent,
+  caption,
   compact = false,
   tone = "default",
   loading = false,
@@ -106,6 +119,9 @@ function StatCard({
             />
           )}
           {change ? <ChangeLine change={change} /> : null}
+          {caption ? (
+            <div className="text-xs text-fg-secondary">{caption}</div>
+          ) : null}
         </div>
       )}
     </>
@@ -114,6 +130,19 @@ function StatCard({
     "flex min-h-24 flex-col gap-2 rounded-lg border border-default bg-surface p-4",
     className
   )
+  if (href && !loading && LinkComponent) {
+    return (
+      <LinkComponent
+        href={href}
+        className={cn(
+          shared,
+          "transition-colors hover:border-input active:bg-app"
+        )}
+      >
+        {body}
+      </LinkComponent>
+    )
+  }
   if (href && !loading) {
     return (
       <a
@@ -142,4 +171,4 @@ function StatCard({
 }
 
 export { StatCard }
-export type { StatCardProps, StatChange }
+export type { StatCardLinkProps, StatCardProps, StatChange }
