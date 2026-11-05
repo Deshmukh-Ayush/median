@@ -73,7 +73,7 @@ Rules:
 - Dates: convert the printed date to YYYY-MM-DD. Day comes before month on Indian invoices (05/04/2026 is 5 April 2026).
 - vendor is the seller who issued the invoice, not the buyer ("Bill to"). Use the seller's GSTIN.
 - placeOfSupply: as printed. placeOfSupplyStateCode: the two-digit code printed with it, or the GST state code of the printed state name; null if no place of supply is printed. vendor.stateCode: the first two digits of the seller's GSTIN, or null.
-- One entry in lines per printed line item, in printed order. taxableAmount is the line's taxable value column as printed. gstRatePercent is the line's GST rate as printed, without the % sign. If only split rates are printed (CGST 9%, SGST 9%), return null and flag it; never add them up.
+- One entry in lines per printed line item, in printed order. taxableAmount is the line's taxable value column as printed. gstRatePercent is the line's GST rate column as printed, without the % sign ("18%" → "18"), including on intra-state bills that also show CGST and SGST. Return null only when the line prints no GST rate column at all, just split CGST/SGST rates; never add split rates up.
 - printedTotals: the invoice's printed summary totals. total is the grand total payable as printed.
 - lowConfidenceFields: list every field that was blurred, cut off, ambiguous, or that you left null. Be honest; a reviewer checks these.`
 
