@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url"
 import { expect, it } from "vitest"
 
 import { aiBillExtractionSchema } from "@/server/ai/bill-extraction"
+import { reviewBill } from "@/server/ai/bill-review"
 
 import { buildBills, expectedFor, type GroundTruth, notesFor } from "./fixtures"
 import { renderImage } from "./render-image"
@@ -29,7 +30,12 @@ it("generates 30 synthetic bills with ground truth", async () => {
   for (const [i, bill] of bills.entries()) {
     const expected = expectedFor(bill)
     // Ground truth must be a valid AI output and score 100% against itself.
-    aiBillExtractionSchema.parse({ ...expected, lowConfidenceFields: [] })
+    const asExtraction = aiBillExtractionSchema.parse({
+      ...expected,
+      lowConfidenceFields: [],
+    })
+    // A correctly read bill must pass every review check.
+    expect(reviewBill(asExtraction, "2026-11-06").needsReview).toEqual([])
     expect(scoreBill(expected, expected, []).every((s) => s.correct)).toBe(true)
 
     let file: string

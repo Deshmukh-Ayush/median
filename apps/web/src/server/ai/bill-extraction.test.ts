@@ -5,14 +5,13 @@ import { billExtractionSchema } from "@/server/services/extraction"
 import {
   type AiBillExtraction,
   aiBillExtractionSchema,
-  flagLowConfidence,
 } from "./bill-extraction"
 
 function sampleBill(): AiBillExtraction {
   return {
     vendor: {
       name: "Lotus Peak Cloud Pvt Ltd",
-      gstin: "29AAACL1234F1Z5",
+      gstin: "29AAACL4417K1ZD",
       stateCode: "29",
     },
     billNumber: "LPC/26-27/0412",
@@ -54,54 +53,5 @@ describe("aiBillExtractionSchema", () => {
   it("requires at least one line", () => {
     const bill = { ...sampleBill(), lines: [] }
     expect(aiBillExtractionSchema.safeParse(bill).success).toBe(false)
-  })
-})
-
-describe("flagLowConfidence", () => {
-  it("adds nothing for a clean bill", () => {
-    expect(flagLowConfidence(sampleBill())).toEqual([])
-  })
-
-  it("keeps the model's own flags", () => {
-    const bill = sampleBill()
-    bill.lowConfidenceFields = [{ field: "billNumber", reason: "blurred" }]
-    expect(flagLowConfidence(bill)).toEqual([
-      { field: "billNumber", reason: "blurred" },
-    ])
-  })
-
-  it("flags missing HSN, rate and total", () => {
-    const bill = sampleBill()
-    const [line] = bill.lines
-    if (!line) throw new Error("fixture has a line")
-    line.hsnSac = null
-    line.gstRatePercent = null
-    bill.printedTotals.total = null
-    expect(flagLowConfidence(bill).map((f) => f.field)).toEqual([
-      "printedTotals.total",
-      "lines[0].hsnSac",
-      "lines[0].gstRatePercent",
-    ])
-  })
-
-  it("flags malformed GSTIN, date and state code", () => {
-    const bill = sampleBill()
-    bill.vendor.gstin = "29AAACL1234"
-    bill.billDate = "05/10/2026"
-    bill.placeOfSupplyStateCode = "Karnataka"
-    expect(flagLowConfidence(bill).map((f) => f.field)).toEqual([
-      "vendor.gstin",
-      "billDate",
-      "placeOfSupplyStateCode",
-    ])
-  })
-
-  it("does not duplicate a field the model already flagged", () => {
-    const bill = sampleBill()
-    bill.vendor.gstin = null
-    bill.lowConfidenceFields = [{ field: "vendor.gstin", reason: "smudged" }]
-    expect(flagLowConfidence(bill)).toEqual([
-      { field: "vendor.gstin", reason: "smudged" },
-    ])
   })
 })

@@ -23,6 +23,13 @@ export function formatPeriod(period: string): string {
   return match && month ? `${month} ${match[1]}` : period
 }
 
+const isoDateFormat = new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE })
+
+/** Today's date in IST as YYYY-MM-DD. */
+export function todayIso(now: Date = new Date()): string {
+  return isoDateFormat.format(now)
+}
+
 const timeFormat = new Intl.DateTimeFormat("en-IN", {
   timeZone: TIME_ZONE,
   day: "numeric",

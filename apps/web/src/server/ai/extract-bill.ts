@@ -3,13 +3,14 @@ import "server-only"
 import { ServiceError } from "@workspace/contracts"
 import { generateText, NoObjectGeneratedError, Output } from "ai"
 
+import { todayIso } from "@/lib/format-date"
+
 import {
   type AiBillExtraction,
   aiBillExtractionSchema,
   BILL_EXTRACTION_PROMPT,
-  flagLowConfidence,
-  type LowConfidenceField,
 } from "./bill-extraction"
+import { type ReviewFlag, reviewBill } from "./bill-review"
 import { fastModel } from "./models"
 
 export const BILL_MEDIA_TYPES = [
@@ -29,8 +30,10 @@ export interface BillDocument {
 export interface BillExtractionResult {
   /** Values as printed. Also a valid `BillExtraction` for the inbox. */
   extraction: AiBillExtraction
-  /** Fields a reviewer must check: the model's flags plus format checks. */
-  lowConfidenceFields: LowConfidenceField[]
+  /** Uncertain or failed a deterministic check. Only these reach the inbox. */
+  needsReview: ReviewFlag[]
+  /** Not printed on the bill. Informational; not sent to the inbox. */
+  notPrinted: ReviewFlag[]
 }
 
 /**
@@ -86,8 +89,5 @@ export async function extractBill(
       { issues: parsed.error.issues }
     )
   }
-  return {
-    extraction: parsed.data,
-    lowConfidenceFields: flagLowConfidence(parsed.data),
-  }
+  return { extraction: parsed.data, ...reviewBill(parsed.data, todayIso()) }
 }

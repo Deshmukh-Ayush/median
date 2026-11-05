@@ -8,9 +8,17 @@
  * document and its expected extraction can't drift apart. Amounts are integer
  * paise (bigint), formatted with the ledger's `formatInr`.
  */
-import { formatInr, paise } from "@workspace/ledger"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 
-import type { AiBillExtraction } from "@/server/ai/bill-extraction"
+import { formatInr, paise } from "@workspace/ledger"
+import { z } from "zod"
+
+import { gstinCheckChar } from "@/lib/gstin"
+import {
+  type AiBillExtraction,
+  aiBillExtractionSchema,
+} from "@/server/ai/bill-extraction"
 
 export type Expected = Omit<AiBillExtraction, "lowConfidenceFields">
 
@@ -311,18 +319,11 @@ function prng(seed: number) {
   }
 }
 
-const GSTIN_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
 /** A format-valid GSTIN with a correct check digit (synthetic PAN). */
 export function makeGstin(state: string, pan: string, entity = "1"): string {
   const body = `${state}${pan}${entity}Z`
-  let sum = 0
-  for (let i = 0; i < body.length; i++) {
-    const value = GSTIN_CHARS.indexOf(body.charAt(i))
-    const product = value * (i % 2 === 0 ? 1 : 2)
-    sum += Math.floor(product / 36) + (product % 36)
-  }
-  const check = GSTIN_CHARS.charAt((36 - (sum % 36)) % 36)
+  const check = gstinCheckChar(body)
+  if (check === null) throw new Error(`bad GSTIN body ${body}`)
   return body + check
 }
 
@@ -732,4 +733,26 @@ export function notesFor(bill: PrintedBill): string[] {
   if (bill.totals.taxable === null) notes.push("no printed taxable subtotal")
   if (bill.quality === "image-low") notes.push("low-quality rasterised scan")
   return notes
+}
+
+const groundTruthSchema = z.object({
+  id: z.string(),
+  file: z.string(),
+  mediaType: z.enum(["application/pdf", "image/png", "image/jpeg"]),
+  layout: z.enum(["classic", "summary", "minimal", "service", "receipt"]),
+  quality: z.enum(["pdf", "image-clean", "image-low"]),
+  supply: z.enum(["intra", "inter"]),
+  notes: z.array(z.string()),
+  expected: aiBillExtractionSchema.omit({ lowConfidenceFields: true }),
+})
+
+/** Reads and validates every bill-NN.json in a directory, in order. */
+export function loadGroundTruth(dir: string): GroundTruth[] {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .map((f) => {
+      const raw: unknown = JSON.parse(readFileSync(join(dir, f), "utf8"))
+      return groundTruthSchema.parse(raw)
+    })
 }
