@@ -27,3 +27,11 @@ export {
   accountTypeForCode,
   chartOfAccountsFor,
 } from "./chart-of-accounts"
+export type {
+  EntryDraft,
+  PostedEntry,
+  PostingContext,
+  PostingError,
+  PostingResult,
+} from "./post-entry"
+export { buildReversal, checkPosting, isIsoDate, periodOf } from "./post-entry"
