@@ -5,7 +5,7 @@
  */
 import { parseRupees } from "@workspace/ledger"
 
-import type { LowConfidenceField } from "@/server/ai/bill-extraction"
+import type { ReviewFlag } from "@/server/ai/bill-review"
 
 import type { Expected } from "./fixtures"
 
@@ -58,7 +58,7 @@ function same(kind: Kind, expected: string, actual: string): boolean {
   }
 }
 
-function isFlagged(path: string, flags: LowConfidenceField[]): boolean {
+function isFlagged(path: string, flags: ReviewFlag[]): boolean {
   // Accept "lines[0].x", "lines.0.x" and whole-object flags like "lines[0]".
   const norm = (p: string) => p.replace(/\.(\d+)/g, "[$1]").replace(/\s/g, "")
   const target = norm(path)
@@ -105,7 +105,7 @@ function score(
   kind: Kind,
   expected: string | null,
   actual: string | null,
-  flags: LowConfidenceField[]
+  flags: ReviewFlag[]
 ): FieldScore {
   const correct =
     expected === null || actual === null
@@ -126,7 +126,7 @@ function score(
 export function scoreBill(
   expected: Expected,
   actual: Expected,
-  flags: LowConfidenceField[]
+  flags: ReviewFlag[]
 ): FieldScore[] {
   const scores = HEADER.map(([field, kind, get]) =>
     score(field, field, kind, get(expected), get(actual), flags)

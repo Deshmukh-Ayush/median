@@ -7,21 +7,19 @@
  * Synthetic bills only. This calls the configured fastModel (Gemini free tier
  * in dev); never point it at real customer bills.
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { it } from "vitest"
-import { z } from "zod"
 
-import {
-  aiBillExtractionSchema,
-  type LowConfidenceField,
-} from "@/server/ai/bill-extraction"
+import { todayIso } from "@/lib/format-date"
+import type { ReviewFlag } from "@/server/ai/bill-review"
 import { extractBill } from "@/server/ai/extract-bill"
 import { fastModel } from "@/server/ai/models"
 
-import type { GroundTruth, Quality } from "./fixtures"
+import { loadGroundTruth, type Quality } from "./fixtures"
+import { type MisreadStats, simulateMisreads } from "./misreads"
 import { type FieldScore, scoreBill, scoreFailure } from "./score"
 
 const DATA_DIR = fileURLToPath(new URL("./data", import.meta.url))
@@ -32,17 +30,6 @@ const REPORT_DIR = fileURLToPath(
 const MIN_GAP_MS = 4500
 const ATTEMPTS = 4
 
-const groundTruthSchema = z.object({
-  id: z.string(),
-  file: z.string(),
-  mediaType: z.enum(["application/pdf", "image/png", "image/jpeg"]),
-  layout: z.enum(["classic", "summary", "minimal", "service", "receipt"]),
-  quality: z.enum(["pdf", "image-clean", "image-low"]),
-  supply: z.enum(["intra", "inter"]),
-  notes: z.array(z.string()),
-  expected: aiBillExtractionSchema.omit({ lowConfidenceFields: true }),
-})
-
 interface BillResult {
   id: string
   layout: string
@@ -50,7 +37,8 @@ interface BillResult {
   notes: string[]
   error: string | null
   ms: number
-  flags: LowConfidenceField[]
+  needsReview: ReviewFlag[]
+  notPrinted: ReviewFlag[]
   scores: FieldScore[]
 }
 
@@ -77,12 +65,22 @@ function modelName(): string {
     : `${fastModel.provider}:${fastModel.modelId}`
 }
 
-function report(results: BillResult[], date: string): string {
+const sum = (stats: MisreadStats[], key: "total" | "caught" | "pinpointed") =>
+  stats.reduce((n, m) => n + m[key], 0)
+
+function report(
+  results: BillResult[],
+  misreads: MisreadStats[],
+  date: string
+): string {
   const all = results.flatMap((r) => r.scores)
   const overall = accuracy(all)
   const fields = [...new Set(all.map((s) => s.field))]
   const wrong = all.filter((s) => !s.correct)
   const flagged = all.filter((s) => s.flagged)
+  const needsReview = results.flatMap((r) => r.needsReview)
+  const billOf = (s: FieldScore) =>
+    results.find((r) => r.scores.includes(s))?.id ?? "?"
   const invented = all.filter((s) => s.invented)
   const failed = results.filter((r) => r.error)
 
@@ -114,10 +112,37 @@ function report(results: BillResult[], date: string): string {
       return `| \`${f}\` | ${accuracy(s).text} | ${w.length} | ${s.filter((x) => x.invented).length} | ${w.filter((x) => x.flagged).length} |`
     }),
     "",
-    "## Low-confidence flags",
+    "## Review flags",
     "",
-    `- Wrong fields that were flagged (recall): ${pct(wrong.filter((s) => s.flagged).length, wrong.length)} (${wrong.filter((s) => s.flagged).length}/${wrong.length})`,
-    `- Flagged fields that were wrong (precision): ${pct(flagged.filter((s) => !s.correct).length, flagged.length)} (${flagged.filter((s) => !s.correct).length}/${flagged.length})`,
+    "Deterministic checks in `bill-review.ts`: GSTIN checksum, state vs tax type, HSN/SAC length, dates, and lines and taxes adding up to the printed totals. Only **needs review** reaches the inbox; **not printed** is informational.",
+    "",
+    `- Needs review: **${needsReview.length}** flags on ${results.filter((r) => r.needsReview.length > 0).length}/${results.length} bills (${needsReview.filter((f) => f.source === "check").length} from checks, ${needsReview.filter((f) => f.source === "model").length} from the model's own flags)`,
+    `- Not printed (informational): ${results.reduce((n, r) => n + r.notPrinted.length, 0)}`,
+    `- Real misreads flagged needs review: **${wrong.filter((s) => s.flagged).length} of ${wrong.length}**`,
+    ...wrong.map(
+      (s) =>
+        `  - ${billOf(s)} \`${s.path}\`: ${s.flagged ? "caught" : "missed"}`
+    ),
+    `- Needs-review flags on fields that were read correctly: ${flagged.filter((s) => s.correct).length}`,
+    "",
+    ...results
+      .filter((r) => r.needsReview.length > 0)
+      .map(
+        (r) =>
+          `- ${r.id}: ${r.needsReview.map((f) => `\`${f.field}\` (${f.source}: ${f.reason})`).join("; ")}`
+      ),
+    "",
+    "## Simulated misreads (offline)",
+    "",
+    "One digit changed in one printed field of each correct bill, then reviewed. *Caught*: the bill gets a needs-review flag. *Pinpointed*: the changed field itself is flagged.",
+    "",
+    "| Field | Misreads | Caught | Pinpointed |",
+    "| --- | ---: | ---: | ---: |",
+    ...misreads.map(
+      (m) =>
+        `| \`${m.field}\` | ${m.total} | ${pct(m.caught, m.total)} | ${pct(m.pinpointed, m.total)} |`
+    ),
+    `| **All** | ${sum(misreads, "total")} | ${pct(sum(misreads, "caught"), sum(misreads, "total"))} | ${pct(sum(misreads, "pinpointed"), sum(misreads, "total"))} |`,
     "",
     "## No-maths check",
     "",
@@ -154,13 +179,7 @@ function report(results: BillResult[], date: string): string {
 
 it("extracts all synthetic bills and reports field-level accuracy", async () => {
   process.loadEnvFile(".env.local")
-  const truths: GroundTruth[] = readdirSync(DATA_DIR)
-    .filter((f) => f.endsWith(".json"))
-    .sort()
-    .map((f) => {
-      const raw: unknown = JSON.parse(readFileSync(join(DATA_DIR, f), "utf8"))
-      return groundTruthSchema.parse(raw)
-    })
+  const truths = loadGroundTruth(DATA_DIR)
 
   const results: BillResult[] = []
   let last = 0
@@ -168,7 +187,8 @@ it("extracts all synthetic bills and reports field-level accuracy", async () => 
     const data = new Uint8Array(readFileSync(join(DATA_DIR, truth.file)))
     let error: string | null = null
     let scores: FieldScore[] = []
-    let flags: LowConfidenceField[] = []
+    let needsReview: ReviewFlag[] = []
+    let notPrinted: ReviewFlag[] = []
     const started = Date.now()
     for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
       await wait(Math.max(0, last + MIN_GAP_MS - Date.now()))
@@ -179,8 +199,9 @@ it("extracts all synthetic bills and reports field-level accuracy", async () => 
           mediaType: truth.mediaType,
           filename: truth.file,
         })
-        flags = result.lowConfidenceFields
-        scores = scoreBill(truth.expected, result.extraction, flags)
+        needsReview = result.needsReview
+        notPrinted = result.notPrinted
+        scores = scoreBill(truth.expected, result.extraction, needsReview)
         error = null
         break
       } catch (e) {
@@ -197,7 +218,8 @@ it("extracts all synthetic bills and reports field-level accuracy", async () => 
       notes: truth.notes,
       error,
       ms: Date.now() - started,
-      flags,
+      needsReview,
+      notPrinted,
       scores,
     })
     console.info(
@@ -205,11 +227,13 @@ it("extracts all synthetic bills and reports field-level accuracy", async () => 
     )
   }
 
-  const date = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-  }).format(new Date())
+  const date = todayIso()
+  const misreads = simulateMisreads(truths, date)
   mkdirSync(REPORT_DIR, { recursive: true })
-  writeFileSync(join(REPORT_DIR, `bills-${date}.md`), report(results, date))
+  writeFileSync(
+    join(REPORT_DIR, `bills-${date}.md`),
+    report(results, misreads, date)
+  )
   writeFileSync(
     join(REPORT_DIR, `bills-${date}.json`),
     `${JSON.stringify({ date, model: modelName(), results }, null, 2)}\n`

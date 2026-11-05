@@ -1,6 +1,5 @@
 import "server-only"
 
-import { gstinSchema, isoDateSchema } from "@workspace/contracts"
 import { z } from "zod"
 
 import { billExtractionSchema } from "@/server/services/extraction"
@@ -76,49 +75,3 @@ Rules:
 - One entry in lines per printed line item, in printed order. taxableAmount is the line's taxable value column as printed. gstRatePercent is the line's GST rate column as printed, without the % sign ("18%" → "18"), including on intra-state bills that also show CGST and SGST. Return null only when the line prints no GST rate column at all, just split CGST/SGST rates; never add split rates up.
 - printedTotals: the invoice's printed summary totals. total is the grand total payable as printed.
 - lowConfidenceFields: list every field that was blurred, cut off, ambiguous, or that you left null. Be honest; a reviewer checks these.`
-
-const RATE_PATTERN = /^\d{1,2}(\.\d{1,2})?$/
-const AMOUNT_PATTERN = /^-?[\d,]+(\.\d{1,2})?$/
-
-/**
- * Adds deterministic low-confidence flags to the model's own: values that are
- * missing, or that don't match the format they must have (GSTIN, date, state
- * code, amounts). Format checks only; no arithmetic.
- */
-export function flagLowConfidence(
-  bill: AiBillExtraction
-): LowConfidenceField[] {
-  const flags = new Map<string, string>()
-  for (const flag of bill.lowConfidenceFields) {
-    flags.set(flag.field, flag.reason)
-  }
-  const flag = (field: string, reason: string) => {
-    if (!flags.has(field)) flags.set(field, reason)
-  }
-
-  if (bill.vendor.gstin === null) flag("vendor.gstin", "not found")
-  else if (!gstinSchema.safeParse(bill.vendor.gstin).success)
-    flag("vendor.gstin", "not a valid GSTIN format")
-  if (!isoDateSchema.safeParse(bill.billDate).success)
-    flag("billDate", "not a valid date")
-  if (bill.placeOfSupplyStateCode === null)
-    flag("placeOfSupplyStateCode", "not found")
-  else if (!/^\d{2}$/.test(bill.placeOfSupplyStateCode))
-    flag("placeOfSupplyStateCode", "not a two-digit state code")
-  if (bill.printedTotals.total === null)
-    flag("printedTotals.total", "not found")
-
-  bill.lines.forEach((line, i) => {
-    if (line.hsnSac === null) flag(`lines[${i}].hsnSac`, "not found")
-    else if (!/^\d{4,8}$/.test(line.hsnSac.replace(/\s/g, "")))
-      flag(`lines[${i}].hsnSac`, "not a 4–8 digit HSN/SAC code")
-    if (line.gstRatePercent === null)
-      flag(`lines[${i}].gstRatePercent`, "not found")
-    else if (!RATE_PATTERN.test(line.gstRatePercent.replace("%", "").trim()))
-      flag(`lines[${i}].gstRatePercent`, "not a rate")
-    if (!AMOUNT_PATTERN.test(line.taxableAmount.replace(/[₹\s]/g, "")))
-      flag(`lines[${i}].taxableAmount`, "not an amount")
-  })
-
-  return [...flags].map(([field, reason]) => ({ field, reason }))
-}
