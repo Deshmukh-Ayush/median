@@ -49,6 +49,7 @@ Index every query path, `organization_id` first.
 - `createInvoice(orgId, input)`, `getInvoice(orgId, id)`, `listInvoices(orgId, cursor)`
 - `getProfitAndLoss(orgId, from, to)`, `getBalanceSheet(orgId, asOf)`, `getTrialBalance(orgId, asOf)`, `listEntries(orgId, filters, cursor)`
 - `getGstSummary(orgId, period)`, `exportTally(orgId, from, to)`, `lockPeriod(orgId, period)`, `listAuditLog(orgId, cursor)`
+- Connectors: `listConnectors()`, `listConnections(orgId)`, `connect(orgId, provider, credentials)`, `disconnect(orgId, connectionId)`, `syncConnection(orgId, connectionId)`, `importFile(orgId, provider, file)`. `connectRazorpay`, `syncRazorpay` and `importBankRows` stay as thin wrappers over these so existing screens keep working.
 
 **Stubs:** every function first returns realistic fake data with the final types, so Ayush's screens work before the real logic exists. Replace stubs one by one through the week without changing signatures. If a signature must change, note it in the summary.
 
@@ -80,6 +81,23 @@ These rules are part of the plan. Every rule gets tests in `packages/ledger` or 
 - GST is computed per line in paise; the invoice total is rounded to the rupee and the difference goes to Round-off.
 - Invoice numbers are unique per financial year (April–March) and at most 16 characters. Credit notes have their own series per financial year.
 
+## Connector framework
+
+Every data source (Razorpay, bank statements, Tally/Zoho imports, later Stripe, Shopify…) is a connector behind one interface. Posting rules never see provider payloads.
+
+- `apps/web/src/server/integrations/connector.ts` defines one interface:
+  - `provider` (string id), `displayName`, `authType: 'api_key' | 'oauth' | 'file'`
+  - `testConnection(credentials)` → ok or error
+  - `sync(orgId, connectionId, cursor)` → yields normalised `SourceRecord` values + the next cursor
+  - file connectors: `parseFile(orgId, file)` → `SourceRecord` values
+- `SourceRecord` kinds: payment, refund, fee, settlement, payout, bank_line, order, invoice, party, opening_balance. Every record has `provider`, `external_id` (or the dedupe hash), `occurred_at`, `amount_paise`, `currency`, `payload`. Validated with Zod.
+- Registry: `integrations/registry.ts` lists all connectors. Adding one = one new folder + one registry line.
+- Sync runner: idempotent upsert into `source_records`, cursor saved on the connection, connection status (connected | syncing | error | disconnected), `last_synced_at`, `last_error`. Manual "sync now" plus a scheduled sync (check Vercel Hobby cron limits; fall back to daily).
+- Posting rules (GST split, fees, refunds, TDS) run on `SourceRecord`s, not on provider payloads, so every connector gets them for free.
+- Credentials are encrypted at rest and never logged.
+
+**Week 2 (planned, not built this week):** Stripe, Cashfree, Shopify, email forwarding (inbound email), Slack/email alerts.
+
 ## Day-by-day tasks
 
 **Day 1: contract and ledger**
@@ -90,10 +108,11 @@ These rules are part of the plan. Every rule gets tests in `packages/ledger` or 
    - Reversal of an entry in a locked period posts in the current open period, linked via `reverses_entry_id`, with an audit row. Test it.
 4. Real `postEntry` service: writes entry + lines + audit_log in one transaction.
 
-**Day 2: Razorpay**
-1. `connectRazorpay`: verify keys with a test call, store encrypted.
-2. `syncRazorpay`: payments, refunds, settlements and fees into `source_records`, idempotent by external_id, paginated, safe to re-run.
-3. Deterministic rules turn records into entries: payment → receivable/revenue, fee → gateway charges with GST, refund → reversal, settlement → bank (clearing) account. High-confidence rule matches post directly; anything else becomes an inbox item.
+**Day 2: connector framework, then Razorpay as connector #1**
+0. Framework first (see "Connector framework"): `connector.ts` interface, `SourceRecord` Zod schema and kinds, `registry.ts`, sync runner (idempotent upsert, saved cursor, status, `last_synced_at`, `last_error`, manual sync now + scheduled sync within Vercel Hobby cron limits, else daily), credential encryption with no logging. Services: `listConnectors`, `listConnections`, `connect`, `disconnect`, `syncConnection`, `importFile`. Schema migration: connection statuses, new `SourceRecord` kinds, `currency`, provider as a registry id.
+1. `integrations/razorpay/` implements the interface. `connectRazorpay` = `connect(orgId, "razorpay", …)`: verify keys with a test call, store encrypted.
+2. `syncRazorpay` = `syncConnection` for Razorpay: payments, refunds, settlements and fees into `source_records`, idempotent by external_id, paginated, safe to re-run.
+3. Deterministic rules run on `SourceRecord`s (not Razorpay payloads) and turn them into entries: payment → receivable/revenue, fee → gateway charges with GST, refund → reversal, settlement → bank (clearing) account. High-confidence rule matches post directly; anything else becomes an inbox item.
    - Payments without an invoice are GST-inclusive: rate from invoice/order lines → product mapping → org default rate → else inbox item. No split if `gst_registered` is false. Split in integer paise (`taxable = round(amount × 100 / (100 + rate))`, `gst = amount − taxable`); intrastate CGST+SGST halves with the odd paisa assigned deterministically, interstate IGST.
    - Fees: Razorpay's `fee` and `tax` fields as given → gateway charges + input GST. Never compute 18%.
    - Refund of an invoiced sale → credit note (reduces output GST); refund without invoice → reversal.
@@ -101,7 +120,7 @@ These rules are part of the plan. Every rule gets tests in `packages/ledger` or 
    - Use Razorpay's settlement reconciliation endpoint when the account has access; otherwise infer and flag it.
 
 **Day 3: bank and matching**
-1. `importBankRows`: accepts normalised rows (CSV parsed with papaparse server-side; PDF rows come from Ayush's AI module in the same shape).
+1. Bank statements are a file connector, `integrations/bank-statement/`, on the same interface (`parseFile` → `bank_line` `SourceRecord`s, with the dedupe hash below as `external_id`). `importBankRows` = `importFile(orgId, "bank-statement", …)`: accepts normalised rows (CSV parsed with papaparse server-side; PDF rows come from Ayush's AI module in the same shape).
    - Dedupe key = hash(account, date, amount, narration, running balance); with no balance, add an occurrence index for identical (account, date, amount, narration) rows. Same or overlapping statements uploaded twice create no duplicates. Test both.
 2. Matching engine, deterministic: settlement credits, invoice payments, known vendors; amount + date window + reference. Unmatched lines → inbox items.
    - Receipts may equal invoice total − TDS (TDS = rate × taxable value, rates 1%, 2%, 10%). Book TDS receivable and the section; send to the inbox until approved.
@@ -126,6 +145,10 @@ These rules are part of the plan. Every rule gets tests in `packages/ledger` or 
    - Include credit notes, TDS receivable totals, and separate rows for exports, SEZ and reverse charge.
 2. `exportTally`: Tally-importable XML (masters and vouchers) for a period. Validate the XML is well-formed.
 3. `lockPeriod`, real `listAuditLog`, full CSV data export.
+4. Migration file connectors:
+   - `integrations/tally-import/`: Tally XML export → parties, ledger accounts (mapped to our chart of accounts), opening balances, past vouchers.
+   - `integrations/zoho-books-import/`: Zoho Books CSV exports → the same records.
+   - Migration check: our trial balance after import must equal the source trial balance; show any difference.
 
 **Day 7: launch**
 1. Seed a demo org with a month of realistic fake data.
