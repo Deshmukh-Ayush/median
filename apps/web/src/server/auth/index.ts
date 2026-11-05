@@ -20,6 +20,7 @@ function createAuth() {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
+    emailAndPassword: { enabled: true },
     plugins: [
       organization({
         ac,
