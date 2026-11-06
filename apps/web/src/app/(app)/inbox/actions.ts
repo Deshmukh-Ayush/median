@@ -13,6 +13,7 @@ import {
 import type { InboxEdits } from "@workspace/contracts"
 import { InvalidMoneyError, parseRupees } from "@workspace/ledger"
 
+import { percentTextSchema } from "@/lib/percent"
 import {
   approveInboxItem,
   bulkApproveInboxItems,
@@ -51,16 +52,6 @@ const rupeesText = z
     }
   })
 
-/** A percentage with up to two decimals ("2", "1.5"), as basis points. */
-const percentText = z
-  .string()
-  .trim()
-  .regex(/^\d{1,3}(\.\d{1,2})?$/, "Enter a rate like 2 or 1.5.")
-  .transform((text) => {
-    const [whole = "0", fraction = ""] = text.split(".")
-    return Number(whole) * 100 + Number(fraction.padEnd(2, "0"))
-  })
-
 /** The tax edits as the form sends them: text fields, parsed here. */
 const taxEditsFormSchema = z.object({
   gst: z
@@ -74,7 +65,7 @@ const taxEditsFormSchema = z.object({
   tds: z
     .object({
       section: z.enum(TDS_SECTIONS),
-      rate: percentText,
+      rate: percentTextSchema,
       amount: rupeesText,
     })
     .nullable()
