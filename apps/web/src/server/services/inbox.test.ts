@@ -1,9 +1,26 @@
 import { BULK_APPROVE_MAX, ServiceError } from "@workspace/contracts"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { OrgContext } from "./context"
-import { createInboxItemFromExtraction } from "./extraction"
-import { bulkApproveInboxItems, listInboxItems } from "./inbox"
+
+const consent = vi.hoisted(() => ({ accepted: true }))
+vi.mock("./consent", async () => {
+  const { ServiceError: Err } = await import("@workspace/contracts")
+  return {
+    requireConsent: vi.fn(() => {
+      if (!consent.accepted)
+        throw new Err("CONSENT_REQUIRED", "Accept consent first.")
+      return Promise.resolve()
+    }),
+  }
+})
+
+const { createInboxItemFromExtraction } = await import("./extraction")
+const { bulkApproveInboxItems, listInboxItems } = await import("./inbox")
+
+beforeEach(() => {
+  consent.accepted = true
+})
 
 const ctx: OrgContext = { orgId: "org_1", userId: "user_1", role: "finance" }
 
@@ -95,6 +112,17 @@ describe("createInboxItemFromExtraction", () => {
     const debits = item.proposedEntry.lines.reduce((s, l) => s + l.debit, 0n)
     const credits = item.proposedEntry.lines.reduce((s, l) => s + l.credit, 0n)
     expect(debits).toBe(credits)
+  })
+
+  it("needs recorded consent", async () => {
+    consent.accepted = false
+    await expect(
+      createInboxItemFromExtraction(
+        ctx,
+        "00000000-0000-4000-8000-00000000d009",
+        bill
+      )
+    ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" })
   })
 
   it("rejects malformed review flags", async () => {
