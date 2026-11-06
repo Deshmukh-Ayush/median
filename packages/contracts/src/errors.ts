@@ -8,6 +8,8 @@ export type ServiceErrorCode =
   | "PERIOD_LOCKED"
   | "UNBALANCED"
   | "INTEGRATION"
+  /** Connect, sync, import and AI extraction need recorded consent first. */
+  | "CONSENT_REQUIRED"
 
 /**
  * The only error type services throw on purpose. Pages map `code` to UI;

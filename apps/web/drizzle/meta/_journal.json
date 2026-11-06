@@ -36,6 +36,13 @@
       "when": 1793871292292,
       "tag": "0004_drop_renamed_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793948486731,
+      "tag": "0005_connection_reconnect_statuses",
+      "breakpoints": true
     }
   ]
 }

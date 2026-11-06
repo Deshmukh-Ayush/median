@@ -1,47 +1,24 @@
 import "server-only"
 
 import {
-  gstStateCodeSchema,
+  createPartyInputSchema,
   gstinSchema,
+  listPartiesFiltersSchema,
   pageOptionsSchema,
   parseInput,
 } from "@workspace/contracts"
-import type { IsoTimestamp, Page, PageOptions } from "@workspace/contracts"
-import { z } from "zod"
+import type {
+  CreatePartyInput,
+  ListPartiesFilters,
+  Page,
+  PageOptions,
+  Party,
+  PartyKind,
+} from "@workspace/contracts"
 
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { STUB_PARTIES, timestampDaysAgo } from "./stub-data"
-
-export type PartyKind = "customer" | "vendor"
-
-export interface Party {
-  readonly id: string
-  readonly kind: PartyKind
-  readonly name: string
-  readonly gstin: string | null
-  /** Two-digit GST state code. Derived from the GSTIN when one is given. */
-  readonly stateCode: string | null
-  readonly email: string | null
-  readonly phone: string | null
-  readonly createdAt: IsoTimestamp
-}
-
-export const createPartyInputSchema = z.object({
-  kind: z.enum(["customer", "vendor"]),
-  name: z.string().trim().min(1).max(200),
-  gstin: gstinSchema.nullish(),
-  stateCode: gstStateCodeSchema.nullish(),
-  email: z.email().nullish(),
-  phone: z.string().trim().max(20).nullish(),
-})
-export type CreatePartyInput = z.input<typeof createPartyInputSchema>
-
-const listPartiesFiltersSchema = z.object({
-  kind: z.enum(["customer", "vendor"]).optional(),
-  search: z.string().trim().max(100).optional(),
-})
-export type ListPartiesFilters = z.input<typeof listPartiesFiltersSchema>
 
 const stubParties: readonly Party[] = [
   {
