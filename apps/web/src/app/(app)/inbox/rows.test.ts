@@ -70,20 +70,13 @@ const item: InboxItem = {
   createdAt: "2026-11-05T10:00:00.000Z",
 }
 
-const accounts = new Map([
-  [ACC.hosting, "Hosting"],
-  [ACC.cgst, "Input CGST"],
-  [ACC.payables, "Accounts payable"],
-])
-const parties = new Map([[AWS, "AWS India"]])
-
 describe("toInboxRow", () => {
   it("splits lines into where money goes and where it comes from", () => {
-    const row = toInboxRow(item, accounts, parties)
+    const row = toInboxRow(item)
     expect(row.goesTo.map((l) => l.account)).toEqual(["Hosting", "Input CGST"])
     expect(row.comesFrom).toEqual([
       {
-        account: "Accounts payable · AWS India",
+        account: "Accounts payable · AWS",
         amount: 45_780_00n,
         description: null,
       },
@@ -92,15 +85,48 @@ describe("toInboxRow", () => {
   })
 
   it("labels the item and formats dates", () => {
-    const row = toInboxRow(item, accounts, parties)
+    const row = toInboxRow(item)
     expect(row.kindLabel).toBe("Bill")
     expect(row.entryDate).toBe("2 Nov 2026")
     expect(row.sourceLabel).toBe("Source document")
+    expect(row.sourceUrl).toBeNull()
   })
 
-  it("falls back when an account isn't in the lookup", () => {
-    const row = toInboxRow(item, new Map(), new Map())
-    expect(row.goesTo[0]?.account).toBe("Unknown account")
-    expect(row.comesFrom[0]?.account).toBe("Unknown account")
+  it("passes GST, TDS and review flags through as proposed", () => {
+    const row = toInboxRow({
+      ...item,
+      sourceDocumentUrl: "https://files.example.test/bill.pdf",
+      gst: {
+        taxable: paise(42_000_00n),
+        cgst: paise(3_780_00n),
+        sgst: paise(3_780_00n),
+        igst: paise(0n),
+        rateBps: 1800,
+        supplyType: "intrastate",
+      },
+      tds: { section: "194J", rateBps: 150, amount: paise(630_00n) },
+      reviewFlags: {
+        needsReview: [
+          {
+            field: "vendor.gstin",
+            kind: "needs_review",
+            reason: "Checksum failed",
+            source: "check",
+          },
+        ],
+        notPrinted: [],
+      },
+    })
+    expect(row.sourceUrl).toBe("https://files.example.test/bill.pdf")
+    expect(row.gst).toMatchObject({ rateLabel: "18%", interstate: false })
+    expect(row.tds).toEqual({ section: "194J", rate: "1.5", amount: 630_00n })
+    expect(row.flags).toEqual([
+      { field: "vendor.gstin", reason: "Checksum failed" },
+    ])
+    expect(row.taxEditable).toBe(true)
+  })
+
+  it("only offers tax edits where tax applies", () => {
+    expect(toInboxRow({ ...item, kind: "bank_line" }).taxEditable).toBe(false)
   })
 })

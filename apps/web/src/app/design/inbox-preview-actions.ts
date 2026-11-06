@@ -20,3 +20,11 @@ export async function previewReject(
     ? { ok: true, ids: [id] }
     : { ok: false, error: "Say why you're rejecting this.", ids: [] }
 }
+
+export async function previewApproveOne(
+  id: string,
+  _edits: unknown
+): Promise<InboxActionResult> {
+  await Promise.resolve()
+  return { ok: true, ids: [id] }
+}

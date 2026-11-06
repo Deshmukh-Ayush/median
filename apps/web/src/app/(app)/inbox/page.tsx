@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Suspense } from "react"
 import { InboxIcon } from "lucide-react"
 
-import { isServiceError } from "@workspace/contracts"
+import { TDS_SECTIONS, isServiceError } from "@workspace/contracts"
 import { PageHeader } from "@workspace/ui/components/app-shell"
 import { buttonVariants } from "@workspace/ui/components/button"
 import { EmptyState } from "@workspace/ui/components/empty-state"
@@ -13,16 +13,11 @@ import { InboxView } from "@/components/inbox/inbox-view"
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import type { SearchParams } from "@/lib/page-props"
 import { can } from "@/lib/permissions"
-import {
-  listInboxItems,
-  listLedgerAccounts,
-  listParties,
-  MAX_PAGE_SIZE,
-} from "@/server/services"
+import { listInboxItems } from "@/server/services"
 import type { OrgContext } from "@/server/services"
 
 import { getPageContext } from "../org-context"
-import { approveItems, rejectItem } from "./actions"
+import { approveItem, approveItems, rejectItem } from "./actions"
 import { toInboxRow } from "./rows"
 
 export const metadata: Metadata = { title: "AI inbox · Median" }
@@ -50,15 +45,10 @@ async function Inbox({
   ctx: OrgContext
   cursor: string | null
 }) {
-  let data
+  let page
   try {
-    // One call each; names are joined in memory, not per line.
-    const [page, accounts, parties] = await Promise.all([
-      listInboxItems(ctx, cursor),
-      listLedgerAccounts(ctx, null, {}, { limit: MAX_PAGE_SIZE }),
-      listParties(ctx, null, {}, { limit: MAX_PAGE_SIZE }),
-    ])
-    data = { page, accounts, parties }
+    // Account and party names come on each line: one query, no lookups.
+    page = await listInboxItems(ctx, cursor)
   } catch (error) {
     if (!isServiceError(error)) throw error
     return (
@@ -72,11 +62,7 @@ async function Inbox({
     )
   }
 
-  const accountNames = new Map(data.accounts.items.map((a) => [a.id, a.name]))
-  const partyNames = new Map(data.parties.items.map((p) => [p.id, p.name]))
-  const rows = data.page.items.map((item) =>
-    toInboxRow(item, accountNames, partyNames)
-  )
+  const rows = page.items.map(toInboxRow)
 
   return (
     <div className="flex flex-col gap-4">
@@ -86,19 +72,21 @@ async function Inbox({
         rows={rows}
         canApprove={can(ctx.role, { resource: "ledger", action: "post" })}
         canReject={can(ctx.role, { resource: "ledger", action: "propose" })}
+        tdsSections={TDS_SECTIONS}
+        approveItem={approveItem}
         approveItems={approveItems}
         rejectItem={rejectItem}
       />
-      {cursor || data.page.nextCursor ? (
+      {cursor || page.nextCursor ? (
         <nav aria-label="Pages" className="flex justify-end gap-2">
           {cursor ? (
             <Link href="/inbox" className={buttonVariants({ size: "sm" })}>
               First page
             </Link>
           ) : null}
-          {data.page.nextCursor ? (
+          {page.nextCursor ? (
             <Link
-              href={`/inbox?cursor=${encodeURIComponent(data.page.nextCursor)}`}
+              href={`/inbox?cursor=${encodeURIComponent(page.nextCursor)}`}
               className={buttonVariants({ size: "sm" })}
             >
               Next page
