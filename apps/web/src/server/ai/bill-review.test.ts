@@ -1,3 +1,4 @@
+import { isStandardGstSlab as contractsSlabCheck } from "@workspace/contracts"
 import { describe, expect, it } from "vitest"
 
 import type { AiBillExtraction } from "./bill-extraction"
@@ -182,5 +183,84 @@ describe("reviewBill", () => {
         source: "model",
       },
     ])
+  })
+})
+
+describe("reviewBill: GST rate on the bill date", () => {
+  // Stand-in for isStandardGstSlab from contracts: same slab periods.
+  const isStandardGstSlab = (rateBps: number, date: string) =>
+    (date <= "2025-09-21"
+      ? [0, 500, 1200, 1800, 2800]
+      : [0, 500, 1800, 4000]
+    ).includes(rateBps)
+  const rateFlags = (b: AiBillExtraction) =>
+    reviewBill(b, TODAY, { isStandardGstSlab }).needsReview.filter((f) =>
+      f.field.endsWith("gstRatePercent")
+    )
+
+  /** The sample bill with line 0 at `percent` (only the rate flag is read). */
+  function billAt(percent: string, date: string): AiBillExtraction {
+    const b = bill()
+    b.billDate = date
+    b.dueDate = null
+    b.lines[0]!.gstRatePercent = percent
+    return b
+  }
+
+  it("accepts rates that are slabs on the bill date", () => {
+    expect(rateFlags(bill())).toEqual([])
+  })
+
+  it("flags 12% on a bill after the slabs changed", () => {
+    expect(rateFlags(billAt("12", "2025-10-01"))).toEqual([
+      expect.objectContaining({
+        field: "lines[0].gstRatePercent",
+        kind: "needs_review",
+        source: "check",
+      }),
+    ])
+  })
+
+  it("accepts 12% on a bill dated before the change", () => {
+    expect(rateFlags(billAt("12", "2025-09-21"))).toEqual([])
+  })
+
+  it("flags 40% before it existed", () => {
+    expect(rateFlags(billAt("40", "2025-09-21"))).toHaveLength(1)
+  })
+
+  it("flags a special rate for review rather than failing it", () => {
+    const [flag] = rateFlags(billAt("3", "2026-01-15"))
+    expect(flag?.kind).toBe("needs_review")
+    expect(flag?.reason).toMatch(/special rate/)
+  })
+
+  it("flags a rate finer than a basis point", () => {
+    expect(rateFlags(billAt("18.005", "2026-01-15"))).toHaveLength(1)
+  })
+
+  it("skips the check without a slab list", () => {
+    const b = billAt("12", "2025-10-01")
+    expect(
+      reviewBill(b, TODAY).needsReview.filter((f) =>
+        f.field.endsWith("gstRatePercent")
+      )
+    ).toEqual([])
+  })
+
+  it("skips the check when the bill date is invalid", () => {
+    expect(rateFlags(billAt("12", "05/10/2025"))).toEqual([])
+  })
+})
+
+describe("reviewBill with the contracts slab list", () => {
+  it("flags 12% after 22 Sep 2025 using isStandardGstSlab", () => {
+    const b = bill()
+    b.lines[0]!.gstRatePercent = "12"
+    expect(
+      reviewBill(b, TODAY, {
+        isStandardGstSlab: contractsSlabCheck,
+      }).needsReview.map((f) => f.field)
+    ).toContain("lines[0].gstRatePercent")
   })
 })
