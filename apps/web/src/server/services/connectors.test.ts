@@ -100,6 +100,58 @@ describe("connectors", () => {
     expect(await codeOf(connect(ctx, "nope", {}))).toBe("NOT_FOUND")
   })
 
+  it("validates Razorpay keys and rejects live keys in test mode", async () => {
+    const secret = "s".repeat(12)
+    expect(
+      await codeOf(
+        connect(ctx, "razorpay-test-keys", {
+          keyId: "rzp_live_abc123",
+          keySecret: secret,
+        })
+      )
+    ).toBe("VALIDATION")
+    expect(
+      await codeOf(connect(ctx, "razorpay-test-keys", { keyId: "rzp_test_a" }))
+    ).toBe("VALIDATION")
+    expect(
+      await codeOf(
+        connect(ctx, "razorpay-test-keys", {
+          keyId: "rzp_test_a",
+          keySecret: "x",
+        })
+      )
+    ).toBe("VALIDATION")
+    const connection = await connect(ctx, "razorpay-test-keys", {
+      keyId: "rzp_test_abcd1234",
+      keySecret: secret,
+    })
+    expect(connection).toMatchObject({ keyHint: "…1234", mode: "test" })
+    expect(JSON.stringify(connection)).not.toContain(secret)
+  })
+
+  it("validates bank statement connection details", async () => {
+    expect(
+      await codeOf(connect(ctx, "bank-statement", { label: "HDFC" }))
+    ).toBe("VALIDATION")
+    const connection = await connect(ctx, "bank-statement", {
+      label: "HDFC current a/c",
+      ledgerAccountId: "00000000-0000-4000-8000-0000000000a1",
+    })
+    expect(connection.label).toBe("HDFC current a/c")
+  })
+
+  it("doesn't count the header or a trailing newline as rows", async () => {
+    const opts = { connectionId: bankConnection }
+    const text = (t: string) => ({ ...csv, text: t })
+    const imported = async (t: string) =>
+      (await importFile(ctx, "bank-statement", text(t), opts)).imported
+    expect(await imported("a\nb\n")).toBe(1)
+    expect(await imported("a\nb")).toBe(1)
+    expect(await imported("a\r\nb\r\nc\r\n\r\n")).toBe(2)
+    expect(await imported("a\n")).toBe(0)
+    expect(await imported("")).toBe(0)
+  })
+
   it("needs a bank connection for bank statements", async () => {
     expect(await codeOf(importFile(ctx, "bank-statement", csv))).toBe(
       "VALIDATION"
