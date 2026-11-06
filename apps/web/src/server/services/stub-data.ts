@@ -80,6 +80,12 @@ export const STUB_ACCOUNTS = {
     "Input IGST",
     "asset"
   ),
+  tdsReceivable: account(
+    "00000000-0000-4000-8000-000000001007",
+    "1450",
+    "TDS receivable",
+    "asset"
+  ),
   payables: account(
     "00000000-0000-4000-8000-000000002001",
     "2100",
