@@ -1,10 +1,10 @@
 import "server-only"
 
 import { ServiceError } from "@workspace/contracts"
+import type { BankRow } from "@workspace/contracts"
 import { generateText, NoObjectGeneratedError, Output } from "ai"
 
 import { parseStatementDate } from "@/lib/statement-date"
-import type { BankRow } from "@/server/services/bank"
 
 import {
   type AiStatementRow,

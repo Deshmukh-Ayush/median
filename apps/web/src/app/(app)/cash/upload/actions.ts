@@ -4,7 +4,7 @@ import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { idSchema, isServiceError } from "@workspace/contracts"
-import type { ImportFile } from "@workspace/contracts"
+import type { BankMatchKind, ImportFile } from "@workspace/contracts"
 
 import { extractBankStatement } from "@/server/ai/extract-bank-statement"
 import { importFile, listConnections } from "@/server/services"
@@ -24,7 +24,20 @@ export interface StatementUploadResult {
   readonly needsReview: number
   /** 1-based row numbers, as a person counts lines in the file. */
   readonly errors: readonly { readonly row: number; readonly message: string }[]
+  /**
+   * New lines by row, matched or sent for review. Empty when the importer
+   * doesn’t report per-line results.
+   */
+  readonly lines: readonly StatementLineResult[]
 }
+
+export type StatementLineResult =
+  | {
+      readonly row: number
+      readonly status: "matched"
+      readonly matchKind: BankMatchKind
+    }
+  | { readonly row: number; readonly status: "needs_review" }
 
 export type StatementUploadState =
   | { readonly status: "idle" }
@@ -111,6 +124,17 @@ export async function uploadBankStatement(
           row: e.index + 1,
           message: e.message,
         })),
+        lines: [
+          ...(result.matched ?? []).map((m): StatementLineResult => ({
+            row: m.rowIndex + 1,
+            status: "matched",
+            matchKind: m.matchKind,
+          })),
+          ...(result.unmatched ?? []).map((u): StatementLineResult => ({
+            row: u.rowIndex + 1,
+            status: "needs_review",
+          })),
+        ].sort((a, b) => a.row - b.row),
       },
     }
   } catch (error) {

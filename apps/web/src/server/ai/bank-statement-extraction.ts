@@ -1,8 +1,7 @@
 import "server-only"
 
+import type { BankRow } from "@workspace/contracts"
 import { z } from "zod"
-
-import type { BankRow } from "@/server/services/bank"
 
 /**
  * The AI output schema for PDF bank statements. The model copies each line

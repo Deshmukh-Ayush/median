@@ -17,6 +17,7 @@ import { StatusChip } from "@workspace/ui/components/status-chip"
 
 import { uploadBankStatement } from "@/app/(app)/cash/upload/actions"
 import type {
+  StatementLineResult,
   StatementUploadResult,
   StatementUploadState,
 } from "@/app/(app)/cash/upload/actions"
@@ -27,8 +28,18 @@ const INITIAL: StatementUploadState = { status: "idle" }
 /** Counts in Indian grouping (1,23,456). */
 const count = new Intl.NumberFormat("en-IN")
 
-/** Error rows shown before "and N more". */
-const ERROR_ROWS_SHOWN = 50
+/** Rows shown in each table before "and N more". */
+const ROWS_SHOWN = 50
+
+/** Founder language for what a line matched. */
+const MATCH_LABELS: Record<
+  Extract<StatementLineResult, { status: "matched" }>["matchKind"],
+  string
+> = {
+  razorpay_settlement: "Razorpay settlement",
+  invoice_payment: "Invoice payment",
+  known_vendor: "Known vendor",
+}
 
 export function BankStatementUpload({
   accounts,
@@ -93,7 +104,7 @@ export function BankStatementUpload({
 
 /** What the import did: matched and posted, sent for review, unreadable. */
 export function MatchResults({ result }: { result: StatementUploadResult }) {
-  const shownErrors = result.errors.slice(0, ERROR_ROWS_SHOWN)
+  const shownErrors = result.errors.slice(0, ROWS_SHOWN)
   const hiddenErrors = result.errors.length - shownErrors.length
   return (
     <section
@@ -147,6 +158,8 @@ export function MatchResults({ result }: { result: StatementUploadResult }) {
         />
       </ul>
 
+      {result.lines.length > 0 ? <LineResults lines={result.lines} /> : null}
+
       {result.errors.length > 0 ? (
         <div className="flex flex-col gap-2 rounded-lg border border-default bg-surface p-4">
           <div className="flex items-center gap-2">
@@ -189,6 +202,49 @@ export function MatchResults({ result }: { result: StatementUploadResult }) {
         </div>
       ) : null}
     </section>
+  )
+}
+
+function LineResults({ lines }: { lines: readonly StatementLineResult[] }) {
+  const shown = lines.slice(0, ROWS_SHOWN)
+  const hidden = lines.length - shown.length
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-default bg-surface p-4">
+      <h3 className="text-sm font-medium">Line by line</h3>
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs text-fg-secondary">
+          <tr>
+            <th scope="col" className="w-20 py-1 font-medium">
+              Line
+            </th>
+            <th scope="col" className="py-1 font-medium">
+              Result
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((line) => (
+            <tr key={line.row} className="border-t border-default">
+              <td className="py-1.5 tabular-nums">{line.row}</td>
+              <td className="py-1.5">
+                {line.status === "matched" ? (
+                  <StatusChip tone="success">
+                    Matched: {MATCH_LABELS[line.matchKind]}
+                  </StatusChip>
+                ) : (
+                  <StatusChip tone="warning">Needs review</StatusChip>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {hidden > 0 ? (
+        <p className="text-xs text-fg-secondary">
+          and {count.format(hidden)} more.
+        </p>
+      ) : null}
+    </div>
   )
 }
 

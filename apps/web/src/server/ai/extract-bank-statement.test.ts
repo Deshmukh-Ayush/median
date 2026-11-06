@@ -1,9 +1,9 @@
+import { bankRowSchema } from "@workspace/contracts"
 import { describe, expect, it, vi } from "vitest"
 
 vi.mock("./models", () => ({ fastModel: {} }))
 
 const { toBankRow } = await import("./extract-bank-statement")
-const { bankRowSchema } = await import("@/server/services/bank")
 
 describe("toBankRow", () => {
   it("normalises a printed row into a valid BankRow", () => {
