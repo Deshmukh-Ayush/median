@@ -1,3 +1,4 @@
+import type * as React from "react"
 import { LockIcon } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -17,6 +18,7 @@ export function PlaceholderPage({
   emptyDescription,
   allowed,
   role,
+  emptyAction,
 }: {
   title: string
   description: string
@@ -25,6 +27,8 @@ export function PlaceholderPage({
   emptyDescription: string
   allowed: boolean
   role: OrgRole
+  /** A first step out of the empty state, e.g. an upload link. */
+  emptyAction?: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -39,6 +43,7 @@ export function PlaceholderPage({
             icon={<Icon />}
             title={emptyTitle}
             description={emptyDescription}
+            action={emptyAction}
           />
         ) : (
           <EmptyState
