@@ -1,5 +1,8 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { LandmarkIcon } from "lucide-react"
+
+import { buttonVariants } from "@workspace/ui/components/button"
 
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 
@@ -18,6 +21,11 @@ export default async function Page() {
       emptyDescription="Upload a bank statement or connect Razorpay to see your cash."
       allowed={allowed}
       role={ctx.role}
+      emptyAction={
+        <Link href="/cash/upload" className={buttonVariants({ size: "sm" })}>
+          Upload bank statement
+        </Link>
+      }
     />
   )
 }
