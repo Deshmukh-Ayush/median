@@ -1,9 +1,26 @@
 import { BULK_APPROVE_MAX, ServiceError } from "@workspace/contracts"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { OrgContext } from "./context"
-import { createInboxItemFromExtraction } from "./extraction"
-import { bulkApproveInboxItems, listInboxItems } from "./inbox"
+
+const consent = vi.hoisted(() => ({ accepted: true }))
+vi.mock("./consent", async () => {
+  const { ServiceError: Err } = await import("@workspace/contracts")
+  return {
+    requireConsent: vi.fn(() => {
+      if (!consent.accepted)
+        throw new Err("CONSENT_REQUIRED", "Accept consent first.")
+      return Promise.resolve()
+    }),
+  }
+})
+
+const { createInboxItemFromExtraction } = await import("./extraction")
+const { bulkApproveInboxItems } = await import("./inbox")
+
+beforeEach(() => {
+  consent.accepted = true
+})
 
 const ctx: OrgContext = { orgId: "org_1", userId: "user_1", role: "finance" }
 
@@ -97,6 +114,17 @@ describe("createInboxItemFromExtraction", () => {
     expect(debits).toBe(credits)
   })
 
+  it("needs recorded consent", async () => {
+    consent.accepted = false
+    await expect(
+      createInboxItemFromExtraction(
+        ctx,
+        "00000000-0000-4000-8000-00000000d009",
+        bill
+      )
+    ).rejects.toMatchObject({ code: "CONSENT_REQUIRED" })
+  })
+
   it("rejects malformed review flags", async () => {
     await expect(
       createInboxItemFromExtraction(
@@ -114,17 +142,7 @@ describe("createInboxItemFromExtraction", () => {
 })
 
 describe("bulkApproveInboxItems", () => {
-  it("approves what it can and reports the rest", async () => {
-    const { items } = await listInboxItems(ctx, null)
-    const known = items.map((i) => i.id)
-    const unknown = "00000000-0000-4000-8000-0000000fffff"
-    const result = await bulkApproveInboxItems(ctx, [...known, unknown])
-    expect(result.approved.map((a) => a.id)).toEqual(known)
-    expect(result.failed).toEqual([
-      { id: unknown, code: "NOT_FOUND", message: "Inbox item not found." },
-    ])
-  })
-
+  // Approving against the database is covered by devchecks (dev branch).
   it(`refuses more than ${BULK_APPROVE_MAX} ids, duplicates, and read-only roles`, async () => {
     const ids = Array.from(
       { length: BULK_APPROVE_MAX + 1 },

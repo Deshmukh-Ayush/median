@@ -725,6 +725,10 @@ export const inboxItems = pgTable(
     /** 0–1. Not money, so a float is fine here. */
     confidence: real().notNull(),
     reason: text().notNull(),
+    /** GST split behind the proposal (InboxGstSplit, amounts as paise strings). */
+    gst: jsonb(),
+    /** TDS deducted (InboxTds, amount as a paise string). */
+    tds: jsonb(),
     sourceType: inboxSourceType().notNull(),
     sourceId: uuid().notNull(),
     status: inboxStatus().notNull().default("pending"),
@@ -825,6 +829,8 @@ export const invoices = pgTable(
       t.number
     ),
     index("invoices_org_date_idx").on(t.organizationId, t.invoiceDate, t.id),
+    // Receipts quote an invoice number without its financial year.
+    index("invoices_org_number_idx").on(t.organizationId, t.number),
     index("invoices_org_party_date_idx").on(
       t.organizationId,
       t.partyId,

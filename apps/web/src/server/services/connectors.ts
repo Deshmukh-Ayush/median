@@ -7,178 +7,40 @@ import {
   importFileOptionsSchema,
   importFileSchema,
   parseInput,
-  razorpayKeyCredentialsSchema,
 } from "@workspace/contracts"
 import type {
+  BankLineMatched,
+  BankLineUnmatched,
+  ConnectionStatus,
   ConnectionSummary,
+  ConnectorAuthType,
   ConnectorInfo,
   ImportFile,
   ImportFileOptions,
   ImportResult,
   SyncResult,
 } from "@workspace/contracts"
+import { and, asc, eq, inArray, ne } from "drizzle-orm"
 import { z } from "zod"
 
-import { requireConsent } from "./consent"
+import { getDb, withTransaction } from "../db"
+import { auditLog, connections, ledgerAccounts } from "../db/schema"
+import {
+  ConnectorAuthError,
+  ConnectorError,
+  isFileConnector,
+} from "../integrations/connector"
+import { Secret, encryptCredentials } from "../integrations/credentials"
+import { connectorInfos, getConnector } from "../integrations/registry"
+import { hasConsent, requireConsent } from "./consent"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
-import { STUB_ACCOUNTS, timestampDaysAgo } from "./stub-data"
-
-// STUB until the connector registry lands (integrations/registry.ts, Day 2).
-const CONNECTORS: readonly ConnectorInfo[] = [
-  {
-    provider: "razorpay",
-    displayName: "Razorpay",
-    category: "payments",
-    authType: "oauth",
-    description: "Payments, refunds, fees and settlements, read-only.",
-    availability: "available",
-    accepts: [],
-    testModeOnly: false,
-  },
-  {
-    provider: "razorpay-test-keys",
-    displayName: "Razorpay (test keys)",
-    category: "payments",
-    authType: "api_key",
-    description: "Connect a Razorpay test account with API keys.",
-    availability: "available",
-    accepts: [],
-    testModeOnly: true,
-  },
-  {
-    provider: "razorpay-settlement-report",
-    displayName: "Razorpay settlement report",
-    category: "payments",
-    authType: "file",
-    description:
-      "Upload the settlement report CSV from the Razorpay dashboard.",
-    availability: "available",
-    accepts: ["text/csv"],
-    testModeOnly: false,
-  },
-  {
-    provider: "bank-statement",
-    displayName: "Bank statement",
-    category: "banks",
-    authType: "file",
-    description: "CSV or PDF statements from any Indian bank.",
-    availability: "available",
-    accepts: ["text/csv", "application/pdf"],
-    testModeOnly: false,
-  },
-  {
-    provider: "tally-import",
-    displayName: "Import from Tally",
-    category: "accounting",
-    authType: "file",
-    description:
-      "Masters, opening balances and vouchers from a Tally XML export.",
-    availability: "coming_soon",
-    accepts: ["application/xml", "text/xml"],
-    testModeOnly: false,
-  },
-  {
-    provider: "zoho-books-import",
-    displayName: "Import from Zoho Books",
-    category: "accounting",
-    authType: "file",
-    description: "Zoho Books CSV exports.",
-    availability: "coming_soon",
-    accepts: ["text/csv"],
-    testModeOnly: false,
-  },
-  {
-    provider: "stripe",
-    displayName: "Stripe",
-    category: "payments",
-    authType: "oauth",
-    description: "Payments and payouts.",
-    availability: "coming_soon",
-    accepts: [],
-    testModeOnly: false,
-  },
-  {
-    provider: "cashfree",
-    displayName: "Cashfree",
-    category: "payments",
-    authType: "api_key",
-    description: "Payments and settlements.",
-    availability: "coming_soon",
-    accepts: [],
-    testModeOnly: false,
-  },
-  {
-    provider: "shopify",
-    displayName: "Shopify",
-    category: "sales_channels",
-    authType: "oauth",
-    description: "Orders, refunds and payouts.",
-    availability: "coming_soon",
-    accepts: [],
-    testModeOnly: false,
-  },
-]
-
-const stubConnections: readonly ConnectionSummary[] = [
-  {
-    id: "00000000-0000-4000-8000-0000000000c1",
-    provider: "razorpay",
-    authType: "oauth",
-    label: "Razorpay",
-    keyHint: "…Xy9Q",
-    mode: "live",
-    ledgerAccountId: null,
-    status: "connected",
-    lastSyncedAt: timestampDaysAgo(0),
-    lastError: null,
-  },
-  {
-    id: "00000000-0000-4000-8000-0000000000c2",
-    provider: "bank-statement",
-    authType: "file",
-    label: "HDFC current a/c",
-    keyHint: null,
-    mode: null,
-    ledgerAccountId: STUB_ACCOUNTS.bank.id,
-    status: "connected",
-    lastSyncedAt: timestampDaysAgo(2),
-    lastError: null,
-  },
-]
-
-const settlementReportCredentialsSchema = z.object({
-  label: z.string().trim().min(1).max(100).optional(),
-})
-
-/**
- * Validates connect() credentials with the connector's schema. Razorpay keys
- * must be test-mode (rzp_test_…); live accounts use OAuth.
- */
-function parseCredentials(
-  provider: string,
-  credentials: unknown
-): { readonly label: string | null; readonly keyHint: string | null } {
-  switch (provider) {
-    case "razorpay-test-keys": {
-      const c = parseInput(razorpayKeyCredentialsSchema, credentials)
-      return { label: null, keyHint: `…${c.keyId.slice(-4)}` }
-    }
-    case "bank-statement": {
-      const c = parseInput(bankStatementCredentialsSchema, credentials)
-      return { label: c.label, keyHint: null }
-    }
-    case "razorpay-settlement-report": {
-      const c = parseInput(settlementReportCredentialsSchema, credentials)
-      return { label: c.label ?? null, keyHint: null }
-    }
-    default:
-      throw new ServiceError(
-        "VALIDATION",
-        `"${provider}" doesn't take credentials.`
-      )
-  }
-}
+import {
+  applySettlementLinks,
+  postNewRecords,
+  runSync,
+  storeRecords,
+} from "./sync-runner"
 
 /** Data rows in CSV text: non-blank lines after the header. */
 export function countCsvRows(text: string): number {
@@ -187,7 +49,7 @@ export function countCsvRows(text: string): number {
 }
 
 export function findConnector(provider: string): ConnectorInfo {
-  const connector = CONNECTORS.find((c) => c.provider === provider)
+  const connector = connectorInfos().find((c) => c.provider === provider)
   if (!connector)
     throw new ServiceError("NOT_FOUND", `No connector "${provider}".`)
   return connector
@@ -196,23 +58,78 @@ export function findConnector(provider: string): ConnectorInfo {
 /** Every connector, for the Integrations gallery. Needs no organisation. */
 export async function listConnectors(): Promise<readonly ConnectorInfo[]> {
   await Promise.resolve()
-  return CONNECTORS
+  return connectorInfos()
 }
 
-/** The organisation's connections. STUB. */
+const summaryColumns = {
+  id: connections.id,
+  provider: connections.provider,
+  authType: connections.authType,
+  label: connections.label,
+  keyHint: connections.keyHint,
+  ledgerAccountId: connections.ledgerAccountId,
+  status: connections.status,
+  lastSyncedAt: connections.lastSyncedAt,
+  lastError: connections.lastError,
+}
+
+interface SummaryRow {
+  readonly id: string
+  readonly provider: string
+  readonly authType: ConnectorAuthType
+  readonly label: string
+  readonly keyHint: string | null
+  readonly ledgerAccountId: string | null
+  readonly status: ConnectionStatus
+  readonly lastSyncedAt: Date | null
+  readonly lastError: string | null
+}
+
+function modeOf(provider: string): ConnectionSummary["mode"] {
+  if (provider === "razorpay-test-keys") return "test"
+  if (provider === "razorpay") return "live"
+  return null
+}
+
+function toSummary(row: SummaryRow): ConnectionSummary {
+  return {
+    ...row,
+    mode: modeOf(row.provider),
+    lastSyncedAt: row.lastSyncedAt ? row.lastSyncedAt.toISOString() : null,
+  }
+}
+
+/** The organisation's connections, oldest first (at most 100). */
 export async function listConnections(
   ctx: OrgContext
 ): Promise<readonly ConnectionSummary[]> {
   assertCan(ctx, "ledger", "read")
-  await Promise.resolve()
-  return stubConnections
+  const rows = await getDb()
+    .select(summaryColumns)
+    .from(connections)
+    .where(eq(connections.organizationId, ctx.orgId))
+    .orderBy(asc(connections.createdAt), asc(connections.id))
+    .limit(100)
+  return rows.map(toSummary)
+}
+
+const fileSettingsSchema = z.object({
+  label: z.string().trim().min(1).max(100).optional(),
+})
+
+interface NewConnection {
+  label: string
+  keyHint: string | null
+  ledgerAccountId: string | null
+  credentialsEncrypted: string | null
 }
 
 /**
  * Connects an api_key or file connector: the connector validates and tests
  * the credentials, which are stored encrypted. OAuth connectors use their own
- * start/complete functions (startRazorpayOAuth). Throws CONSENT_REQUIRED,
- * NOT_FOUND, VALIDATION, INTEGRATION (provider rejected the credentials). STUB.
+ * start/complete functions (startRazorpayOAuth). Reconnecting the same key
+ * reuses its connection (and its sync cursor). Throws CONSENT_REQUIRED,
+ * NOT_FOUND, VALIDATION, INTEGRATION (provider rejected the credentials).
  */
 export async function connect(
   ctx: OrgContext,
@@ -221,56 +138,189 @@ export async function connect(
 ): Promise<ConnectionSummary> {
   assertCan(ctx, "settings", "update")
   const id = parseInput(z.string().min(1).max(50), provider)
-  const connector = findConnector(id)
-  if (connector.availability !== "available") {
-    throw new ServiceError(
-      "VALIDATION",
-      `${connector.displayName} is coming soon.`
-    )
+  const info = findConnector(id)
+  if (info.availability !== "available") {
+    throw new ServiceError("VALIDATION", `${info.displayName} is coming soon.`)
   }
-  if (connector.authType === "oauth") {
+  if (info.authType === "oauth") {
     throw new ServiceError(
       "VALIDATION",
-      `${connector.displayName} connects through its approval screen.`
+      `${info.displayName} connects through its approval screen.`
     )
   }
   if (credentials === undefined || credentials === null) {
     throw new ServiceError("VALIDATION", "Missing credentials.")
   }
-  const parsed = parseCredentials(connector.provider, credentials)
-  await requireConsent(ctx)
-  return {
-    id: crypto.randomUUID(),
-    provider: connector.provider,
-    authType: connector.authType,
-    label: parsed.label ?? connector.displayName,
-    keyHint: parsed.keyHint,
-    mode: connector.testModeOnly ? "test" : null,
-    ledgerAccountId: null,
-    status: "connected",
-    lastSyncedAt: null,
-    lastError: null,
+
+  // Validate before the consent check, so bad input is VALIDATION either way.
+  const connector = getConnector(id)
+  let row: NewConnection
+  let test: (() => Promise<{ keyHint: string | null }>) | null = null
+  if (id === "bank-statement") {
+    const c = parseInput(bankStatementCredentialsSchema, credentials)
+    row = {
+      label: c.label,
+      keyHint: null,
+      ledgerAccountId: c.ledgerAccountId,
+      credentialsEncrypted: null,
+    }
+  } else if (connector && isFileConnector(connector)) {
+    const c = parseInput(
+      connector.settingsSchema ?? fileSettingsSchema,
+      credentials
+    )
+    row = {
+      label: c.label ?? info.displayName,
+      keyHint: null,
+      ledgerAccountId: null,
+      credentialsEncrypted: null,
+    }
+  } else if (connector) {
+    const c = parseInput(connector.credentialsSchema, credentials)
+    const secret = new Secret(c)
+    row = {
+      label: info.displayName,
+      keyHint: null,
+      ledgerAccountId: null,
+      credentialsEncrypted: null,
+    }
+    const encrypt = () =>
+      encryptCredentials(c, { orgId: ctx.orgId, provider: id })
+    test = async () => {
+      const result = await connector.testConnection(secret)
+      row.credentialsEncrypted = encrypt()
+      return result
+    }
+  } else {
+    throw new ServiceError("VALIDATION", `"${id}" doesn't take credentials.`)
   }
+
+  await requireConsent(ctx)
+
+  if (test) {
+    try {
+      row.keyHint = (await test()).keyHint
+    } catch (error) {
+      if (error instanceof ConnectorAuthError)
+        throw new ServiceError(
+          "INTEGRATION",
+          `${info.displayName} rejected these keys.`
+        )
+      if (error instanceof ConnectorError)
+        throw new ServiceError("INTEGRATION", error.message)
+      throw error
+    }
+  }
+
+  if (row.ledgerAccountId) {
+    const [account] = await getDb()
+      .select({ type: ledgerAccounts.type })
+      .from(ledgerAccounts)
+      .where(
+        and(
+          eq(ledgerAccounts.organizationId, ctx.orgId),
+          eq(ledgerAccounts.id, row.ledgerAccountId)
+        )
+      )
+      .limit(1)
+    if (account?.type !== "asset")
+      throw new ServiceError(
+        "VALIDATION",
+        "Choose a bank account (an asset account) from your chart of accounts."
+      )
+  }
+
+  return withTransaction(async (tx) => {
+    // Same provider and key again: reconnect the existing connection.
+    const [existing] = row.keyHint
+      ? await tx
+          .select({ id: connections.id })
+          .from(connections)
+          .where(
+            and(
+              eq(connections.organizationId, ctx.orgId),
+              eq(connections.provider, id),
+              eq(connections.keyHint, row.keyHint)
+            )
+          )
+          .limit(1)
+          .for("update")
+      : []
+    const [saved] = existing
+      ? await tx
+          .update(connections)
+          .set({ ...row, status: "connected", lastError: null })
+          .where(
+            and(
+              eq(connections.organizationId, ctx.orgId),
+              eq(connections.id, existing.id)
+            )
+          )
+          .returning(summaryColumns)
+      : await tx
+          .insert(connections)
+          .values({
+            organizationId: ctx.orgId,
+            provider: id,
+            authType: info.authType,
+            ...row,
+          })
+          .returning(summaryColumns)
+    if (!saved)
+      throw new ServiceError("CONFLICT", "Couldn't save the connection.")
+    await tx.insert(auditLog).values({
+      organizationId: ctx.orgId,
+      actorId: ctx.userId,
+      action: existing ? "connection.reconnect" : "connection.create",
+      entity: "connection",
+      entityId: saved.id,
+      before: null,
+      after: { provider: id, label: row.label, keyHint: row.keyHint },
+      source: "web",
+    })
+    return toSummary(saved)
+  })
 }
 
-/** Stops syncing and deletes stored credentials; imported data stays. STUB. */
+/** Stops syncing and deletes stored credentials; imported data stays. */
 export async function disconnect(
   ctx: OrgContext,
   connectionId: string
 ): Promise<ConnectionSummary> {
   assertCan(ctx, "settings", "update")
   const id = parseInput(idSchema, connectionId)
-  const connection = stubConnections.find((c) => c.id === id)
-  if (!connection) throw new ServiceError("NOT_FOUND", "Connection not found.")
-  await Promise.resolve()
-  return { ...connection, status: "disconnected", keyHint: null }
+  return withTransaction(async (tx) => {
+    const [saved] = await tx
+      .update(connections)
+      .set({
+        status: "disconnected",
+        credentialsEncrypted: null,
+        lastError: null,
+      })
+      .where(
+        and(eq(connections.organizationId, ctx.orgId), eq(connections.id, id))
+      )
+      .returning(summaryColumns)
+    if (!saved) throw new ServiceError("NOT_FOUND", "Connection not found.")
+    await tx.insert(auditLog).values({
+      organizationId: ctx.orgId,
+      actorId: ctx.userId,
+      action: "connection.disconnect",
+      entity: "connection",
+      entityId: id,
+      before: null,
+      after: { status: "disconnected" },
+      source: "web",
+    })
+    return toSummary(saved)
+  })
 }
 
 /**
  * Pulls new records since the saved cursor and runs the posting rules on
  * them. Safe to re-run. Throws CONSENT_REQUIRED, NOT_FOUND, CONFLICT (already
  * syncing), INTEGRATION (and marks the connection reconnect_required/revoked
- * when the provider rejects our token). STUB.
+ * when the provider rejects our token).
  */
 export async function syncConnection(
   ctx: OrgContext,
@@ -278,25 +328,55 @@ export async function syncConnection(
 ): Promise<SyncResult> {
   assertCan(ctx, "ledger", "post")
   const id = parseInput(idSchema, connectionId)
-  const connection = stubConnections.find((c) => c.id === id)
-  if (!connection) throw new ServiceError("NOT_FOUND", "Connection not found.")
-  if (connection.authType === "file") {
-    throw new ServiceError(
-      "VALIDATION",
-      "File connections import with importFile."
-    )
-  }
   await requireConsent(ctx)
+  const r = await runSync(ctx.orgId, id, "razorpay_rule")
   return {
     connectionId: id,
-    fetched: { payment: 148, refund: 3, fee: 148, settlement: 9 },
-    inserted: 308,
-    skippedExisting: 0,
-    posted: 302,
-    sentToInbox: 6,
-    status: "connected",
-    lastSyncedAt: new Date().toISOString(),
+    fetched: r.fetched,
+    inserted: r.inserted,
+    skippedExisting: r.skippedExisting,
+    posted: r.posted,
+    sentToInbox: r.sentToInbox,
+    status: r.status,
+    lastSyncedAt: r.lastSyncedAt.toISOString(),
   }
+}
+
+/** The org's connection for a file connector, created on first import. */
+async function fileConnection(
+  ctx: OrgContext,
+  info: ConnectorInfo,
+  connectionId: string | undefined
+): Promise<string> {
+  const db = getDb()
+  const [found] = await db
+    .select({ id: connections.id })
+    .from(connections)
+    .where(
+      and(
+        eq(connections.organizationId, ctx.orgId),
+        eq(connections.provider, info.provider),
+        connectionId
+          ? eq(connections.id, connectionId)
+          : ne(connections.status, "disconnected")
+      )
+    )
+    .orderBy(asc(connections.createdAt))
+    .limit(1)
+  if (found) return found.id
+  if (connectionId) throw new ServiceError("NOT_FOUND", "Connection not found.")
+  const [created] = await db
+    .insert(connections)
+    .values({
+      organizationId: ctx.orgId,
+      provider: info.provider,
+      authType: "file",
+      label: info.displayName,
+    })
+    .returning({ id: connections.id })
+  if (!created)
+    throw new ServiceError("CONFLICT", "Couldn't create the connection.")
+  return created.id
 }
 
 /**
@@ -304,7 +384,8 @@ export async function syncConnection(
  * settlement report, later Tally XML). Unreadable rows are reported in
  * `errors`, not thrown; re-importing the same file creates no duplicates.
  * Throws CONSENT_REQUIRED, NOT_FOUND, VALIDATION (e.g. a bank statement
- * without connectionId). STUB.
+ * without connectionId). Bank statements return per-row `matched` and
+ * `unmatched` for the rows imported this time.
  */
 export async function importFile(
   ctx: OrgContext,
@@ -315,11 +396,11 @@ export async function importFile(
   assertCan(ctx, "ledger", "post")
   const f = parseInput(importFileSchema, file)
   const o = parseInput(importFileOptionsSchema, options)
-  const connector = findConnector(provider)
-  if (connector.authType !== "file" || connector.availability !== "available") {
+  const info = findConnector(provider)
+  if (info.authType !== "file" || info.availability !== "available") {
     throw new ServiceError(
       "VALIDATION",
-      `${connector.displayName} doesn't take files yet.`
+      `${info.displayName} doesn't take files yet.`
     )
   }
   if (provider === "bank-statement" && !o.connectionId) {
@@ -329,14 +410,114 @@ export async function importFile(
     )
   }
   await requireConsent(ctx)
-  const rows = f.kind === "rows" ? f.rows.length : countCsvRows(f.text)
-  const posted = Math.floor(rows * 0.8)
-  return {
-    connectionId: o.connectionId ?? crypto.randomUUID(),
-    imported: rows,
-    duplicates: 0,
-    posted,
-    sentToInbox: rows - posted,
-    errors: [],
+
+  const connector = getConnector(provider)
+  if (!connector || !isFileConnector(connector)) {
+    throw new ServiceError(
+      "VALIDATION",
+      `${info.displayName} doesn't take files yet.`
+    )
   }
+
+  const connectionId = await fileConnection(ctx, info, o.connectionId)
+  const parsed = await connector.parseFile(f, { provider, connectionId })
+  const stored = await storeRecords(ctx.orgId, connectionId, parsed.records)
+  if (parsed.settlementLinks?.length)
+    await applySettlementLinks(ctx.orgId, provider, parsed.settlementLinks)
+  const posting = await postNewRecords(ctx.orgId, connectionId, "file_import")
+  await getDb()
+    .update(connections)
+    .set({ lastSyncedAt: new Date(), status: "connected", lastError: null })
+    .where(
+      and(
+        eq(connections.organizationId, ctx.orgId),
+        eq(connections.id, connectionId)
+      )
+    )
+  // Per-row results for bank statements (new rows only).
+  const matched: BankLineMatched[] = []
+  const unmatched: BankLineUnmatched[] = []
+  if (parsed.rowIndexes) {
+    parsed.records.forEach((record, i) => {
+      const key = record.externalId ?? record.dedupeHash ?? ""
+      const sourceRecordId = stored.insertedIds.get(key)
+      const outcome = sourceRecordId && posting.outcomes.get(sourceRecordId)
+      const rowIndex = parsed.rowIndexes?.[i] ?? i
+      if (!sourceRecordId || !outcome) return
+      if (outcome.status === "posted" && outcome.entryId)
+        matched.push({
+          rowIndex,
+          sourceRecordId,
+          matchKind: outcome.matchKind ?? "invoice_payment",
+          entryId: outcome.entryId,
+        })
+      else if (outcome.status === "inbox" && outcome.inboxItemId)
+        unmatched.push({
+          rowIndex,
+          sourceRecordId,
+          inboxItemId: outcome.inboxItemId,
+        })
+    })
+  }
+  return {
+    connectionId,
+    imported: stored.inserted,
+    duplicates: stored.skippedExisting,
+    posted: posting.posted,
+    sentToInbox: posting.sentToInbox,
+    errors: [...parsed.errors, ...stored.errors],
+    ...(parsed.rowIndexes ? { matched, unmatched } : {}),
+  }
+}
+
+export interface ScheduledSyncReport {
+  readonly synced: number
+  readonly failed: readonly {
+    readonly connectionId: string
+    readonly message: string
+  }[]
+  /** Skipped: no consent, or already syncing. */
+  readonly skipped: number
+}
+
+/**
+ * Syncs every connected API connection across organisations, one at a time.
+ * For the cron route (Vercel Hobby allows one run a day). Never call it from
+ * a user request: it acts as the system, not a member.
+ */
+export async function runScheduledSyncs(): Promise<ScheduledSyncReport> {
+  const rows = await getDb()
+    .select({ id: connections.id, orgId: connections.organizationId })
+    .from(connections)
+    .where(
+      and(
+        ne(connections.authType, "file"),
+        inArray(connections.status, ["connected", "error"])
+      )
+    )
+    .orderBy(asc(connections.lastSyncedAt))
+    .limit(500)
+  let synced = 0
+  let skipped = 0
+  const failed: { connectionId: string; message: string }[] = []
+  for (const row of rows) {
+    if (!(await hasConsent(row.orgId))) {
+      skipped++
+      continue
+    }
+    try {
+      await runSync(row.orgId, row.id, "scheduled_sync")
+      synced++
+    } catch (error) {
+      if (error instanceof ServiceError && error.code === "CONFLICT") {
+        skipped++
+        continue
+      }
+      failed.push({
+        connectionId: row.id,
+        message: error instanceof ServiceError ? error.message : "Sync failed.",
+      })
+    }
+  }
+  return { synced, failed, skipped }
 }
