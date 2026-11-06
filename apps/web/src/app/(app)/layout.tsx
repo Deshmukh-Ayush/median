@@ -6,6 +6,7 @@ import { AppShell, TopBar } from "@workspace/ui/components/app-shell"
 import { Button } from "@workspace/ui/components/button"
 import type { CommandBarGroup } from "@workspace/ui/components/command-bar"
 import { Logo } from "@workspace/ui/components/logo"
+import { Toaster } from "@workspace/ui/components/sonner"
 import type { SidebarSection } from "@workspace/ui/components/sidebar"
 
 import { signOut } from "@/app/(auth)/actions"
@@ -126,6 +127,7 @@ export default async function AppLayout({
       }
     >
       {children}
+      <Toaster />
     </AppShell>
   )
 }

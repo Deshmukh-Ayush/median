@@ -46,6 +46,7 @@ import { Money } from "@workspace/ui/components/money"
 import { Sidebar } from "@workspace/ui/components/sidebar"
 import type { SidebarSection } from "@workspace/ui/components/sidebar"
 import { SourceLink } from "@workspace/ui/components/source-link"
+import { Toaster } from "@workspace/ui/components/sonner"
 import { StatCard } from "@workspace/ui/components/stat-card"
 import { StatusChip } from "@workspace/ui/components/status-chip"
 import type { StatusTone } from "@workspace/ui/components/status-chip"
@@ -65,7 +66,11 @@ import type { ColorToken } from "@workspace/ui/lib/tokens"
 
 import { InboxView } from "@/components/inbox/inbox-view"
 
-import { previewApprove, previewReject } from "./inbox-preview-actions"
+import {
+  previewApprove,
+  previewApproveOne,
+  previewReject,
+} from "./inbox-preview-actions"
 import { inboxRows, invoices, moneySamples, stats } from "./sample-data"
 import type { SampleInvoice } from "./sample-data"
 
@@ -608,6 +613,8 @@ export default function DesignPage() {
             rows={[...inboxRows]}
             canApprove
             canReject
+            tdsSections={["194C", "194J"]}
+            approveItem={previewApproveOne}
             approveItems={previewApprove}
             rejectItem={previewReject}
           />
@@ -1189,6 +1196,7 @@ export default function DesignPage() {
           </div>
         </Section>
       </main>
+      <Toaster />
     </div>
   )
 }
