@@ -305,7 +305,10 @@ async function lockPending(
     .for("update")
   if (!row) throw new ServiceError("NOT_FOUND", "Inbox item not found.")
   if (row.status !== "pending")
-    throw new ServiceError("CONFLICT", `This item was already ${row.status}.`)
+    throw new ServiceError(
+      "CONFLICT",
+      `Someone already ${row.status === "approved" ? "approved" : "rejected"} this item.`
+    )
   return decode(row)
 }
 
@@ -341,7 +344,17 @@ export async function approveInboxItem(
         lines: edited.entry.lines.map((l) => ({ ...l })),
       },
       { tx }
-    )
+    ).catch((error: unknown) => {
+      if (error instanceof ServiceError && error.code === "UNBALANCED")
+        throw new ServiceError(
+          "UNBALANCED",
+          e.gst || e.tds !== undefined || e.lines
+            ? "These edits don't balance. Check the amounts."
+            : "This entry doesn't balance. Check the amounts.",
+          error.details
+        )
+      throw error
+    })
     const [row] = await tx
       .update(inboxItems)
       .set({
