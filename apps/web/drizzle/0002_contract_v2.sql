@@ -137,6 +137,8 @@ ALTER TABLE "organization_settings" ADD COLUMN "composition_scheme" boolean DEFA
 ALTER TABLE "organization_settings" ADD COLUMN "default_gst_rate_bps" integer;--> statement-breakpoint
 ALTER TABLE "source_records" ADD COLUMN "dedupe_hash" text;--> statement-breakpoint
 ALTER TABLE "source_records" ADD COLUMN "currency" text DEFAULT 'INR' NOT NULL;--> statement-breakpoint
+-- Hand-edited: created before credit_notes_source_record_fk, which references it.
+ALTER TABLE "source_records" ADD CONSTRAINT "source_records_org_id_uq" UNIQUE("organization_id","id");--> statement-breakpoint
 ALTER TABLE "consents" ADD CONSTRAINT "consents_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "consents" ADD CONSTRAINT "consents_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credit_note_lines" ADD CONSTRAINT "credit_note_lines_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -158,7 +160,6 @@ CREATE INDEX "deletion_tombstones_org_idx" ON "deletion_tombstones" USING btree 
 CREATE INDEX "deletion_tombstones_retention_idx" ON "deletion_tombstones" USING btree ("retention_until") WHERE "deletion_tombstones"."purged_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "source_records_org_dedupe_hash_uq" ON "source_records" USING btree ("organization_id","dedupe_hash") WHERE "source_records"."dedupe_hash" is not null;--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_org_fy_number_uq" UNIQUE("organization_id","financial_year","number");--> statement-breakpoint
-ALTER TABLE "source_records" ADD CONSTRAINT "source_records_org_id_uq" UNIQUE("organization_id","id");--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_number_length_check" CHECK (char_length("invoices"."number") between 1 and 16);--> statement-breakpoint
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_amounts_check" CHECK ("invoices"."taxable_paise" >= 0 and "invoices"."cgst_paise" >= 0 and "invoices"."sgst_paise" >= 0 and "invoices"."igst_paise" >= 0 and "invoices"."paid_paise" >= 0 and "invoices"."round_off_paise" between -50 and 50 and "invoices"."total_paise" = "invoices"."taxable_paise" + "invoices"."cgst_paise" + "invoices"."sgst_paise" + "invoices"."igst_paise" + "invoices"."round_off_paise");--> statement-breakpoint
 ALTER TABLE "organization_settings" ADD CONSTRAINT "organization_settings_default_rate_check" CHECK ("organization_settings"."default_gst_rate_bps" is null or "organization_settings"."default_gst_rate_bps" between 0 and 10000);--> statement-breakpoint
