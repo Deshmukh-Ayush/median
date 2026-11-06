@@ -159,14 +159,15 @@ export async function storeRecords(
           sourceRecords.externalId,
         ],
         // Records not booked yet take the provider's latest state (a refund
-        // turning processed); booked ones never change.
+        // turning processed); booked ones keep theirs. The settlement link is
+        // filled in either way: another connector (the settlement report)
+        // may know it when the API didn't.
         set: {
-          payload: sql`excluded.payload`,
-          amountPaise: sql`excluded.amount_paise`,
+          payload: sql`case when ${sourceRecords.status} = 'new' then excluded.payload else ${sourceRecords.payload} end`,
+          amountPaise: sql`case when ${sourceRecords.status} = 'new' then excluded.amount_paise else ${sourceRecords.amountPaise} end`,
           settlementExternalId: sql`coalesce(${sourceRecords.settlementExternalId}, excluded.settlement_external_id)`,
           updatedAt: sql`now()`,
         },
-        setWhere: sql`${sourceRecords.status} = 'new'`,
       })
       .returning({
         id: sourceRecords.id,
@@ -201,17 +202,18 @@ export async function storeRecords(
 /** Ties stored records to their settlement (recon), where not yet linked. */
 export async function applySettlementLinks(
   orgId: string,
-  provider: string,
   links: readonly SettlementLink[]
 ): Promise<void> {
-  const bySettlement = new Map<string, string[]>()
+  const bySettlement = new Map<string, { provider: string; ids: string[] }>()
   for (const l of links) {
-    const ids = bySettlement.get(l.settlementExternalId) ?? []
-    ids.push(l.externalId)
-    bySettlement.set(l.settlementExternalId, ids)
+    const key = `${l.provider}\u0000${l.settlementExternalId}`
+    const group = bySettlement.get(key) ?? { provider: l.provider, ids: [] }
+    group.ids.push(l.externalId)
+    bySettlement.set(key, group)
   }
   const db = getDb()
-  for (const [settlementId, externalIds] of bySettlement) {
+  for (const [key, { provider, ids: externalIds }] of bySettlement) {
+    const settlementId = key.split("\u0000")[1] ?? ""
     for (let i = 0; i < externalIds.length; i += INSERT_CHUNK) {
       await db
         .update(sourceRecords)
@@ -1033,11 +1035,7 @@ export async function runSync(
       skippedExisting += stored.skippedExisting
       errors.push(...stored.errors)
       if (batch.settlementLinks?.length)
-        await applySettlementLinks(
-          orgId,
-          connection.provider,
-          batch.settlementLinks
-        )
+        await applySettlementLinks(orgId, batch.settlementLinks)
       cursor = batch.cursor
       await db
         .update(connections)

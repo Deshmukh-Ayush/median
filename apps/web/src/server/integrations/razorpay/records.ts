@@ -16,16 +16,22 @@ import type {
 // - refund: payment_id, status
 // - settlement: status, fees, tax, utr, recon ("available" | "unavailable")
 
+/**
+ * Every Razorpay record has provider "razorpay", whichever connector read it
+ * (API with test keys, OAuth, or the settlement report), so the unique
+ * (organization_id, provider, external_id) constraint dedupes across them
+ * and nothing is booked twice.
+ */
+export const RAZORPAY_PROVIDER = "razorpay"
+const provider = RAZORPAY_PROVIDER
+
 const iso = (unixSeconds: number) => new Date(unixSeconds * 1000).toISOString()
 
 /** The fee record's external id for a payment. */
 export const feeExternalId = (paymentId: string) => `${paymentId}:fee`
 
 /** A payment, plus its gateway-fee record once Razorpay has charged one. */
-export function paymentRecords(
-  provider: string,
-  p: RazorpayPayment
-): SourceRecordInput[] {
+export function paymentRecords(p: RazorpayPayment): SourceRecordInput[] {
   const records: SourceRecordInput[] = [
     {
       provider,
@@ -59,10 +65,7 @@ export function paymentRecords(
   return records
 }
 
-export function refundRecord(
-  provider: string,
-  r: RazorpayRefund
-): SourceRecordInput {
+export function refundRecord(r: RazorpayRefund): SourceRecordInput {
   return {
     provider,
     kind: "refund",
@@ -79,7 +82,6 @@ export function refundRecord(
 }
 
 export function settlementRecord(
-  provider: string,
   s: RazorpaySettlement,
   recon: "available" | "unavailable"
 ): SourceRecordInput {
@@ -104,10 +106,11 @@ export function settlementRecord(
  */
 export function reconLinks(
   items: readonly RazorpayReconItem[]
-): { externalId: string; settlementExternalId: string }[] {
+): { provider: string; externalId: string; settlementExternalId: string }[] {
   return items.flatMap((item) => {
     if (!item.settlement_id) return []
     const link = {
+      provider,
       externalId: item.entity_id,
       settlementExternalId: item.settlement_id,
     }

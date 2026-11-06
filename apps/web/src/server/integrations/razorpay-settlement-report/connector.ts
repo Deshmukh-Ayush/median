@@ -5,7 +5,11 @@ import { parseRupees } from "@workspace/ledger"
 import { z } from "zod"
 
 import type { FileConnector, ParsedFile, SettlementLink } from "../connector"
-import { paymentRecords, refundRecord } from "../razorpay/records"
+import {
+  RAZORPAY_PROVIDER,
+  paymentRecords,
+  refundRecord,
+} from "../razorpay/records"
 
 // Fallback until Razorpay partner OAuth is approved: the settlement
 // reconciliation report CSV downloaded from the Razorpay dashboard. Produces
@@ -16,7 +20,7 @@ import { paymentRecords, refundRecord } from "../razorpay/records"
 // amounts are rupees as printed ("1,180.00"); timestamps without a zone are
 // IST. Rows of other types (adjustment, transfer…) are reported as errors.
 
-const PROVIDER = "razorpay-settlement-report"
+const CONNECTOR = "razorpay-settlement-report"
 const REQUIRED = [
   "entity_id",
   "type",
@@ -147,7 +151,7 @@ export async function parseSettlementReport(
     const currency = (row.currency || "INR").toUpperCase()
 
     if (row.type === "payment") {
-      const recs = paymentRecords(PROVIDER, {
+      const recs = paymentRecords({
         id: row.entity_id,
         entity: "payment",
         amount: Number(row.amount),
@@ -171,7 +175,7 @@ export async function parseSettlementReport(
       )
     } else if (row.type === "refund") {
       records.push({
-        ...refundRecord(PROVIDER, {
+        ...refundRecord({
           id: row.entity_id,
           entity: "refund",
           amount: Number(row.amount),
@@ -220,7 +224,7 @@ export async function parseSettlementReport(
       continue
     }
     records.push({
-      provider: PROVIDER,
+      provider: RAZORPAY_PROVIDER,
       kind: "settlement",
       externalId: id,
       dedupeHash: null,
@@ -246,7 +250,7 @@ export async function parseSettlementReport(
 
 export const razorpaySettlementReportConnector: FileConnector = {
   info: {
-    provider: PROVIDER,
+    provider: CONNECTOR,
     displayName: "Razorpay settlement report",
     category: "payments",
     authType: "file",

@@ -21,6 +21,8 @@ export type ConnectorCursor = Readonly<Record<string, number | string>>
 
 /** Ties already-stored records to the settlement they were paid out in. */
 export interface SettlementLink {
+  /** Provider of the records to link (e.g. "razorpay"). */
+  readonly provider: string
   readonly externalId: string
   readonly settlementExternalId: string
 }
