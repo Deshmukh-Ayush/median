@@ -38,15 +38,37 @@ export async function signIn(
       values: { email: raw.email },
     }
   }
+  const auth = getAuth()
+  let sessionCookies: string
   try {
-    await getAuth().api.signInEmail({
+    const result = await auth.api.signInEmail({
       body: parsed.data,
       headers: await headers(),
+      returnHeaders: true,
     })
+    // The new session's cookies, so we can act as it in this same request.
+    sessionCookies = result.headers
+      .getSetCookie()
+      .map((cookie) => cookie.split(";")[0])
+      .join("; ")
   } catch (error) {
     const message = authErrorMessage(error)
     if (message === null) throw error
     return { error: message, values: { email: raw.email } }
+  }
+  // A new session has no active organisation, so every app page would send
+  // the user to the picker and lose redirectTo. With exactly one
+  // organisation there's nothing to pick: open it.
+  const asNewSession = new Headers({ cookie: sessionCookies })
+  const organizations = await auth.api.listOrganizations({
+    headers: asNewSession,
+  })
+  const [only] = organizations
+  if (only && organizations.length === 1) {
+    await auth.api.setActiveOrganization({
+      body: { organizationId: only.id },
+      headers: asNewSession,
+    })
   }
   redirect(safeRedirect(raw.redirectTo))
 }
