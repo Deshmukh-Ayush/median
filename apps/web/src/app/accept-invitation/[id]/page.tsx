@@ -10,7 +10,7 @@ import type { PagePropsWith } from "@/lib/page-props"
 import { ROLE_LABELS, isOrgRole } from "@/lib/permissions"
 import { getAuth } from "@/server/auth"
 
-import { acceptInvitation } from "./actions"
+import { acceptInvitation, signOutToAcceptInvitation } from "./actions"
 
 export const metadata: Metadata = { title: "Join an organisation · Median" }
 
@@ -87,6 +87,11 @@ export default async function AcceptInvitationPage(
         <p className="text-sm text-fg-secondary">
           You&apos;re signed in as {session.user.email}.
         </p>
+        <form action={signOutToAcceptInvitation.bind(null, id)}>
+          <Button type="submit" variant="secondary" className="w-full">
+            Sign in with a different email
+          </Button>
+        </form>
       </Frame>
     )
   }
