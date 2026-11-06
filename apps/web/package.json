@@ -15,7 +15,7 @@
     "eval:bills": "vitest run --config evals/vitest.config.ts evals/bills/run",
     "analyze": "cross-env ANALYZE=true next build --webpack",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/migrate.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
