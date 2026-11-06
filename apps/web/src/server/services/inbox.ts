@@ -166,6 +166,7 @@ async function viewsFor(
             type: ledgerAccounts.type,
             parentId: ledgerAccounts.parentId,
             isSystem: ledgerAccounts.isSystem,
+            isBank: ledgerAccounts.isBank,
           })
           .from(ledgerAccounts)
           .where(
