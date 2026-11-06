@@ -2,10 +2,12 @@ import "server-only"
 
 import {
   ServiceError,
+  bankStatementCredentialsSchema,
   idSchema,
   importFileOptionsSchema,
   importFileSchema,
   parseInput,
+  razorpayKeyCredentialsSchema,
 } from "@workspace/contracts"
 import type {
   ConnectionSummary,
@@ -145,6 +147,45 @@ const stubConnections: readonly ConnectionSummary[] = [
   },
 ]
 
+const settlementReportCredentialsSchema = z.object({
+  label: z.string().trim().min(1).max(100).optional(),
+})
+
+/**
+ * Validates connect() credentials with the connector's schema. Razorpay keys
+ * must be test-mode (rzp_test_…); live accounts use OAuth.
+ */
+function parseCredentials(
+  provider: string,
+  credentials: unknown
+): { readonly label: string | null; readonly keyHint: string | null } {
+  switch (provider) {
+    case "razorpay-test-keys": {
+      const c = parseInput(razorpayKeyCredentialsSchema, credentials)
+      return { label: null, keyHint: `…${c.keyId.slice(-4)}` }
+    }
+    case "bank-statement": {
+      const c = parseInput(bankStatementCredentialsSchema, credentials)
+      return { label: c.label, keyHint: null }
+    }
+    case "razorpay-settlement-report": {
+      const c = parseInput(settlementReportCredentialsSchema, credentials)
+      return { label: c.label ?? null, keyHint: null }
+    }
+    default:
+      throw new ServiceError(
+        "VALIDATION",
+        `"${provider}" doesn't take credentials.`
+      )
+  }
+}
+
+/** Data rows in CSV text: non-blank lines after the header. */
+export function countCsvRows(text: string): number {
+  const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim() !== "")
+  return Math.max(0, lines.length - 1)
+}
+
 export function findConnector(provider: string): ConnectorInfo {
   const connector = CONNECTORS.find((c) => c.provider === provider)
   if (!connector)
@@ -196,13 +237,14 @@ export async function connect(
   if (credentials === undefined || credentials === null) {
     throw new ServiceError("VALIDATION", "Missing credentials.")
   }
+  const parsed = parseCredentials(connector.provider, credentials)
   await requireConsent(ctx)
   return {
     id: crypto.randomUUID(),
     provider: connector.provider,
     authType: connector.authType,
-    label: connector.displayName,
-    keyHint: connector.authType === "api_key" ? "…a1B2" : null,
+    label: parsed.label ?? connector.displayName,
+    keyHint: parsed.keyHint,
     mode: connector.testModeOnly ? "test" : null,
     ledgerAccountId: null,
     status: "connected",
@@ -287,10 +329,7 @@ export async function importFile(
     )
   }
   await requireConsent(ctx)
-  const rows = Math.max(
-    0,
-    f.kind === "rows" ? f.rows.length : f.text.split("\n").length - 1
-  )
+  const rows = f.kind === "rows" ? f.rows.length : countCsvRows(f.text)
   const posted = Math.floor(rows * 0.8)
   return {
     connectionId: o.connectionId ?? crypto.randomUUID(),
