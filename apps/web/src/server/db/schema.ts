@@ -78,10 +78,17 @@ export const journalSourceType = pgEnum("journal_source_type", [
   "opening_balance",
 ])
 
+/**
+ * reconnect_required: the provider rejected our token (expired, scopes
+ * changed); revoked: the user revoked access at the provider. Both need the
+ * user to connect again.
+ */
 export const connectionStatus = pgEnum("connection_status", [
   "connected",
   "syncing",
   "error",
+  "reconnect_required",
+  "revoked",
   "disconnected",
 ])
 
