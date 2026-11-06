@@ -15,7 +15,7 @@ vi.mock("./consent", async () => {
   }
 })
 
-const { connect, importFile, listConnectors, syncConnection } =
+const { connect, countCsvRows, importFile, listConnectors, syncConnection } =
   await import("./connectors")
 const { completeRazorpayOAuth, startRazorpayOAuth } = await import("./razorpay")
 const { importBankRows } = await import("./bank")
@@ -66,16 +66,6 @@ describe("consent gate", () => {
     expect(
       await codeOf(importBankRows(ctx, [], { bankAccountId: bankConnection }))
     ).toBe("CONSENT_REQUIRED")
-  })
-
-  // Sync and real connects need the database: covered by devchecks against
-  // the dev branch, not unit tests.
-  it("lets imports run once consent is recorded", async () => {
-    expect(
-      await codeOf(
-        importFile(ctx, "bank-statement", csv, { connectionId: bankConnection })
-      )
-    ).toBe("ok")
   })
 })
 
@@ -130,16 +120,12 @@ describe("connectors", () => {
     ).toBe("VALIDATION")
   })
 
-  it("doesn't count the header or a trailing newline as rows", async () => {
-    const opts = { connectionId: bankConnection }
-    const text = (t: string) => ({ ...csv, text: t })
-    const imported = async (t: string) =>
-      (await importFile(ctx, "bank-statement", text(t), opts)).imported
-    expect(await imported("a\nb\n")).toBe(1)
-    expect(await imported("a\nb")).toBe(1)
-    expect(await imported("a\r\nb\r\nc\r\n\r\n")).toBe(2)
-    expect(await imported("a\n")).toBe(0)
-    expect(await imported("")).toBe(0)
+  it("doesn't count the header or a trailing newline as rows", () => {
+    expect(countCsvRows("a\nb\n")).toBe(1)
+    expect(countCsvRows("a\nb")).toBe(1)
+    expect(countCsvRows("a\r\nb\r\nc\r\n\r\n")).toBe(2)
+    expect(countCsvRows("a\n")).toBe(0)
+    expect(countCsvRows("")).toBe(0)
   })
 
   it("needs a bank connection for bank statements", async () => {

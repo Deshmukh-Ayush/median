@@ -2,6 +2,7 @@ import "server-only"
 
 import { ServiceError, sourceRecordSchema } from "@workspace/contracts"
 import type {
+  BankMatchKind,
   ConnectionStatus,
   InboxGstSplit,
   InboxTds,
@@ -12,6 +13,7 @@ import type {
 import { paise, resolveGstRate } from "@workspace/ledger"
 import type { EffectiveRate, SystemAccountKey } from "@workspace/ledger"
 import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm"
+import { z } from "zod"
 
 import { getDb, withTransaction } from "../db"
 import {
@@ -23,6 +25,7 @@ import {
   ledgerAccounts,
   organizationDefaultGstRates,
   organizationSettings,
+  parties,
   sourceRecords,
 } from "../db/schema"
 import type { ConnectorCursor, SettlementLink } from "../integrations/connector"
@@ -35,7 +38,9 @@ import { decryptCredentials } from "../integrations/credentials"
 import { getConnector } from "../integrations/registry"
 import { postEntry } from "./ledger"
 import {
+  bankLineRule,
   feeRule,
+  findBankMatch,
   istDateOf,
   paymentInvoiceNumber,
   paymentMappingKey,
@@ -44,6 +49,7 @@ import {
   settlementRule,
 } from "./posting-rules"
 import type {
+  BankDecision,
   Decision,
   OpenInvoice,
   OriginalPayment,
@@ -68,6 +74,8 @@ const POST_BATCH = 5_000
 export interface StoreResult {
   readonly fetched: Partial<Record<SourceRecordKind, number>>
   readonly inserted: number
+  /** Ids of newly inserted records, by externalId or dedupeHash. */
+  readonly insertedIds: ReadonlyMap<string, string>
   readonly skippedExisting: number
   readonly errors: readonly {
     readonly index: number
@@ -83,6 +91,15 @@ export interface PostResult {
     readonly recordId: string
     readonly message: string
   }[]
+  /** What happened to each record looked at, by record id. */
+  readonly outcomes: ReadonlyMap<string, RecordOutcome>
+}
+
+export interface RecordOutcome {
+  readonly status: "posted" | "inbox" | "wait" | "ignored"
+  readonly entryId: string | null
+  readonly inboxItemId: string | null
+  readonly matchKind: BankMatchKind | null
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +129,7 @@ export async function storeRecords(
 
   const db = getDb()
   let inserted = 0
+  const insertedIds = new Map<string, string>()
   const toRow = (r: SourceRecord) => ({
     organizationId: orgId,
     connectionId,
@@ -150,7 +168,13 @@ export async function storeRecords(
         },
         setWhere: sql`${sourceRecords.status} = 'new'`,
       })
-      .returning({ inserted: sql<boolean>`(xmax = 0)` })
+      .returning({
+        id: sourceRecords.id,
+        externalId: sourceRecords.externalId,
+        inserted: sql<boolean>`(xmax = 0)`,
+      })
+    for (const r of rows)
+      if (r.inserted && r.externalId) insertedIds.set(r.externalId, r.id)
     inserted += rows.filter((r) => r.inserted).length
   }
   for (let i = 0; i < hashed.length; i += INSERT_CHUNK) {
@@ -161,10 +185,17 @@ export async function storeRecords(
         target: [sourceRecords.organizationId, sourceRecords.dedupeHash],
         where: sql`${sourceRecords.dedupeHash} is not null`,
       })
-      .returning({ id: sourceRecords.id })
+      .returning({ id: sourceRecords.id, dedupeHash: sourceRecords.dedupeHash })
+    for (const r of rows) if (r.dedupeHash) insertedIds.set(r.dedupeHash, r.id)
     inserted += rows.length
   }
-  return { fetched, inserted, skippedExisting: valid.length - inserted, errors }
+  return {
+    fetched,
+    inserted,
+    insertedIds,
+    skippedExisting: valid.length - inserted,
+    errors,
+  }
 }
 
 /** Ties stored records to their settlement (recon), where not yet linked. */
@@ -216,6 +247,8 @@ const ACCOUNT_KEYS = {
   gatewayCharges: "gateway_charges",
   receivables: "trade_receivables",
   tdsReceivable: "tds_receivable",
+  suspense: "suspense",
+  payables: "trade_payables",
 } as const satisfies Record<keyof RuleAccounts, SystemAccountKey>
 
 interface RuleContext {
@@ -303,7 +336,12 @@ async function loadRuleContext(orgId: string): Promise<RuleContext> {
 interface StoredRow extends RuleRecord {
   readonly provider: string
   readonly reference: string | null
+  readonly direction: "inflow" | "outflow"
 }
+
+const bankLinePayloadSchema = z.looseObject({
+  description: z.string().optional(),
+})
 
 const recordColumns = {
   id: sourceRecords.id,
@@ -314,6 +352,7 @@ const recordColumns = {
   amountPaise: sourceRecords.amountPaise,
   settlementExternalId: sourceRecords.settlementExternalId,
   reference: sourceRecords.reference,
+  direction: sourceRecords.direction,
   payload: sourceRecords.payload,
 }
 
@@ -352,14 +391,29 @@ function encodeTds(t: InboxTds | null): unknown {
   return t && { ...t, amount: String(t.amount) }
 }
 
+type Tally = {
+  posted: number
+  sentToInbox: number
+  postingErrors: { recordId: string; message: string }[]
+  outcomes: Map<string, RecordOutcome>
+}
+
+const newTally = (): Tally => ({
+  posted: 0,
+  sentToInbox: 0,
+  postingErrors: [],
+  outcomes: new Map(),
+})
+
 /** Books one decision and marks the record, in one transaction. */
 async function applyDecision(
   orgId: string,
   record: StoredRow,
-  decision: Decision,
+  decision: BankDecision,
   source: string
-): Promise<"posted" | "inbox" | "wait" | "ignored"> {
-  if (decision.action === "wait") return "wait"
+): Promise<Omit<RecordOutcome, "matchKind">> {
+  const none = { entryId: null, inboxItemId: null }
+  if (decision.action === "wait") return { status: "wait", ...none }
   return withTransaction(async (tx) => {
     const mark = async (
       status: "posted" | "inbox" | "ignored",
@@ -378,11 +432,15 @@ async function applyDecision(
         .returning({ id: sourceRecords.id })
       // Someone else booked it meanwhile: roll back.
       if (updated.length === 0)
-        throw new ServiceError("CONFLICT", "Record already booked.")
+        throw new ServiceError("CONFLICT", ALREADY_BOOKED)
     }
     if (decision.action === "ignore") {
       await mark("ignored")
-      return "ignored"
+      return { status: "ignored", ...none }
+    }
+    if (decision.action === "link") {
+      await mark("posted", decision.entryId)
+      return { status: "posted", entryId: decision.entryId, inboxItemId: null }
     }
     if (decision.action === "post") {
       const posted = await postEntry(
@@ -390,7 +448,7 @@ async function applyDecision(
         {
           entryDate: decision.entry.entryDate,
           narration: decision.entry.narration,
-          sourceType: "razorpay",
+          sourceType: record.kind === "bank_line" ? "bank" : "razorpay",
           sourceId: record.id,
           reversesEntryId: decision.reversesEntryId ?? null,
           lines: decision.entry.lines.map((l, i) => ({
@@ -405,9 +463,9 @@ async function applyDecision(
         { tx }
       )
       await mark("posted", posted.id)
-      return "posted"
+      return { status: "posted", entryId: posted.id, inboxItemId: null }
     }
-    await tx
+    const [item] = await tx
       .insert(inboxItems)
       .values({
         organizationId: orgId,
@@ -421,49 +479,64 @@ async function applyDecision(
         sourceId: record.id,
       })
       .onConflictDoNothing()
+      .returning({ id: inboxItems.id })
     await mark("inbox")
-    return "inbox"
+    return { status: "inbox", entryId: null, inboxItemId: item?.id ?? null }
   })
 }
+
+const ALREADY_BOOKED = "Record already booked."
 
 async function decideAndApply(
   orgId: string,
   record: StoredRow,
-  decision: Decision,
+  decision: BankDecision,
   source: string,
-  tally: {
-    posted: number
-    sentToInbox: number
-    postingErrors: { recordId: string; message: string }[]
-  }
+  tally: Tally,
+  matchKind: BankMatchKind | null = null
 ): Promise<void> {
+  const count = (
+    o: Omit<RecordOutcome, "matchKind">,
+    kind: BankMatchKind | null
+  ) => {
+    if (o.status === "posted") tally.posted++
+    if (o.status === "inbox") tally.sentToInbox++
+    tally.outcomes.set(record.id, {
+      ...o,
+      matchKind: o.status === "posted" ? kind : null,
+    })
+  }
   try {
-    const outcome = await applyDecision(orgId, record, decision, source)
-    if (outcome === "posted") tally.posted++
-    if (outcome === "inbox") tally.sentToInbox++
+    count(await applyDecision(orgId, record, decision, source), matchKind)
   } catch (error) {
-    if (!(error instanceof ServiceError) || decision.action !== "post")
-      throw error
-    if (error.code === "CONFLICT" && error.message === "Record already booked.")
-      return
+    if (!(error instanceof ServiceError)) throw error
+    if (error.code === "CONFLICT" && error.message === ALREADY_BOOKED) return
+    if (decision.action !== "post" && decision.action !== "link") throw error
     // A rule's entry was refused (e.g. locked period): send it for review.
     tally.postingErrors.push({ recordId: record.id, message: error.message })
-    const outcome = await applyDecision(
-      orgId,
-      record,
-      {
-        action: "inbox",
-        kind:
-          record.kind === "settlement" ? "settlement_gap" : "razorpay_record",
-        entry: decision.entry,
-        reason: `Couldn't post automatically: ${error.message}`,
-        confidence: 0.5,
-        gst: null,
-        tds: null,
-      },
-      source
+    if (decision.action !== "post") throw error
+    count(
+      await applyDecision(
+        orgId,
+        record,
+        {
+          action: "inbox",
+          kind:
+            record.kind === "bank_line"
+              ? "bank_line"
+              : record.kind === "settlement"
+                ? "settlement_gap"
+                : "razorpay_record",
+          entry: decision.entry,
+          reason: `Couldn't post automatically: ${error.message}`,
+          confidence: 0.5,
+          gst: null,
+          tds: null,
+        },
+        source
+      ),
+      null
     )
-    if (outcome === "inbox") tally.sentToInbox++
   }
 }
 
@@ -511,11 +584,7 @@ export async function postNewRecords(
   source: string
 ): Promise<PostResult> {
   const ctx = await loadRuleContext(orgId)
-  const tally = {
-    posted: 0,
-    sentToInbox: 0,
-    postingErrors: [] as { recordId: string; message: string }[],
-  }
+  const tally = newTally()
 
   // Phase 1: payments and fees.
   const payments = await newRecords(orgId, connectionId, ["payment", "fee"])
@@ -700,13 +769,158 @@ export async function postNewRecords(
       )
     }
   }
+
+  // Phase 4: bank lines, matched deterministically.
+  const bankLines = await newRecords(orgId, connectionId, ["bank_line"])
+  if (bankLines.length > 0) {
+    const db = getDb()
+    const [connection] = await db
+      .select({ ledgerAccountId: connections.ledgerAccountId })
+      .from(connections)
+      .where(
+        and(
+          eq(connections.organizationId, orgId),
+          eq(connections.id, connectionId)
+        )
+      )
+      .limit(1)
+    const bankAccountId = connection?.ledgerAccountId ?? ctx.accounts.bank
+    const dates = bankLines.map((l) => istDateOf(l.occurredAt)).sort()
+    const from = new Date(`${dates[0] ?? "1970-01-01"}T00:00:00+05:30`)
+    from.setUTCDate(from.getUTCDate() - 6)
+    const to = new Date(`${dates.at(-1) ?? "2999-01-01"}T23:59:59+05:30`)
+    to.setUTCDate(to.getUTCDate() + 2)
+    const [settlementRows, matchedSettlements, invoiceRows, vendorRows] =
+      await db.batch([
+        db
+          .select({
+            externalId: sourceRecords.externalId,
+            status: sourceRecords.status,
+            entryId: sourceRecords.journalEntryId,
+            amountPaise: sourceRecords.amountPaise,
+            occurredAt: sourceRecords.occurredAt,
+            utr: sourceRecords.reference,
+          })
+          .from(sourceRecords)
+          .where(
+            and(
+              eq(sourceRecords.organizationId, orgId),
+              eq(sourceRecords.kind, "settlement"),
+              sql`${sourceRecords.occurredAt} between ${from} and ${to}`
+            )
+          ),
+        // Settlements already matched to a bank line.
+        db
+          .select({ settlementId: sourceRecords.settlementExternalId })
+          .from(sourceRecords)
+          .where(
+            and(
+              eq(sourceRecords.organizationId, orgId),
+              eq(sourceRecords.kind, "bank_line"),
+              sql`${sourceRecords.settlementExternalId} is not null`,
+              sql`${sourceRecords.occurredAt} between ${from} and ${to}`
+            )
+          ),
+        db
+          .select({
+            id: invoices.id,
+            number: invoices.number,
+            partyId: invoices.partyId,
+            total: invoices.totalPaise,
+            taxable: invoices.taxablePaise,
+            date: invoices.invoiceDate,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.organizationId, orgId),
+              inArray(invoices.status, ["issued", "partially_paid"])
+            )
+          )
+          .orderBy(sql`${invoices.invoiceDate} desc`)
+          .limit(2_000),
+        db
+          .select({ partyId: parties.id, name: parties.name })
+          .from(parties)
+          .where(
+            and(eq(parties.organizationId, orgId), eq(parties.kind, "vendor"))
+          )
+          .limit(5_000),
+      ])
+    const taken = new Set(matchedSettlements.map((s) => s.settlementId))
+    const settlementsAvailable = settlementRows
+      .filter((s) => s.externalId !== null && !taken.has(s.externalId))
+      .map((s) => ({
+        externalId: s.externalId ?? "",
+        status: s.status,
+        entryId: s.entryId,
+        amountPaise: s.amountPaise,
+        date: istDateOf(s.occurredAt),
+        utr: s.utr,
+      }))
+    const openInvoices = invoiceRows.map((i) => ({
+      ...i,
+      total: paise(i.total),
+      taxable: paise(i.taxable),
+    }))
+    const usedInvoices = new Set<string>()
+    for (const line of bankLines) {
+      const p = bankLinePayloadSchema.safeParse(line.payload).data
+      const match = findBankMatch(
+        {
+          direction: line.direction,
+          amountPaise: line.amountPaise,
+          date: istDateOf(line.occurredAt),
+          text: `${p?.description ?? ""} ${line.reference ?? ""}`,
+        },
+        {
+          settlements: settlementsAvailable.filter(
+            (s) => !taken.has(s.externalId)
+          ),
+          invoices: openInvoices.filter((i) => !usedInvoices.has(i.id)),
+          vendors: vendorRows,
+        }
+      )
+      const decision = bankLineRule(line, {
+        accounts: ctx.accounts,
+        suspense: ctx.accounts.suspense,
+        payables: ctx.accounts.payables,
+        bankAccountId,
+        match,
+      })
+      const matchKind: BankMatchKind | null =
+        match.kind === "settlement"
+          ? "razorpay_settlement"
+          : match.kind === "invoice"
+            ? "invoice_payment"
+            : match.kind === "vendor"
+              ? "known_vendor"
+              : null
+      await decideAndApply(orgId, line, decision, source, tally, matchKind)
+      if (match.kind === "settlement") {
+        taken.add(match.settlement.externalId)
+        await db
+          .update(sourceRecords)
+          .set({ settlementExternalId: match.settlement.externalId })
+          .where(
+            and(
+              eq(sourceRecords.organizationId, orgId),
+              eq(sourceRecords.id, line.id)
+            )
+          )
+      }
+      if (match.kind === "invoice") usedInvoices.add(match.invoice.id)
+    }
+  }
+
   return tally
 }
 
 // ---------------------------------------------------------------------------
 // Running a sync
 
-export interface RunSyncResult extends StoreResult, PostResult {
+export interface RunSyncResult
+  extends Omit<StoreResult, "insertedIds">, Omit<PostResult, "outcomes"> {
   readonly status: ConnectionStatus
   readonly lastSyncedAt: Date
 }

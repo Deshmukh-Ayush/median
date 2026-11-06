@@ -84,6 +84,8 @@ export interface ApiConnector<C = unknown> {
 export interface ParsedFile {
   readonly records: readonly SourceRecordInput[]
   readonly settlementLinks?: readonly SettlementLink[]
+  /** File row index of each record, when records map 1:1 to rows. */
+  readonly rowIndexes?: readonly number[]
   /** Rows that couldn't be read; reported, not thrown. 0-based data rows. */
   readonly errors: readonly {
     readonly index: number
@@ -97,7 +99,7 @@ export interface FileConnector {
   readonly settingsSchema?: z.ZodType<{ readonly label?: string | undefined }>
   parseFile(
     file: ImportFile,
-    ctx: { readonly provider: string }
+    ctx: { readonly provider: string; readonly connectionId: string }
   ): Promise<ParsedFile>
 }
 

@@ -4,6 +4,7 @@
 
 import { z } from "zod"
 
+import type { BankLineMatched, BankLineUnmatched } from "./bank"
 import { idSchema, moneySchema } from "./common"
 import type { IsoTimestamp } from "./common"
 
@@ -216,6 +217,10 @@ export interface ImportResult {
     readonly index: number
     readonly message: string
   }[]
+  /** Bank statements only: new lines booked by a deterministic match. */
+  readonly matched?: readonly BankLineMatched[]
+  /** Bank statements only: new lines sent to the inbox. */
+  readonly unmatched?: readonly BankLineUnmatched[]
 }
 
 /** @deprecated Kept for syncRazorpay(); use SyncResult. */
