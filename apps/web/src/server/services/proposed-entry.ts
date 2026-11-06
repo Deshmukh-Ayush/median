@@ -1,42 +1,11 @@
-// The shape of an entry waiting in the approval inbox. Stored in
-// inbox_items.proposed_entry as JSON, with amounts as integer-paise strings.
+import type {
+  LedgerAccountSummary,
+  PartyRef,
+  ProposedEntry,
+  ProposedEntryView,
+} from "@workspace/contracts"
 
-import { idSchema, isoDateSchema, moneyJsonSchema } from "@workspace/contracts"
-import type { IsoDate, Money } from "@workspace/contracts"
-import { z } from "zod"
-
-export interface ProposedLine {
-  readonly accountId: string
-  readonly partyId: string | null
-  readonly debit: Money
-  readonly credit: Money
-  readonly description: string | null
-}
-
-export interface ProposedEntry {
-  readonly entryDate: IsoDate
-  readonly narration: string
-  readonly lines: readonly ProposedLine[]
-}
-
-/** Parses the JSON stored in inbox_items.proposed_entry. */
-export const proposedEntryJsonSchema = z.object({
-  entryDate: isoDateSchema,
-  narration: z.string().min(1).max(500),
-  lines: z
-    .array(
-      z.object({
-        accountId: idSchema,
-        partyId: idSchema.nullable(),
-        debit: moneyJsonSchema,
-        credit: moneyJsonSchema,
-        description: z.string().max(500).nullable(),
-      })
-    )
-    .min(2),
-})
-
-/** Encodes a ProposedEntry for jsonb (bigint → string). */
+/** Encodes a ProposedEntry for inbox_items.proposed_entry (bigint → string). */
 export function encodeProposedEntry(entry: ProposedEntry): unknown {
   return {
     ...entry,
@@ -45,5 +14,29 @@ export function encodeProposedEntry(entry: ProposedEntry): unknown {
       debit: l.debit.toString(),
       credit: l.credit.toString(),
     })),
+  }
+}
+
+/**
+ * Joins account and party names onto a stored proposal. Accounts and parties
+ * are looked up once per page by the caller (no N+1).
+ */
+export function toProposedEntryView(
+  entry: ProposedEntry,
+  accounts: ReadonlyMap<string, LedgerAccountSummary>,
+  parties: ReadonlyMap<string, PartyRef>
+): ProposedEntryView {
+  return {
+    ...entry,
+    lines: entry.lines.map((l) => {
+      const account = accounts.get(l.accountId)
+      return {
+        ...l,
+        accountCode: account?.code ?? "",
+        accountName: account?.name ?? "Unknown account",
+        accountType: account?.type ?? "expense",
+        partyName: l.partyId ? (parties.get(l.partyId)?.name ?? null) : null,
+      }
+    }),
   }
 }
