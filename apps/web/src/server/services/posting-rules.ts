@@ -83,11 +83,12 @@ export type Decision =
   | { readonly action: "ignore"; readonly reason: string }
 
 /**
- * Razorpay Software Pvt Ltd invoices its fees from Karnataka (29): CGST+SGST
- * for Karnataka merchants, IGST for the rest. Confirm against a Razorpay tax
- * invoice before go-live (flagged in the Day 2 summary).
+ * Default GST state Razorpay bills its fees from: Karnataka (29), giving
+ * CGST+SGST for Karnataka merchants and IGST for the rest. Each connection
+ * can override it (connections.fee_gst_state_code); the CA should verify it
+ * against Razorpay's tax invoice.
  */
-export const RAZORPAY_GST_STATE = "29"
+export const DEFAULT_RAZORPAY_FEE_GST_STATE = "29"
 
 const ZERO = paise(0n)
 
@@ -264,7 +265,12 @@ export function paymentRule(
 
 export function feeRule(
   record: RuleRecord,
-  ctx: { readonly accounts: RuleAccounts; readonly org: RuleOrg }
+  ctx: {
+    readonly accounts: RuleAccounts
+    readonly org: RuleOrg
+    /** The connection's setting; null → DEFAULT_RAZORPAY_FEE_GST_STATE. */
+    readonly feeGstStateCode?: string | null
+  }
 ): Decision {
   const f = feePayloadSchema.safeParse(record.payload)
   const amount = paise(record.amountPaise)
@@ -328,7 +334,8 @@ export function feeRule(
       tds: null,
     }
   }
-  const split = splitTax(tax, org.stateCode === RAZORPAY_GST_STATE)
+  const feeState = ctx.feeGstStateCode ?? DEFAULT_RAZORPAY_FEE_GST_STATE
+  const split = splitTax(tax, org.stateCode === feeState)
   return {
     action: "post",
     entry: {
@@ -627,6 +634,8 @@ export interface SettlementCandidate {
   readonly externalId: string
   readonly status: "new" | "posted" | "inbox" | "ignored"
   readonly entryId: string | null
+  /** The bank account the settlement entry debited; null → accounts.bank. */
+  readonly bankAccountId: string | null
 }
 
 export interface VendorCandidate {
@@ -685,14 +694,16 @@ export function bankLineRule(
 
   if (match.kind === "settlement" && inflow) {
     const s = match.settlement
-    // Settlements post Dr Bank (default) / Cr Razorpay clearing.
+    // Settlements post Dr <settlement bank> / Cr Razorpay clearing. If this
+    // statement is for another bank account, move it across.
+    const settledTo = s.bankAccountId ?? accounts.bank
     const transfer: ProposedEntry = {
       entryDate,
       narration: `Razorpay settlement ${s.externalId} received`,
-      lines: [dr(bankAccountId, amount), cr(accounts.bank, amount)],
+      lines: [dr(bankAccountId, amount), cr(settledTo, amount)],
     }
     if (s.status === "posted" && s.entryId) {
-      if (bankAccountId === accounts.bank)
+      if (bankAccountId === settledTo)
         return { action: "link", entryId: s.entryId }
       return { action: "post", entry: transfer }
     }

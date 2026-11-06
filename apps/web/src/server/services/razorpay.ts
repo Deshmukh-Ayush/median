@@ -108,6 +108,8 @@ export async function completeRazorpayOAuth(
       keyHint: "…Xy9Q",
       mode: "live",
       ledgerAccountId: null,
+      settlementBankAccountId: null,
+      feeGstStateCode: null,
       status: "connected",
       lastSyncedAt: null,
       lastError: null,

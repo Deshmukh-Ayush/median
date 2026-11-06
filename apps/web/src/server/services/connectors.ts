@@ -7,6 +7,7 @@ import {
   importFileOptionsSchema,
   importFileSchema,
   parseInput,
+  updateConnectionSettingsInputSchema,
 } from "@workspace/contracts"
 import type {
   BankLineMatched,
@@ -19,6 +20,7 @@ import type {
   ImportFileOptions,
   ImportResult,
   SyncResult,
+  UpdateConnectionSettingsInput,
 } from "@workspace/contracts"
 import { and, asc, eq, inArray, ne } from "drizzle-orm"
 import { z } from "zod"
@@ -68,6 +70,8 @@ const summaryColumns = {
   label: connections.label,
   keyHint: connections.keyHint,
   ledgerAccountId: connections.ledgerAccountId,
+  settlementBankAccountId: connections.settlementBankAccountId,
+  feeGstStateCode: connections.feeGstStateCode,
   status: connections.status,
   lastSyncedAt: connections.lastSyncedAt,
   lastError: connections.lastError,
@@ -80,6 +84,8 @@ interface SummaryRow {
   readonly label: string
   readonly keyHint: string | null
   readonly ledgerAccountId: string | null
+  readonly settlementBankAccountId: string | null
+  readonly feeGstStateCode: string | null
   readonly status: ConnectionStatus
   readonly lastSyncedAt: Date | null
   readonly lastError: string | null
@@ -276,6 +282,80 @@ export async function connect(
       entityId: saved.id,
       before: null,
       after: { provider: id, label: row.label, keyHint: row.keyHint },
+      source: "web",
+    })
+    return toSummary(saved)
+  })
+}
+
+/**
+ * Changes a connection's settings: the bank account Razorpay settlements are
+ * paid into (must be a bank account in this org), and the GST state Razorpay
+ * bills its fees from. Omitted fields stay; null resets to the default.
+ * Writes an audit row. Throws NOT_FOUND, VALIDATION.
+ */
+export async function updateConnectionSettings(
+  ctx: OrgContext,
+  connectionId: string,
+  input: UpdateConnectionSettingsInput
+): Promise<ConnectionSummary> {
+  assertCan(ctx, "settings", "update")
+  const id = parseInput(idSchema, connectionId)
+  const s = parseInput(updateConnectionSettingsInputSchema, input)
+  if (s.settlementBankAccountId) {
+    const [account] = await getDb()
+      .select({ isBank: ledgerAccounts.isBank })
+      .from(ledgerAccounts)
+      .where(
+        and(
+          eq(ledgerAccounts.organizationId, ctx.orgId),
+          eq(ledgerAccounts.id, s.settlementBankAccountId)
+        )
+      )
+      .limit(1)
+    if (!account?.isBank)
+      throw new ServiceError("VALIDATION", "Choose one of your bank accounts.")
+  }
+  return withTransaction(async (tx) => {
+    const [before] = await tx
+      .select(summaryColumns)
+      .from(connections)
+      .where(
+        and(eq(connections.organizationId, ctx.orgId), eq(connections.id, id))
+      )
+      .for("update")
+    if (!before) throw new ServiceError("NOT_FOUND", "Connection not found.")
+    if (!before.provider.startsWith("razorpay"))
+      throw new ServiceError(
+        "VALIDATION",
+        "These settings apply to Razorpay connections."
+      )
+    const [saved] = await tx
+      .update(connections)
+      .set({
+        ...(s.settlementBankAccountId !== undefined
+          ? { settlementBankAccountId: s.settlementBankAccountId }
+          : {}),
+        ...(s.feeGstStateCode !== undefined
+          ? { feeGstStateCode: s.feeGstStateCode }
+          : {}),
+      })
+      .where(
+        and(eq(connections.organizationId, ctx.orgId), eq(connections.id, id))
+      )
+      .returning(summaryColumns)
+    if (!saved) throw new ServiceError("CONFLICT", "Connection changed.")
+    await tx.insert(auditLog).values({
+      organizationId: ctx.orgId,
+      actorId: ctx.userId,
+      action: "connection.settings",
+      entity: "connection",
+      entityId: id,
+      before: {
+        settlementBankAccountId: before.settlementBankAccountId,
+        feeGstStateCode: before.feeGstStateCode,
+      },
+      after: s,
       source: "web",
     })
     return toSummary(saved)

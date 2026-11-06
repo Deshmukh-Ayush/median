@@ -95,6 +95,9 @@ export interface LedgerAccountSummary {
   readonly isSystem: boolean
   /** A bank account: offered when connecting a bank statement. */
   readonly isBank: boolean
+  /** Bank accounts: the bank's name and last four digits; null otherwise. */
+  readonly bankName: string | null
+  readonly accountLast4: string | null
 }
 
 export interface PartyRef {

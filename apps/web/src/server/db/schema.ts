@@ -373,6 +373,10 @@ export const ledgerAccounts = pgTable(
     systemKey: text(),
     /** A bank account: bank-statement connections post to it. */
     isBank: boolean().notNull().default(false),
+    /** Bank accounts: the bank's name, e.g. "HDFC Bank". */
+    bankName: text(),
+    /** Bank accounts: last four digits of the account number, for display. */
+    accountLast4: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -384,6 +388,10 @@ export const ledgerAccounts = pgTable(
       .where(sql`${t.systemKey} is not null`),
     index("ledger_accounts_org_type_idx").on(t.organizationId, t.type),
     index("ledger_accounts_org_parent_idx").on(t.organizationId, t.parentId),
+    check(
+      "ledger_accounts_last4_check",
+      sql`${t.accountLast4} is null or ${t.accountLast4} ~ '^[0-9]{4}$'`
+    ),
     foreignKey({
       name: "ledger_accounts_parent_fk",
       columns: [t.organizationId, t.parentId],
@@ -592,6 +600,14 @@ export const connections = pgTable(
     keyHint: text(),
     /** Bank connections post to this ledger account. */
     ledgerAccountId: uuid(),
+    /** Razorpay: the bank account settlements are paid into. Null → first bank account. */
+    settlementBankAccountId: uuid(),
+    /**
+     * Razorpay: GST state the gateway bills its fees from, deciding CGST+SGST
+     * vs IGST on fee input credit. Null → Karnataka (29). For the CA to verify
+     * against Razorpay's tax invoice.
+     */
+    feeGstStateCode: text(),
     status: connectionStatus().notNull().default("connected"),
     lastSyncedAt: timestamp({ withTimezone: true }),
     /** Connector-specific sync position, e.g. { "payments": 1730000000 }. */
@@ -608,6 +624,15 @@ export const connections = pgTable(
       columns: [t.organizationId, t.ledgerAccountId],
       foreignColumns: [ledgerAccounts.organizationId, ledgerAccounts.id],
     }),
+    foreignKey({
+      name: "connections_settlement_bank_fk",
+      columns: [t.organizationId, t.settlementBankAccountId],
+      foreignColumns: [ledgerAccounts.organizationId, ledgerAccounts.id],
+    }),
+    check(
+      "connections_fee_gst_state_check",
+      sql`${t.feeGstStateCode} is null or ${t.feeGstStateCode} ~ '^[0-9]{2}$'`
+    ),
   ]
 )
 
