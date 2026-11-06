@@ -1,6 +1,8 @@
 import type { Money } from "@workspace/contracts"
 import { paise } from "@workspace/ledger"
 
+import type { InboxRowView } from "@/components/inbox/inbox-view"
+
 /** Fake data for the /design review page only. */
 
 export interface SampleInvoice {
@@ -95,4 +97,90 @@ export const moneySamples: readonly { label: string; value: Money }[] = [
   { label: "Crores", value: rupees(12_34_56_789) },
   { label: "Negative", value: rupees(-45_250) },
   { label: "Paise", value: paise(1_23_456_78n) },
+]
+
+/** Sample AI inbox rows (already prepared for display). */
+export const inboxRows: readonly InboxRowView[] = [
+  {
+    id: "00000000-0000-4000-8000-00000000c001",
+    kindLabel: "Bill",
+    confidence: 0.86,
+    reason: "New vendor bill from AWS. Check the expense account.",
+    narration: "AWS invoice IN-2026-118734 (October hosting)",
+    entryDate: "2 Nov 2026",
+    createdAt: "5 Nov, 4:42 pm",
+    amount: paise(49_560_00n),
+    goesTo: [
+      {
+        account: "Hosting and cloud",
+        amount: paise(42_000_00n),
+        description: "EC2 + RDS",
+      },
+      {
+        account: "Input CGST",
+        amount: paise(3_780_00n),
+        description: "CGST 9%",
+      },
+      {
+        account: "Input SGST",
+        amount: paise(3_780_00n),
+        description: "SGST 9%",
+      },
+    ],
+    comesFrom: [
+      {
+        account: "Accounts payable · AWS India",
+        amount: paise(49_560_00n),
+        description: null,
+      },
+    ],
+    sourceLabel: "Source document",
+  },
+  {
+    id: "00000000-0000-4000-8000-00000000c002",
+    kindLabel: "Bank line",
+    confidence: 0.42,
+    reason:
+      'Bank debit of ₹1,85,000.00 with reference "NEFT-SAL-OCT" didn\'t match any bill or vendor.',
+    narration: "NEFT-SAL-OCT",
+    entryDate: "1 Nov 2026",
+    createdAt: "4 Nov, 11:05 am",
+    amount: paise(1_85_000_00n),
+    goesTo: [
+      { account: "Salaries", amount: paise(1_85_000_00n), description: null },
+    ],
+    comesFrom: [
+      {
+        account: "HDFC current account",
+        amount: paise(1_85_000_00n),
+        description: null,
+      },
+    ],
+    sourceLabel: "Source record",
+  },
+  {
+    id: "00000000-0000-4000-8000-00000000c003",
+    kindLabel: "Razorpay payment",
+    confidence: 0.93,
+    reason: "Payment matched invoice INV-0042 by amount and customer.",
+    narration: "Razorpay pay_PX81 for INV-0042",
+    entryDate: "31 Oct 2026",
+    createdAt: "3 Nov, 9:30 am",
+    amount: paise(1_18_000_00n),
+    goesTo: [
+      {
+        account: "Razorpay clearing",
+        amount: paise(1_18_000_00n),
+        description: null,
+      },
+    ],
+    comesFrom: [
+      {
+        account: "Accounts receivable · Acme Labs",
+        amount: paise(1_18_000_00n),
+        description: null,
+      },
+    ],
+    sourceLabel: "Source record",
+  },
 ]
