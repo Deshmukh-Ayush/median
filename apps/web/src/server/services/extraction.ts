@@ -10,6 +10,7 @@ import {
 import type { BillReviewInput, InboxItem, PartyRef } from "@workspace/contracts"
 import { paise, parseRupees, splitTax, taxOn } from "@workspace/ledger"
 
+import { requireConsent } from "./consent"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { toProposedEntryView } from "./proposed-entry"
@@ -35,7 +36,8 @@ function rateBps(printed: string | null): number | null {
  * Turns a validated bill extraction into a pending purchase entry with input
  * tax credit. Tax and totals are computed in code; the AI's output is only
  * read. `review` carries the review-check flags (needsReview, notPrinted) to
- * the inbox item. Throws VALIDATION if either doesn't match its schema.
+ * the inbox item. Throws VALIDATION if either doesn't match its schema,
+ * CONSENT_REQUIRED until data-processing consent is recorded.
  * STUB: books to a fixed expense account and vendor, intrastate; Day 4 resolves
  * accounts, parties and supply type.
  */
@@ -49,6 +51,7 @@ export async function createInboxItemFromExtraction(
   const docId = parseInput(idSchema, documentId)
   const bill = parseInput(billExtractionSchema, extraction)
   const flags = parseInput(billReviewSchema, review)
+  await requireConsent(ctx)
 
   let taxable = 0n
   let tax = 0n

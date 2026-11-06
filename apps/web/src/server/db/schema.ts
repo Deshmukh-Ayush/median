@@ -232,16 +232,24 @@ export const gstRateMappings = pgTable(
     label: text().notNull(),
     hsnSac: text(),
     gstRateBps: integer().notNull(),
+    /** First day this rate applies (inclusive); null = since GST began. */
+    effectiveFrom: isoDate(),
+    /** Last day this rate applies (inclusive); null = still in force. */
+    effectiveTo: isoDate(),
     /** Revenue account to credit; null → the org's default revenue account. */
     revenueAccountId: uuid(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    unique("gst_rate_mappings_org_kind_key_uq").on(
-      t.organizationId,
-      t.kind,
-      t.key
+    // One row per rate window; windows for a key never overlap (exclusion
+    // constraint in migration 0007).
+    unique("gst_rate_mappings_org_kind_key_from_uq")
+      .on(t.organizationId, t.kind, t.key, t.effectiveFrom)
+      .nullsNotDistinct(),
+    check(
+      "gst_rate_mappings_window_check",
+      sql`${t.effectiveFrom} is null or ${t.effectiveTo} is null or ${t.effectiveFrom} <= ${t.effectiveTo}`
     ),
     foreignKey({
       name: "gst_rate_mappings_revenue_account_fk",
@@ -251,6 +259,95 @@ export const gstRateMappings = pgTable(
     check(
       "gst_rate_mappings_rate_check",
       sql`${t.gstRateBps} between 0 and 10000`
+    ),
+  ]
+)
+
+/**
+ * The org's default GST rate over time (rule 8 fallback), so a payment is
+ * split at the default valid on its supply date. When an org has no rows
+ * here, `organization_settings.default_gst_rate_bps` applies to all dates.
+ */
+export const organizationDefaultGstRates = pgTable(
+  "organization_default_gst_rates",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    gstRateBps: integer().notNull(),
+    effectiveFrom: isoDate(),
+    effectiveTo: isoDate(),
+    createdBy: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("organization_default_gst_rates_org_from_uq")
+      .on(t.organizationId, t.effectiveFrom)
+      .nullsNotDistinct(),
+    check(
+      "organization_default_gst_rates_rate_check",
+      sql`${t.gstRateBps} between 0 and 10000`
+    ),
+    check(
+      "organization_default_gst_rates_window_check",
+      sql`${t.effectiveFrom} is null or ${t.effectiveTo} is null or ${t.effectiveFrom} <= ${t.effectiveTo}`
+    ),
+  ]
+)
+
+// ---------------------------------------------------------------------------
+// HSN/SAC master (reference data shared by every organisation, so no
+// organization_id). Starts empty; filled only from official notifications by
+// scripts/import-hsn-sac-rates.ts. Never invent rates.
+
+export const hsnSacCodes = pgTable(
+  "hsn_sac_codes",
+  {
+    /** 2, 4, 6 or 8 digits. Rates may be defined on a parent heading. */
+    code: text().primaryKey(),
+    kind: text({ enum: ["hsn", "sac"] }).notNull(),
+    description: text().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check(
+      "hsn_sac_codes_code_check",
+      sql`${t.code} ~ '^([0-9]{2}|[0-9]{4}|[0-9]{6}|[0-9]{8})$'`
+    ),
+    check(
+      "hsn_sac_codes_kind_check",
+      sql`(${t.kind} = 'sac') = (${t.code} like '99%')`
+    ),
+  ]
+)
+
+export const hsnSacRates = pgTable(
+  "hsn_sac_rates",
+  {
+    id: id(),
+    code: text()
+      .notNull()
+      .references(() => hsnSacCodes.code, { onDelete: "restrict" }),
+    gstRateBps: integer().notNull(),
+    effectiveFrom: isoDate().notNull(),
+    effectiveTo: isoDate(),
+    /** e.g. "sale value per piece up to ₹2,500"; null if unconditional. */
+    condition: text(),
+    /** Notification the rate comes from. */
+    source: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("hsn_sac_rates_code_from_condition_uq")
+      .on(t.code, t.effectiveFrom, t.condition)
+      .nullsNotDistinct(),
+    index("hsn_sac_rates_code_from_idx").on(t.code, t.effectiveFrom),
+    check("hsn_sac_rates_rate_check", sql`${t.gstRateBps} between 0 and 10000`),
+    check(
+      "hsn_sac_rates_window_check",
+      sql`${t.effectiveTo} is null or ${t.effectiveFrom} <= ${t.effectiveTo}`
     ),
   ]
 )
@@ -628,6 +725,10 @@ export const inboxItems = pgTable(
     /** 0–1. Not money, so a float is fine here. */
     confidence: real().notNull(),
     reason: text().notNull(),
+    /** GST split behind the proposal (InboxGstSplit, amounts as paise strings). */
+    gst: jsonb(),
+    /** TDS deducted (InboxTds, amount as a paise string). */
+    tds: jsonb(),
     sourceType: inboxSourceType().notNull(),
     sourceId: uuid().notNull(),
     status: inboxStatus().notNull().default("pending"),
@@ -728,6 +829,8 @@ export const invoices = pgTable(
       t.number
     ),
     index("invoices_org_date_idx").on(t.organizationId, t.invoiceDate, t.id),
+    // Receipts quote an invoice number without its financial year.
+    index("invoices_org_number_idx").on(t.organizationId, t.number),
     index("invoices_org_party_date_idx").on(
       t.organizationId,
       t.partyId,
