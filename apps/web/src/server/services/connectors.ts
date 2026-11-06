@@ -423,7 +423,7 @@ export async function importFile(
   const parsed = await connector.parseFile(f, { provider, connectionId })
   const stored = await storeRecords(ctx.orgId, connectionId, parsed.records)
   if (parsed.settlementLinks?.length)
-    await applySettlementLinks(ctx.orgId, provider, parsed.settlementLinks)
+    await applySettlementLinks(ctx.orgId, parsed.settlementLinks)
   const posting = await postNewRecords(ctx.orgId, connectionId, "file_import")
   await getDb()
     .update(connections)

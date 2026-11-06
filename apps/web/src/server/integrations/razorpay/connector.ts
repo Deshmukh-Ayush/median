@@ -67,7 +67,6 @@ async function translate<T>(run: () => Promise<T>): Promise<T> {
 }
 
 async function* syncRazorpay(
-  provider: string,
   auth: () => RazorpayAuth,
   cursor: ConnectorCursor | null,
   now: Date,
@@ -92,13 +91,13 @@ async function* syncRazorpay(
     if (stream === "payments") {
       for await (const items of pages(client.payments(window)))
         yield {
-          records: items.flatMap((p) => paymentRecords(provider, p)),
+          records: items.flatMap((p) => paymentRecords(p)),
           cursor: next,
         }
     } else if (stream === "refunds") {
       for await (const items of pages(client.refunds(window)))
         yield {
-          records: items.map((r) => refundRecord(provider, r)),
+          records: items.map((r) => refundRecord(r)),
           cursor: next,
         }
     } else {
@@ -128,7 +127,6 @@ async function* syncRazorpay(
           records: items.map((s) => {
             const d = istDate(s.created_at)
             return settlementRecord(
-              provider,
               s,
               reconByDay.get(`${d.year}-${d.month}-${d.day}`) ?? "unavailable"
             )
@@ -185,13 +183,7 @@ export const razorpayTestKeysConnector: ApiConnector<KeyCredentials> = {
       type: "keys",
       ...ctx.credentials.reveal(),
     })
-    return syncRazorpay(
-      "razorpay-test-keys",
-      auth,
-      cursor,
-      ctx.now,
-      clientOptions
-    )
+    return syncRazorpay(auth, cursor, ctx.now, clientOptions)
   },
 }
 
@@ -220,6 +212,6 @@ export const razorpayOAuthConnector: ApiConnector<OAuthCredentials> = {
       type: "oauth",
       accessToken: ctx.credentials.reveal().accessToken,
     })
-    return syncRazorpay("razorpay", auth, cursor, ctx.now, clientOptions)
+    return syncRazorpay(auth, cursor, ctx.now, clientOptions)
   },
 }

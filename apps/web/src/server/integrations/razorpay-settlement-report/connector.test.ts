@@ -68,3 +68,58 @@ describe("Razorpay settlement report", () => {
     expect(parseReportTime("yesterday")).toBeNull()
   })
 })
+
+describe("one identity across Razorpay connectors", () => {
+  it("API and report records for the same entities share provider, kind and external id", async () => {
+    const { paymentRecords, refundRecord } = await import("../razorpay/records")
+    const api = [
+      ...paymentRecords({
+        id: "pay_A",
+        entity: "payment",
+        amount: 118_000,
+        currency: "INR",
+        status: "captured",
+        order_id: "order_1",
+        invoice_id: null,
+        method: "upi",
+        amount_refunded: 0,
+        captured: true,
+        description: null,
+        email: null,
+        contact: null,
+        notes: {},
+        fee: 2_360,
+        tax: 360,
+        created_at: 1_793_000_000,
+      }),
+      refundRecord({
+        id: "rfnd_B",
+        entity: "refund",
+        amount: 10_000,
+        currency: "INR",
+        payment_id: "pay_A",
+        notes: {},
+        status: "processed",
+        created_at: 1_793_000_100,
+      }),
+    ]
+    const { records } = await parseSettlementReport(
+      csv(
+        `pay_A,payment,0,"1,156.40","1,180.00",INR,23.60,3.60,0,1,2026-11-02 10:00:00,2026-11-04 09:00:00,setl_X,,,,UTR9,order_1,upi`,
+        `rfnd_B,refund,100.00,0,100.00,INR,0,0,0,1,2026-11-03 10:00:00,2026-11-04 09:00:00,setl_X,,,pay_A,UTR9,,`
+      )
+    )
+    const identity = (r: {
+      provider: string
+      kind: string
+      externalId: string | null
+      amountPaise: bigint
+    }) => `${r.provider}|${r.kind}|${r.externalId}|${r.amountPaise}`
+    expect(
+      records.filter((r) => r.kind !== "settlement").map(identity)
+    ).toEqual(api.map(identity))
+    expect(new Set(records.map((r) => r.provider))).toEqual(
+      new Set(["razorpay"])
+    )
+  })
+})
