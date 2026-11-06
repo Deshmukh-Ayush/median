@@ -59,3 +59,19 @@ export {
   splitTax,
   taxOn,
 } from "./gst"
+export type {
+  EffectiveRate,
+  EffectiveWindow,
+  GstRateSource,
+  IsoDateString,
+  RateOnResult,
+  ResolveGstRateInput,
+  ResolvedGstRate,
+} from "./gst-rates"
+export {
+  assertValidWindow,
+  isEffectiveOn,
+  rateOn,
+  resolveGstRate,
+  windowsOverlap,
+} from "./gst-rates"

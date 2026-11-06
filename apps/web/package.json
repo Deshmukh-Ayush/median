@@ -16,7 +16,8 @@
     "analyze": "cross-env ANALYZE=true next build --webpack",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/migrate.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:import-hsn": "tsx scripts/import-hsn-sac-rates.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.111",
@@ -53,6 +54,7 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^10",
     "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   },
