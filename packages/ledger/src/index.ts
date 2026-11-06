@@ -59,3 +59,4 @@ export {
   splitTax,
   taxOn,
 } from "./gst"
+export { percentChangeBps } from "./change"
