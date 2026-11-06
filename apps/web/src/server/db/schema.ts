@@ -371,6 +371,8 @@ export const ledgerAccounts = pgTable(
      * (e.g. "razorpay_clearing", "gst_output_cgst"). Null for user accounts.
      */
     systemKey: text(),
+    /** A bank account: bank-statement connections post to it. */
+    isBank: boolean().notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

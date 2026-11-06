@@ -83,6 +83,8 @@ export interface AccountTemplate {
   readonly name: string
   readonly type: AccountType
   readonly systemKey?: SystemAccountKey
+  /** A bank account (bank statements connect to it). */
+  readonly isBank?: boolean
   /** Code of the parent account in the same template. */
   readonly parentCode?: string
 }
@@ -91,14 +93,17 @@ const a = (
   code: string,
   name: string,
   type: AccountType,
-  extra: Pick<AccountTemplate, "systemKey" | "parentCode"> = {}
+  extra: Pick<AccountTemplate, "systemKey" | "parentCode" | "isBank"> = {}
 ): AccountTemplate => ({ code, name, type, ...extra })
 
 /** Accounts every startup needs. */
 export const BASE_ACCOUNTS: readonly AccountTemplate[] = [
   // Current assets
   a("1100", "Cash in hand", "asset"),
-  a("1110", "Bank current account", "asset", { systemKey: "bank_default" }),
+  a("1110", "Bank current account", "asset", {
+    systemKey: "bank_default",
+    isBank: true,
+  }),
   a("1120", "Razorpay clearing", "asset", { systemKey: "razorpay_clearing" }),
   a("1200", "Trade receivables", "asset", { systemKey: "trade_receivables" }),
   a("1300", "Advances to vendors", "asset"),

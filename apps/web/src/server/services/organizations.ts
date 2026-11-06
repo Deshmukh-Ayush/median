@@ -56,6 +56,7 @@ export async function seedOrganization(input: {
     parentId: t.parentCode ? (idByCode.get(t.parentCode) ?? null) : null,
     isSystem: t.systemKey !== undefined,
     systemKey: t.systemKey ?? null,
+    isBank: t.isBank ?? false,
   }))
 
   const [, inserted] = await db.batch([
