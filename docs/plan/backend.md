@@ -70,7 +70,8 @@ DB guards in the migration: triggers blocking UPDATE and DELETE on journal_entri
 - GST and CA: `getGstSummary`, `exportGstr1(ctx, period)` → { period, gstin, payload, warnings }, `exportTally`, `lockPeriod`, `listAuditLog`
 - Consent: `recordConsent(ctx, consentVersion)` (user from session), `getConsentStatus(ctx)` → { currentVersion, accepted, acceptedAt, acceptedBy }
 - Data rights: `exportOrgData(ctx)` → zip of one CSV per table plus a JSON manifest; `deleteOrgData(ctx, { confirmation })`, two steps (request → token + summary; confirm with token + typed org name), owner only
-- **Kept for the app:** `connectRazorpay`, `syncRazorpay` and `importBankRows` stay as thin wrappers over `connect`, `syncConnection` and `importFile`, so screens built on them keep working.
+- Razorpay OAuth: `startRazorpayOAuth(ctx, { returnTo })` → `{ authorizeUrl }`; `completeRazorpayOAuth(ctx, query)` → `{ connection, returnTo }`.
+- **Kept for the app:** `connectRazorpay` (test keys only), `syncRazorpay` and `importBankRows` stay as thin wrappers over `connect`, `syncConnection` and `importFile`, so screens built on them keep working.
 - **Consent gate:** `connect`, `syncConnection`, `importFile` and `createInboxItemFromExtraction` throw `CONSENT_REQUIRED` until consent is recorded.
 
 Every service first ships as a stub returning realistic fake data with final types. Replace stubs during the week without changing signatures; list any change in the PR and the summary.
@@ -89,7 +90,9 @@ Every service first ships as a stub returning realistic fake data with final typ
    - SourceRecord kinds: payment, refund, fee, settlement, payout, bank_line, order, invoice, party, opening_balance. Every record has provider, external_id (or the dedupe hash), occurred_at, amount_paise, currency and payload, and is validated with Zod (schema in packages/contracts).
 2. Sync runner: idempotent upsert into source_records, saves cursor and status, manual sync plus a scheduled sync (check Vercel Hobby cron limits; fall back to daily). Credentials encrypted, never logged.
 3. Posting rules run on SourceRecords (rules 8–11), so every connector gets them.
-4. `integrations/razorpay/`: API key auth (OAuth after partner approval), payments, refunds, fees, settlements. Use the settlement reconciliation endpoint if available; otherwise infer and flag. High-confidence rule matches post; everything else goes to the inbox.
+4. `integrations/razorpay/`: payments, refunds, fees, settlements. Use the settlement reconciliation endpoint if available; otherwise infer and flag. High-confidence rule matches post; everything else goes to the inbox.
+   - Auth (approved): Razorpay partner OAuth with read-only scope for live accounts (`startRazorpayOAuth` → Razorpay's approval screen → `completeRazorpayOAuth`); API keys only in test mode. Tokens are encrypted at rest; a rejected token marks the connection `reconnect_required`, a revoked one `revoked`.
+   - Fallback until partner approval: `integrations/razorpay-settlement-report/`, a file connector for the settlement report CSV from the Razorpay dashboard, producing the same SourceRecords.
 5. Real `listConnectors`, `listConnections`, `connect`, `disconnect`, `syncConnection`, with the consent gate.
 
 **Day 3: bank statements and the inbox**
