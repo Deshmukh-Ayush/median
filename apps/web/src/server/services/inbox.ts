@@ -3,263 +3,215 @@ import "server-only"
 import {
   BULK_APPROVE_MAX,
   ServiceError,
+  TDS_SECTIONS,
   bulkApproveInboxItemsInputSchema,
   idSchema,
   inboxEditsSchema,
   listInboxFiltersSchema,
+  moneyJsonSchema,
   pageOptionsSchema,
   parseInput,
+  proposedEntryJsonSchema,
 } from "@workspace/contracts"
 import type {
   ApproveInboxItemResult,
   BulkApproveResult,
   InboxEdits,
+  InboxGstSplit,
   InboxItem,
+  InboxTds,
+  LedgerAccountSummary,
   ListInboxFilters,
   Page,
   PageOptions,
   PartyRef,
   ProposedEntry,
 } from "@workspace/contracts"
-import { paise } from "@workspace/ledger"
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm"
 import { z } from "zod"
 
+import { getDb, withTransaction } from "../db"
+import type { Tx } from "../db"
+import {
+  inboxItems,
+  ledgerAccounts,
+  parties,
+  sourceRecords,
+} from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
-import { toProposedEntryView } from "./proposed-entry"
-import {
-  STUB_ACCOUNTS,
-  STUB_ACCOUNT_LIST,
-  STUB_PARTIES,
-  daysAgo,
-  timestampDaysAgo,
-} from "./stub-data"
+import { applyInboxEdits } from "./inbox-edits"
+import type { TaxAccounts } from "./inbox-edits"
+import { postEntry } from "./ledger"
+import { decodeCursor, encodeCursor } from "./pagination"
+import { encodeProposedEntry, toProposedEntryView } from "./proposed-entry"
 
-const stubAccounts = new Map(STUB_ACCOUNT_LIST.map((a) => [a.id, a]))
-const stubParties = new Map<string, PartyRef>(
-  Object.values(STUB_PARTIES).map((p) => [p.id, p])
-)
-const view = (entry: ProposedEntry) =>
-  toProposedEntryView(entry, stubAccounts, stubParties)
+// The approval inbox: everything a rule or the AI couldn't post with high
+// confidence waits here. Approving posts through postEntry (rules 1–4);
+// nothing reaches the ledger without it.
 
 const noFlags = { needsReview: [], notPrinted: [] }
 
-const stubItems: readonly InboxItem[] = [
-  {
-    id: "00000000-0000-4000-8000-00000000c001",
-    kind: "bill",
-    status: "pending",
-    confidence: 0.86,
-    reason: "New vendor bill from AWS. Check the expense account.",
-    sourceRef: { type: "document", id: "00000000-0000-4000-8000-00000000d001" },
-    sourceDocumentUrl:
-      "https://example.blob.vercel-storage.com/bills/aws-in-2026-118734.pdf",
-    proposedEntry: view({
-      entryDate: daysAgo(4),
-      narration: "AWS invoice IN-2026-118734 (October hosting)",
-      lines: [
-        {
-          accountId: STUB_ACCOUNTS.hosting.id,
-          partyId: null,
-          debit: paise(42_000_00n),
-          credit: paise(0n),
-          description: "EC2 + RDS",
-        },
-        {
-          accountId: STUB_ACCOUNTS.inputCgst.id,
-          partyId: null,
-          debit: paise(3_780_00n),
-          credit: paise(0n),
-          description: "CGST 9%",
-        },
-        {
-          accountId: STUB_ACCOUNTS.inputSgst.id,
-          partyId: null,
-          debit: paise(3_780_00n),
-          credit: paise(0n),
-          description: "SGST 9%",
-        },
-        {
-          accountId: STUB_ACCOUNTS.payables.id,
-          partyId: STUB_PARTIES.aws.id,
-          debit: paise(0n),
-          credit: paise(49_560_00n),
-          description: null,
-        },
-      ],
-    }),
-    gst: {
-      taxable: paise(42_000_00n),
-      cgst: paise(3_780_00n),
-      sgst: paise(3_780_00n),
-      igst: paise(0n),
-      rateBps: 1800,
-      supplyType: "intrastate",
-    },
-    tds: null,
-    reviewFlags: {
-      needsReview: [
-        {
-          field: "lines[0].hsnSac",
-          kind: "needs_review",
-          reason: "Partly cut off",
-          source: "model",
-        },
-      ],
-      notPrinted: [
-        {
-          field: "dueDate",
-          kind: "not_printed",
-          reason: "No due date on the bill",
-          source: "check",
-        },
-      ],
-    },
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNote: null,
-    postedEntryId: null,
-    createdAt: timestampDaysAgo(1),
-  },
-  {
-    id: "00000000-0000-4000-8000-00000000c002",
-    kind: "bank_line",
-    status: "pending",
-    confidence: 0.42,
-    reason:
-      'Bank debit of ₹1,85,000.00 with reference "NEFT-SAL-OCT" didn\'t match any bill or vendor.',
-    sourceRef: {
-      type: "source_record",
-      id: "00000000-0000-4000-8000-00000000b010",
-    },
-    sourceDocumentUrl: null,
-    proposedEntry: view({
-      entryDate: daysAgo(5),
-      narration: "NEFT-SAL-OCT",
-      lines: [
-        {
-          accountId: STUB_ACCOUNTS.salaries.id,
-          partyId: null,
-          debit: paise(1_85_000_00n),
-          credit: paise(0n),
-          description: null,
-        },
-        {
-          accountId: STUB_ACCOUNTS.bank.id,
-          partyId: null,
-          debit: paise(0n),
-          credit: paise(1_85_000_00n),
-          description: null,
-        },
-      ],
-    }),
-    gst: null,
-    tds: null,
-    reviewFlags: noFlags,
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNote: null,
-    postedEntryId: null,
-    createdAt: timestampDaysAgo(2),
-  },
-  {
-    id: "00000000-0000-4000-8000-00000000c003",
-    kind: "bank_line",
-    status: "pending",
-    confidence: 0.74,
-    reason:
-      "₹1,16,000.00 from Acme Retail is ₹2,000.00 short of invoice INV/2026-27/0042: looks like 2% TDS under 194J.",
-    sourceRef: {
-      type: "source_record",
-      id: "00000000-0000-4000-8000-00000000b012",
-    },
-    sourceDocumentUrl: null,
-    proposedEntry: view({
-      entryDate: daysAgo(1),
-      narration: "Receipt from Acme Retail against INV/2026-27/0042 (TDS 194J)",
-      lines: [
-        {
-          accountId: STUB_ACCOUNTS.bank.id,
-          partyId: null,
-          debit: paise(1_16_000_00n),
-          credit: paise(0n),
-          description: null,
-        },
-        {
-          accountId: STUB_ACCOUNTS.tdsReceivable.id,
-          partyId: STUB_PARTIES.acme.id,
-          debit: paise(2_000_00n),
-          credit: paise(0n),
-          description: "TDS 194J @ 2%",
-        },
-        {
-          accountId: STUB_ACCOUNTS.receivables.id,
-          partyId: STUB_PARTIES.acme.id,
-          debit: paise(0n),
-          credit: paise(1_18_000_00n),
-          description: null,
-        },
-      ],
-    }),
-    gst: null,
-    tds: { section: "194J", rateBps: 200, amount: paise(2_000_00n) },
-    reviewFlags: noFlags,
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNote: null,
-    postedEntryId: null,
-    createdAt: timestampDaysAgo(1),
-  },
-  {
-    id: "00000000-0000-4000-8000-00000000c004",
-    kind: "settlement_gap",
-    status: "pending",
-    confidence: 0.6,
-    reason:
-      "Razorpay settlement setl_Ok3fX is ₹412.00 less than its payments minus fees and refunds.",
-    sourceRef: {
-      type: "source_record",
-      id: "00000000-0000-4000-8000-00000000b011",
-    },
-    sourceDocumentUrl: null,
-    proposedEntry: view({
-      entryDate: daysAgo(6),
-      narration: "Unexplained settlement difference setl_Ok3fX",
-      lines: [
-        {
-          accountId: STUB_ACCOUNTS.gatewayCharges.id,
-          partyId: null,
-          debit: paise(412_00n),
-          credit: paise(0n),
-          description: null,
-        },
-        {
-          accountId: STUB_ACCOUNTS.razorpayClearing.id,
-          partyId: null,
-          debit: paise(0n),
-          credit: paise(412_00n),
-          description: null,
-        },
-      ],
-    }),
-    gst: null,
-    tds: null,
-    reviewFlags: noFlags,
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNote: null,
-    postedEntryId: null,
-    createdAt: timestampDaysAgo(3),
-  },
-]
+const gstJsonSchema = z
+  .object({
+    taxable: moneyJsonSchema,
+    cgst: moneyJsonSchema,
+    sgst: moneyJsonSchema,
+    igst: moneyJsonSchema,
+    rateBps: z.int().nullable(),
+    supplyType: z.enum(["intrastate", "interstate"]).nullable(),
+  })
+  .nullable()
+const tdsJsonSchema = z
+  .object({
+    section: z.enum(TDS_SECTIONS),
+    rateBps: z.int(),
+    amount: moneyJsonSchema,
+  })
+  .nullable()
 
-function findStub(id: string): InboxItem {
-  const item = stubItems.find((i) => i.id === id)
-  if (!item) throw new ServiceError("NOT_FOUND", "Inbox item not found.")
-  return item
+const itemColumns = {
+  id: inboxItems.id,
+  kind: inboxItems.kind,
+  status: inboxItems.status,
+  confidence: inboxItems.confidence,
+  reason: inboxItems.reason,
+  sourceType: inboxItems.sourceType,
+  sourceId: inboxItems.sourceId,
+  proposedEntry: inboxItems.proposedEntry,
+  gst: inboxItems.gst,
+  tds: inboxItems.tds,
+  reviewedBy: inboxItems.reviewedBy,
+  reviewedAt: inboxItems.reviewedAt,
+  reviewNote: inboxItems.reviewNote,
+  postedEntryId: inboxItems.postedEntryId,
+  createdAt: inboxItems.createdAt,
 }
 
-/** Newest first. Defaults to pending items. STUB. */
+interface ItemRow {
+  readonly id: string
+  readonly kind: InboxItem["kind"]
+  readonly status: InboxItem["status"]
+  readonly confidence: number
+  readonly reason: string
+  readonly sourceType: "document" | "source_record"
+  readonly sourceId: string
+  readonly proposedEntry: unknown
+  readonly gst: unknown
+  readonly tds: unknown
+  readonly reviewedBy: string | null
+  readonly reviewedAt: Date | null
+  readonly reviewNote: string | null
+  readonly postedEntryId: string | null
+  readonly createdAt: Date
+}
+
+interface DecodedItem {
+  readonly row: ItemRow
+  readonly entry: ProposedEntry
+  readonly gst: InboxGstSplit | null
+  readonly tds: InboxTds | null
+}
+
+function decode(row: ItemRow): DecodedItem {
+  const entry = proposedEntryJsonSchema.safeParse(row.proposedEntry)
+  if (!entry.success)
+    throw new Error(`inbox_items ${row.id}: stored proposal is invalid`)
+  return {
+    row,
+    entry: entry.data,
+    gst: gstJsonSchema.catch(null).parse(row.gst ?? null),
+    tds: tdsJsonSchema.catch(null).parse(row.tds ?? null),
+  }
+}
+
+function encodeGst(g: InboxGstSplit | null): unknown {
+  return (
+    g && {
+      ...g,
+      taxable: String(g.taxable),
+      cgst: String(g.cgst),
+      sgst: String(g.sgst),
+      igst: String(g.igst),
+    }
+  )
+}
+const encodeTds = (t: InboxTds | null): unknown =>
+  t && { ...t, amount: String(t.amount) }
+
+/** Account and party names for a set of items: two queries, no N+1. */
+async function viewsFor(
+  orgId: string,
+  items: readonly DecodedItem[]
+): Promise<InboxItem[]> {
+  const accountIds = [
+    ...new Set(items.flatMap((i) => i.entry.lines.map((l) => l.accountId))),
+  ]
+  const partyIds = [
+    ...new Set(
+      items.flatMap((i) =>
+        i.entry.lines.flatMap((l) => (l.partyId ? [l.partyId] : []))
+      )
+    ),
+  ]
+  const db = getDb()
+  const [accountRows, partyRows] = await Promise.all([
+    accountIds.length === 0
+      ? []
+      : db
+          .select({
+            id: ledgerAccounts.id,
+            code: ledgerAccounts.code,
+            name: ledgerAccounts.name,
+            type: ledgerAccounts.type,
+            parentId: ledgerAccounts.parentId,
+            isSystem: ledgerAccounts.isSystem,
+          })
+          .from(ledgerAccounts)
+          .where(
+            and(
+              eq(ledgerAccounts.organizationId, orgId),
+              inArray(ledgerAccounts.id, accountIds)
+            )
+          ),
+    partyIds.length === 0
+      ? []
+      : db
+          .select({ id: parties.id, name: parties.name, gstin: parties.gstin })
+          .from(parties)
+          .where(
+            and(
+              eq(parties.organizationId, orgId),
+              inArray(parties.id, partyIds)
+            )
+          ),
+  ])
+  const accounts = new Map<string, LedgerAccountSummary>(
+    accountRows.map((a) => [a.id, a])
+  )
+  const partyMap = new Map<string, PartyRef>(partyRows.map((p) => [p.id, p]))
+  return items.map(({ row, entry, gst, tds }) => ({
+    id: row.id,
+    kind: row.kind,
+    status: row.status,
+    confidence: row.confidence,
+    reason: row.reason,
+    sourceRef: { type: row.sourceType, id: row.sourceId },
+    // Signed document URLs come with bill uploads (Day 4).
+    sourceDocumentUrl: null,
+    proposedEntry: toProposedEntryView(entry, accounts, partyMap),
+    gst,
+    tds,
+    reviewFlags: noFlags,
+    reviewedBy: row.reviewedBy,
+    reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+    reviewNote: row.reviewNote,
+    postedEntryId: row.postedEntryId,
+    createdAt: row.createdAt.toISOString(),
+  }))
+}
+
+/** Newest first. Defaults to pending items. */
 export async function listInboxItems(
   ctx: OrgContext,
   cursor: string | null,
@@ -269,17 +221,99 @@ export async function listInboxItems(
   assertCan(ctx, "ledger", "read")
   const f = parseInput(listInboxFiltersSchema, filters)
   const { limit } = parseInput(pageOptionsSchema, options)
-  const items = stubItems.filter(
-    (i) => i.status === f.status && (!f.kind || i.kind === f.kind)
-  )
-  await Promise.resolve()
-  return { items: cursor ? [] : items.slice(0, limit), nextCursor: null }
+  const after = decodeCursor(cursor)
+  const afterAt = after ? new Date(after.k) : null
+  if (afterAt && Number.isNaN(afterAt.getTime()))
+    throw new ServiceError("VALIDATION", "Invalid page cursor.")
+
+  const rows = await getDb()
+    .select(itemColumns)
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.organizationId, ctx.orgId),
+        eq(inboxItems.status, f.status),
+        f.kind ? eq(inboxItems.kind, f.kind) : undefined,
+        after && afterAt
+          ? or(
+              lt(inboxItems.createdAt, afterAt),
+              and(
+                eq(inboxItems.createdAt, afterAt),
+                lt(inboxItems.id, after.id)
+              )
+            )
+          : undefined
+      )
+    )
+    .orderBy(desc(inboxItems.createdAt), desc(inboxItems.id))
+    .limit(limit + 1)
+  const page = rows.slice(0, limit)
+  const last = page.at(-1)
+  return {
+    items: await viewsFor(ctx.orgId, page.map(decode)),
+    nextCursor:
+      rows.length > limit && last
+        ? encodeCursor({ k: last.createdAt.toISOString(), id: last.id })
+        : null,
+  }
+}
+
+const TAX_KEYS = {
+  outputCgst: "gst_output_cgst",
+  outputSgst: "gst_output_sgst",
+  outputIgst: "gst_output_igst",
+  inputCgst: "gst_input_cgst",
+  inputSgst: "gst_input_sgst",
+  inputIgst: "gst_input_igst",
+  tdsReceivable: "tds_receivable",
+  receivables: "trade_receivables",
+} as const
+
+async function taxAccounts(tx: Tx, orgId: string): Promise<TaxAccounts> {
+  const rows = await tx
+    .select({ id: ledgerAccounts.id, key: ledgerAccounts.systemKey })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.organizationId, orgId),
+        inArray(ledgerAccounts.systemKey, Object.values(TAX_KEYS))
+      )
+    )
+  const byKey = new Map(rows.map((r) => [r.key, r.id]))
+  const pick = (key: string) => byKey.get(key) ?? ""
+  return {
+    outputCgst: pick(TAX_KEYS.outputCgst),
+    outputSgst: pick(TAX_KEYS.outputSgst),
+    outputIgst: pick(TAX_KEYS.outputIgst),
+    inputCgst: pick(TAX_KEYS.inputCgst),
+    inputSgst: pick(TAX_KEYS.inputSgst),
+    inputIgst: pick(TAX_KEYS.inputIgst),
+    tdsReceivable: pick(TAX_KEYS.tdsReceivable),
+    receivables: pick(TAX_KEYS.receivables),
+  }
+}
+
+async function lockPending(
+  tx: Tx,
+  orgId: string,
+  id: string
+): Promise<DecodedItem> {
+  const [row] = await tx
+    .select(itemColumns)
+    .from(inboxItems)
+    .where(and(eq(inboxItems.organizationId, orgId), eq(inboxItems.id, id)))
+    .for("update")
+  if (!row) throw new ServiceError("NOT_FOUND", "Inbox item not found.")
+  if (row.status !== "pending")
+    throw new ServiceError("CONFLICT", `This item was already ${row.status}.`)
+  return decode(row)
 }
 
 /**
  * Posts the proposed entry (with `edits` applied; GST and TDS edits rebuild
- * the tax lines in code) through the ledger and marks the item approved.
- * Throws PERIOD_LOCKED / UNBALANCED / CONFLICT (already reviewed). STUB.
+ * the tax lines in code) through the ledger and marks the item approved, in
+ * one transaction. Throws NOT_FOUND, VALIDATION, PERIOD_LOCKED, UNBALANCED,
+ * CONFLICT (already reviewed).
  */
 export async function approveInboxItem(
   ctx: OrgContext,
@@ -289,33 +323,63 @@ export async function approveInboxItem(
   assertCan(ctx, "ledger", "post")
   const itemId = parseInput(idSchema, id)
   const e = parseInput(inboxEditsSchema, edits ?? {})
-  const item = findStub(itemId)
-  const entryId = crypto.randomUUID()
-  await Promise.resolve()
-  return {
-    entryId,
-    item: {
-      ...item,
-      status: "approved",
-      proposedEntry: {
-        entryDate: e.entryDate ?? item.proposedEntry.entryDate,
-        narration: e.narration ?? item.proposedEntry.narration,
-        lines: e.lines
-          ? view({ ...item.proposedEntry, lines: e.lines }).lines
-          : item.proposedEntry.lines,
+  const { decoded, entryId } = await withTransaction(async (tx) => {
+    const item = await lockPending(tx, ctx.orgId, itemId)
+    const edited = applyInboxEdits(
+      item.entry,
+      { gst: item.gst, tds: item.tds },
+      e,
+      await taxAccounts(tx, ctx.orgId)
+    )
+    const posted = await postEntry(
+      { orgId: ctx.orgId, userId: ctx.userId, source: "inbox" },
+      {
+        entryDate: edited.entry.entryDate,
+        narration: edited.entry.narration,
+        sourceType: "inbox",
+        sourceId: item.row.id,
+        lines: edited.entry.lines.map((l) => ({ ...l })),
       },
-      gst: e.gst && item.gst ? { ...item.gst, ...e.gst } : item.gst,
-      tds: e.tds === undefined ? item.tds : e.tds,
-      reviewedBy: ctx.userId,
-      reviewedAt: new Date().toISOString(),
-      postedEntryId: entryId,
-    },
-  }
+      { tx }
+    )
+    const [row] = await tx
+      .update(inboxItems)
+      .set({
+        status: "approved",
+        reviewedBy: ctx.userId,
+        reviewedAt: new Date(),
+        postedEntryId: posted.id,
+        proposedEntry: encodeProposedEntry(edited.entry),
+        gst: encodeGst(edited.gst),
+        tds: encodeTds(edited.tds),
+      })
+      .where(
+        and(eq(inboxItems.organizationId, ctx.orgId), eq(inboxItems.id, itemId))
+      )
+      .returning(itemColumns)
+    if (!row) throw new ServiceError("CONFLICT", "Inbox item changed.")
+    if (item.row.sourceType === "source_record") {
+      await tx
+        .update(sourceRecords)
+        .set({ status: "posted", journalEntryId: posted.id })
+        .where(
+          and(
+            eq(sourceRecords.organizationId, ctx.orgId),
+            eq(sourceRecords.id, item.row.sourceId),
+            eq(sourceRecords.status, "inbox")
+          )
+        )
+    }
+    return { decoded: decode(row), entryId: posted.id }
+  })
+  const [item] = await viewsFor(ctx.orgId, [decoded])
+  if (!item) throw new Error("unreachable")
+  return { item, entryId }
 }
 
 /**
  * Approves up to BULK_APPROVE_MAX items without edits, each in its own
- * transaction: one failure (e.g. PERIOD_LOCKED) doesn't stop the rest. STUB.
+ * transaction: one failure (e.g. PERIOD_LOCKED) doesn't stop the rest.
  */
 export async function bulkApproveInboxItems(
   ctx: OrgContext,
@@ -337,7 +401,10 @@ export async function bulkApproveInboxItems(
   return { approved, failed }
 }
 
-/** Marks the item rejected with the reviewer's reason. STUB. */
+/**
+ * Marks the item rejected with the reviewer's reason; its source record is
+ * set aside (not booked). Throws NOT_FOUND, CONFLICT (already reviewed).
+ */
 export async function rejectInboxItem(
   ctx: OrgContext,
   id: string,
@@ -346,13 +413,36 @@ export async function rejectInboxItem(
   assertCan(ctx, "ledger", "propose")
   const itemId = parseInput(idSchema, id)
   const note = parseInput(z.string().trim().min(1).max(500), reason)
-  const item = findStub(itemId)
-  await Promise.resolve()
-  return {
-    ...item,
-    status: "rejected",
-    reviewedBy: ctx.userId,
-    reviewedAt: new Date().toISOString(),
-    reviewNote: note,
-  }
+  const decoded = await withTransaction(async (tx) => {
+    const item = await lockPending(tx, ctx.orgId, itemId)
+    const [row] = await tx
+      .update(inboxItems)
+      .set({
+        status: "rejected",
+        reviewedBy: ctx.userId,
+        reviewedAt: new Date(),
+        reviewNote: note,
+      })
+      .where(
+        and(eq(inboxItems.organizationId, ctx.orgId), eq(inboxItems.id, itemId))
+      )
+      .returning(itemColumns)
+    if (!row) throw new ServiceError("CONFLICT", "Inbox item changed.")
+    if (item.row.sourceType === "source_record") {
+      await tx
+        .update(sourceRecords)
+        .set({ status: "ignored" })
+        .where(
+          and(
+            eq(sourceRecords.organizationId, ctx.orgId),
+            eq(sourceRecords.id, item.row.sourceId),
+            eq(sourceRecords.status, "inbox")
+          )
+        )
+    }
+    return decode(row)
+  })
+  const [item] = await viewsFor(ctx.orgId, [decoded])
+  if (!item) throw new Error("unreachable")
+  return item
 }

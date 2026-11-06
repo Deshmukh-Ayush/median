@@ -38,6 +38,8 @@ export interface RuleAccounts {
   readonly gatewayCharges: string
   readonly receivables: string
   readonly tdsReceivable: string
+  readonly suspense: string
+  readonly payables: string
 }
 
 export interface RuleOrg {
@@ -446,6 +448,15 @@ export function refundRule(
   const revenueLine = original.lines.find(
     (l) => l.dimensions?.["gst_rate_bps"] !== undefined
   )
+  const hadGst = original.lines.some((l) =>
+    [accounts.outputCgst, accounts.outputSgst, accounts.outputIgst].includes(
+      l.accountId
+    )
+  )
+  if (!revenueLine && hadGst)
+    return toInbox(
+      `Refund ${ref}: the GST rate on payment ${original.externalId} isn't recorded. Set the GST split before approving.`
+    )
   const rate = Number(revenueLine?.dimensions?.["gst_rate_bps"] ?? "0")
   const revenueAccount = revenueLine?.accountId ?? accounts.revenue
   const hadIgst = original.lines.some(
@@ -607,4 +618,216 @@ export function receiptRule(
     gst: null,
     tds: null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Bank lines: deterministic matching (amount + date window + reference)
+
+export interface SettlementCandidate {
+  readonly externalId: string
+  readonly status: "new" | "posted" | "inbox" | "ignored"
+  readonly entryId: string | null
+}
+
+export interface VendorCandidate {
+  readonly partyId: string
+  readonly name: string
+}
+
+export type BankMatch =
+  | { readonly kind: "settlement"; readonly settlement: SettlementCandidate }
+  | { readonly kind: "invoice"; readonly invoice: OpenInvoice }
+  | { readonly kind: "vendor"; readonly vendor: VendorCandidate }
+  /** Several candidates fit equally: never guess. */
+  | { readonly kind: "ambiguous"; readonly what: string }
+  | { readonly kind: "none" }
+
+export type BankDecision =
+  | Decision
+  /** The money movement is already booked (the settlement entry). */
+  | { readonly action: "link"; readonly entryId: string }
+
+export function bankLineRule(
+  record: RuleRecord & {
+    readonly direction: "inflow" | "outflow"
+    readonly reference: string | null
+  },
+  ctx: {
+    readonly accounts: RuleAccounts
+    readonly suspense: string
+    readonly payables: string
+    /** The ledger account of this bank connection. */
+    readonly bankAccountId: string
+    readonly match: BankMatch
+  }
+): BankDecision {
+  const { accounts, bankAccountId, match } = ctx
+  const amount = paise(record.amountPaise)
+  const entryDate = istDateOf(record.occurredAt)
+  const p = z
+    .looseObject({ description: z.string().optional() })
+    .safeParse(record.payload).data
+  const narration = (p?.description ?? "Bank line").slice(0, 200)
+  const inflow = record.direction === "inflow"
+  const inbox = (
+    entry: ProposedEntry,
+    reason: string,
+    confidence: number
+  ): Decision => ({
+    action: "inbox",
+    kind: "bank_line",
+    entry,
+    reason,
+    confidence,
+    gst: null,
+    tds: null,
+  })
+
+  if (match.kind === "settlement" && inflow) {
+    const s = match.settlement
+    // Settlements post Dr Bank (default) / Cr Razorpay clearing.
+    const transfer: ProposedEntry = {
+      entryDate,
+      narration: `Razorpay settlement ${s.externalId} received`,
+      lines: [dr(bankAccountId, amount), cr(accounts.bank, amount)],
+    }
+    if (s.status === "posted" && s.entryId) {
+      if (bankAccountId === accounts.bank)
+        return { action: "link", entryId: s.entryId }
+      return { action: "post", entry: transfer }
+    }
+    return inbox(
+      transfer,
+      `Credit matches Razorpay settlement ${s.externalId}, which is waiting in the inbox. Approve the settlement first.`,
+      0.7
+    )
+  }
+  if (match.kind === "invoice" && inflow) {
+    return receiptRule(amount, match.invoice, {
+      accounts,
+      debitAccountId: bankAccountId,
+      entryDate,
+      reference: record.reference ?? narration,
+      kind: "bank_line",
+    })
+  }
+  if (match.kind === "vendor" && !inflow) {
+    return inbox(
+      {
+        entryDate,
+        narration: `Payment to ${match.vendor.name}: ${narration}`,
+        lines: [
+          dr(ctx.payables, amount, null, match.vendor.partyId),
+          cr(bankAccountId, amount),
+        ],
+      },
+      `Looks like a payment to ${match.vendor.name}. Check which bill it settles.`,
+      0.75
+    )
+  }
+  const reason =
+    match.kind === "ambiguous"
+      ? `${formatInr(amount)} could be ${match.what}. Pick the right one.`
+      : `No match for this ${inflow ? "credit" : "debit"} of ${formatInr(amount)}. Choose the account.`
+  return inbox(
+    {
+      entryDate,
+      narration,
+      lines: inflow
+        ? [dr(bankAccountId, amount), cr(ctx.suspense, amount)]
+        : [dr(ctx.suspense, amount), cr(bankAccountId, amount)],
+    },
+    reason,
+    match.kind === "ambiguous" ? 0.5 : 0.3
+  )
+}
+
+/** Uppercase letters and digits only, for matching names and numbers in narrations. */
+export function normalizeForMatch(text: string): string {
+  return text.toUpperCase().replace(/[^A-Z0-9]/g, "")
+}
+
+/**
+ * Picks the bank line's match. Order: a Razorpay settlement (amount within
+ * −1/+5 days, UTR in the narration wins), then an invoice (number in the
+ * narration, else a unique amount or TDS match), then a known vendor named
+ * in the narration.
+ */
+export function findBankMatch(
+  line: {
+    readonly direction: "inflow" | "outflow"
+    readonly amountPaise: bigint
+    readonly date: string
+    readonly text: string
+  },
+  candidates: {
+    readonly settlements: readonly (SettlementCandidate & {
+      readonly amountPaise: bigint
+      readonly date: string
+      readonly utr: string | null
+    })[]
+    readonly invoices: readonly (OpenInvoice & { readonly date: string })[]
+    readonly vendors: readonly VendorCandidate[]
+  }
+): BankMatch {
+  const text = normalizeForMatch(line.text)
+  const daysBetween = (a: string, b: string) =>
+    (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000
+  if (line.direction === "inflow") {
+    const settlements = candidates.settlements.filter((s) => {
+      const lag = daysBetween(s.date, line.date)
+      return s.amountPaise === line.amountPaise && lag >= -1 && lag <= 5
+    })
+    const byUtr = settlements.filter(
+      (s) => s.utr && text.includes(normalizeForMatch(s.utr))
+    )
+    const [onlyUtr] = byUtr
+    if (byUtr.length === 1 && onlyUtr)
+      return { kind: "settlement", settlement: onlyUtr }
+    const [onlyS] = settlements
+    if (settlements.length === 1 && onlyS)
+      return { kind: "settlement", settlement: onlyS }
+    if (settlements.length > 1)
+      return {
+        kind: "ambiguous",
+        what: `one of ${settlements.length} Razorpay settlements`,
+      }
+
+    const eligible = candidates.invoices.filter((i) => i.date <= line.date)
+    const byNumber = eligible.filter((i) => {
+      const n = normalizeForMatch(i.number)
+      return n.length >= 3 && text.includes(n)
+    })
+    const [onlyN] = byNumber
+    if (byNumber.length === 1 && onlyN)
+      return { kind: "invoice", invoice: onlyN }
+    const received = paise(line.amountPaise)
+    const byAmount = eligible.filter(
+      (i) =>
+        i.total === received ||
+        matchTdsReceipt({
+          received,
+          invoiceTotal: i.total,
+          taxable: i.taxable,
+        }) !== null
+    )
+    const [onlyA] = byAmount
+    if (byAmount.length === 1 && onlyA)
+      return { kind: "invoice", invoice: onlyA }
+    if (byAmount.length > 1)
+      return {
+        kind: "ambiguous",
+        what: `a payment for ${byAmount.length} invoices`,
+      }
+    return { kind: "none" }
+  }
+  const vendors = candidates.vendors.filter((v) => {
+    const n = normalizeForMatch(v.name)
+    return n.length >= 4 && text.includes(n)
+  })
+  const [onlyV] = vendors
+  if (vendors.length === 1 && onlyV) return { kind: "vendor", vendor: onlyV }
+  if (vendors.length > 1)
+    return { kind: "ambiguous", what: `a payment to ${vendors.length} vendors` }
+  return { kind: "none" }
 }

@@ -3,7 +3,9 @@ import type { ResolvedGstRate } from "@workspace/ledger"
 import { describe, expect, it } from "vitest"
 
 import {
+  bankLineRule,
   feeRule,
+  findBankMatch,
   istDateOf,
   paymentMappingKey,
   paymentRule,
@@ -32,6 +34,8 @@ const accounts: RuleAccounts = {
   gatewayCharges: "gateway",
   receivables: "receivables",
   tdsReceivable: "tds",
+  suspense: "suspense",
+  payables: "payables",
 }
 const karnataka: RuleOrg = {
   gstRegistered: true,
@@ -399,5 +403,133 @@ describe("receipts against invoices (rule 11)", () => {
   it("sends other shortfalls to the inbox without TDS", () => {
     const d = receiptRule(paise(1_10_000_00n), invoice, ctx)
     expect(d).toMatchObject({ action: "inbox", tds: null })
+  })
+})
+
+describe("bank lines", () => {
+  const line = (direction: "inflow" | "outflow", amountPaise: bigint) => ({
+    ...record({ kind: "bank_line", externalId: null, amountPaise }),
+    direction,
+    reference: null,
+    payload: { description: "NEFT CR RAZORPAY UTR1" },
+  })
+  const base = {
+    accounts,
+    suspense: "suspense",
+    payables: "payables",
+    bankAccountId: "hdfc",
+  }
+  const settlement = {
+    externalId: "setl_1",
+    status: "posted" as const,
+    entryId: "e_setl",
+    amountPaise: 115_640n,
+    date: "2025-09-21",
+    utr: "UTR1",
+  }
+  const invoice = {
+    id: "inv_1",
+    number: "INV/2026-27/0042",
+    partyId: "acme",
+    total: paise(1_18_000_00n),
+    taxable: paise(1_00_000_00n),
+    date: "2025-09-01",
+  }
+  const candidates = {
+    settlements: [settlement],
+    invoices: [invoice],
+    vendors: [],
+  }
+  const find = (
+    direction: "inflow" | "outflow",
+    amountPaise: bigint,
+    text: string,
+    c: Partial<Parameters<typeof findBankMatch>[1]> = {}
+  ) =>
+    findBankMatch(
+      { direction, amountPaise, date: "2025-09-22", text },
+      { ...candidates, ...c }
+    )
+
+  it("matches a settlement credit by amount and date, UTR breaking ties", () => {
+    expect(find("inflow", 115_640n, "NEFT")).toMatchObject({
+      kind: "settlement",
+    })
+    const two = [
+      settlement,
+      { ...settlement, externalId: "setl_2", utr: "UTR2" },
+    ]
+    expect(find("inflow", 115_640n, "NEFT", { settlements: two }).kind).toBe(
+      "ambiguous"
+    )
+    expect(
+      find("inflow", 115_640n, "NEFT UTR2", { settlements: two })
+    ).toMatchObject({ settlement: { externalId: "setl_2" } })
+    // Outside the window: no match.
+    expect(
+      find("inflow", 115_640n, "NEFT", {
+        settlements: [{ ...settlement, date: "2025-09-01" }],
+        invoices: [],
+      }).kind
+    ).toBe("none")
+  })
+
+  it("links to the settlement entry, or moves it from the default bank", () => {
+    const match = { kind: "settlement" as const, settlement }
+    expect(
+      bankLineRule(line("inflow", 115_640n), {
+        ...base,
+        bankAccountId: "bank",
+        match,
+      })
+    ).toEqual({ action: "link", entryId: "e_setl" })
+    expect(
+      lines(
+        bankLineRule(line("inflow", 115_640n), { ...base, match }) as Decision
+      )
+    ).toEqual({ "Dr hdfc": 115_640n, "Cr bank": 115_640n })
+  })
+
+  it("matches invoice receipts by number, amount or TDS (rule 11)", () => {
+    expect(find("inflow", 5_00n, "IMPS INV/2026-27/0042")).toMatchObject({
+      kind: "invoice",
+    })
+    expect(find("inflow", 1_16_000_00n, "NEFT ACME")).toMatchObject({
+      kind: "invoice",
+    })
+    const d = bankLineRule(line("inflow", 1_16_000_00n), {
+      ...base,
+      match: { kind: "invoice", invoice },
+    })
+    expect(d).toMatchObject({
+      action: "inbox",
+      kind: "bank_line",
+      tds: { rateBps: 200 },
+    })
+  })
+
+  it("proposes known vendor payments and parks the rest in suspense", () => {
+    const vendors = [{ partyId: "aws", name: "AWS India" }]
+    const match = find("outflow", 11_800_00n, "UPI-AWS INDIA-PAYMENT", {
+      vendors,
+    })
+    expect(match).toMatchObject({ kind: "vendor" })
+    expect(
+      lines(
+        bankLineRule(line("outflow", 11_800_00n), {
+          ...base,
+          match,
+        }) as Decision
+      )
+    ).toEqual({ "Dr payables": 11_800_00n, "Cr hdfc": 11_800_00n })
+    const none = bankLineRule(line("outflow", 999n), {
+      ...base,
+      match: { kind: "none" },
+    })
+    expect(none).toMatchObject({ action: "inbox", confidence: 0.3 })
+    expect(lines(none as Decision)).toEqual({
+      "Dr suspense": 999n,
+      "Cr hdfc": 999n,
+    })
   })
 })

@@ -9,6 +9,8 @@ import {
   parseInput,
 } from "@workspace/contracts"
 import type {
+  BankLineMatched,
+  BankLineUnmatched,
   ConnectionStatus,
   ConnectionSummary,
   ConnectorAuthType,
@@ -382,7 +384,8 @@ async function fileConnection(
  * settlement report, later Tally XML). Unreadable rows are reported in
  * `errors`, not thrown; re-importing the same file creates no duplicates.
  * Throws CONSENT_REQUIRED, NOT_FOUND, VALIDATION (e.g. a bank statement
- * without connectionId). Bank statements: STUB until their connector lands.
+ * without connectionId). Bank statements return per-row `matched` and
+ * `unmatched` for the rows imported this time.
  */
 export async function importFile(
   ctx: OrgContext,
@@ -410,21 +413,14 @@ export async function importFile(
 
   const connector = getConnector(provider)
   if (!connector || !isFileConnector(connector)) {
-    // STUB (bank-statement) until its connector lands.
-    const rows = f.kind === "rows" ? f.rows.length : countCsvRows(f.text)
-    const posted = Math.floor(rows * 0.8)
-    return {
-      connectionId: o.connectionId ?? crypto.randomUUID(),
-      imported: rows,
-      duplicates: 0,
-      posted,
-      sentToInbox: rows - posted,
-      errors: [],
-    }
+    throw new ServiceError(
+      "VALIDATION",
+      `${info.displayName} doesn't take files yet.`
+    )
   }
 
   const connectionId = await fileConnection(ctx, info, o.connectionId)
-  const parsed = await connector.parseFile(f, { provider })
+  const parsed = await connector.parseFile(f, { provider, connectionId })
   const stored = await storeRecords(ctx.orgId, connectionId, parsed.records)
   if (parsed.settlementLinks?.length)
     await applySettlementLinks(ctx.orgId, provider, parsed.settlementLinks)
@@ -438,6 +434,31 @@ export async function importFile(
         eq(connections.id, connectionId)
       )
     )
+  // Per-row results for bank statements (new rows only).
+  const matched: BankLineMatched[] = []
+  const unmatched: BankLineUnmatched[] = []
+  if (parsed.rowIndexes) {
+    parsed.records.forEach((record, i) => {
+      const key = record.externalId ?? record.dedupeHash ?? ""
+      const sourceRecordId = stored.insertedIds.get(key)
+      const outcome = sourceRecordId && posting.outcomes.get(sourceRecordId)
+      const rowIndex = parsed.rowIndexes?.[i] ?? i
+      if (!sourceRecordId || !outcome) return
+      if (outcome.status === "posted" && outcome.entryId)
+        matched.push({
+          rowIndex,
+          sourceRecordId,
+          matchKind: outcome.matchKind ?? "invoice_payment",
+          entryId: outcome.entryId,
+        })
+      else if (outcome.status === "inbox" && outcome.inboxItemId)
+        unmatched.push({
+          rowIndex,
+          sourceRecordId,
+          inboxItemId: outcome.inboxItemId,
+        })
+    })
+  }
   return {
     connectionId,
     imported: stored.inserted,
@@ -445,6 +466,7 @@ export async function importFile(
     posted: posting.posted,
     sentToInbox: posting.sentToInbox,
     errors: [...parsed.errors, ...stored.errors],
+    ...(parsed.rowIndexes ? { matched, unmatched } : {}),
   }
 }
 

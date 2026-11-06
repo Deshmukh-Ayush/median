@@ -2,6 +2,7 @@ import "server-only"
 
 import type { ConnectorInfo } from "@workspace/contracts"
 
+import { bankStatementConnector } from "./bank-statement/connector"
 import type { Connector } from "./connector"
 import { razorpaySettlementReportConnector } from "./razorpay-settlement-report/connector"
 import {
@@ -16,24 +17,11 @@ export const CONNECTORS: readonly Connector[] = [
   razorpayOAuthConnector,
   razorpayTestKeysConnector,
   razorpaySettlementReportConnector,
+  bankStatementConnector,
 ]
 
-/**
- * Listed in the gallery without an implementation in this registry yet.
- * bank-statement imports still run through the stub in services/connectors.ts
- * until its connector lands (Day 3).
- */
+/** Listed in the gallery as coming soon; no implementation yet. */
 export const LISTED_ONLY: readonly ConnectorInfo[] = [
-  {
-    provider: "bank-statement",
-    displayName: "Bank statement",
-    category: "banks",
-    authType: "file",
-    description: "CSV or PDF statements from any Indian bank.",
-    availability: "available",
-    accepts: ["text/csv", "application/pdf"],
-    testModeOnly: false,
-  },
   {
     provider: "tally-import",
     displayName: "Import from Tally",
