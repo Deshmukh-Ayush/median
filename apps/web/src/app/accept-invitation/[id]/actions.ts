@@ -30,3 +30,15 @@ export async function acceptInvitation(invitationId: string): Promise<void> {
   })
   redirect("/")
 }
+
+/**
+ * Signs out and returns to sign-in, which comes back to this invite. For when
+ * the invite was sent to a different email than the signed-in account.
+ */
+export async function signOutToAcceptInvitation(
+  invitationId: string
+): Promise<void> {
+  await getAuth().api.signOut({ headers: await headers() })
+  const here = `/accept-invitation/${encodeURIComponent(invitationId)}`
+  redirect(`/sign-in?redirectTo=${encodeURIComponent(here)}`)
+}

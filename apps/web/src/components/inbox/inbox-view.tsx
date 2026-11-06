@@ -2,10 +2,13 @@
 
 import * as React from "react"
 import { toast } from "sonner"
-import { CheckIcon, InboxIcon, XIcon } from "lucide-react"
+import { CheckIcon, InboxIcon, PencilIcon, XIcon } from "lucide-react"
 
-import type { Money as MoneyValue } from "@workspace/contracts"
+import type { Money as MoneyValue, TdsSection } from "@workspace/contracts"
+import { formatInr } from "@workspace/ledger"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import { ConfidenceBadge } from "@workspace/ui/components/confidence-badge"
 import {
   Dialog,
@@ -23,7 +26,10 @@ import { StatusChip } from "@workspace/ui/components/status-chip"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "cn"
 
-import type { InboxActionResult } from "@/app/(app)/inbox/actions"
+import type {
+  InboxActionResult,
+  TaxEditsForm,
+} from "@/app/(app)/inbox/actions"
 
 export interface InboxLineView {
   account: string
@@ -47,12 +53,31 @@ export interface InboxRowView {
   /** Where it comes from (credit lines). */
   comesFrom: InboxLineView[]
   sourceLabel: string
+  /** Signed URL of the bill or statement; null for API records. */
+  sourceUrl: string | null
+  gst: {
+    taxable: MoneyValue
+    cgst: MoneyValue
+    sgst: MoneyValue
+    igst: MoneyValue
+    /** "18%", or null when lines carry different rates. */
+    rateLabel: string | null
+    interstate: boolean
+  } | null
+  tds: { section: TdsSection; rate: string; amount: MoneyValue } | null
+  /** Whether the reviewer may correct GST and TDS before approving. */
+  taxEditable: boolean
+  /** Fields extraction checks want a human to look at. */
+  flags: { field: string; reason: string }[]
 }
 
 interface InboxViewProps {
   rows: InboxRowView[]
   canApprove: boolean
   canReject: boolean
+  /** TDS sections the reviewer can pick; passed in to keep zod off the client. */
+  tdsSections: readonly TdsSection[]
+  approveItem: (id: string, edits: TaxEditsForm) => Promise<InboxActionResult>
   approveItems: (ids: string[]) => Promise<InboxActionResult>
   rejectItem: (id: string, reason: string) => Promise<InboxActionResult>
 }
@@ -77,9 +102,16 @@ export function InboxView({
   rows,
   canApprove,
   canReject,
+  tdsSections,
+  approveItem,
   approveItems,
   rejectItem,
 }: InboxViewProps) {
+  // Tax corrections for one item, kept here so the `a` shortcut sends them.
+  const [draft, setDraft] = React.useState<{
+    id: string
+    edits: TaxEditsForm
+  } | null>(null)
   // Items done this session are hidden at once; the server refresh follows.
   const [done, setDone] = React.useState<ReadonlySet<string>>(new Set())
   const visible = React.useMemo(
@@ -119,9 +151,21 @@ export function InboxView({
   const approve = React.useCallback(
     (ids: string[]) => {
       if (!canApprove || ids.length === 0 || pending) return
+      // Bulk approval posts proposals as they are, so it can't carry edits.
+      if (ids.length > 1 && draft && ids.includes(draft.id)) {
+        toast.error(
+          "One selected item has tax edits. Approve it on its own first."
+        )
+        return
+      }
       startTransition(async () => {
-        const result = await approveItems(ids)
+        const [only] = ids
+        const result =
+          ids.length === 1 && only
+            ? await approveItem(only, draft?.id === only ? draft.edits : {})
+            : await approveItems(ids)
         markDone(result.ids)
+        if (result.ids.some((id) => id === draft?.id)) setDraft(null)
         if (result.ok) {
           toast.success(
             ids.length === 1
@@ -137,7 +181,7 @@ export function InboxView({
         }
       })
     },
-    [approveItems, canApprove, markDone, pending]
+    [approveItem, approveItems, canApprove, draft, markDone, pending]
   )
 
   const move = React.useCallback(
@@ -301,10 +345,17 @@ export function InboxView({
 
         {active ? (
           <InboxDetail
+            // Remount per item so a half-typed edit never leaks across.
+            key={active.id}
             row={active}
             canApprove={canApprove}
             canReject={canReject}
             pending={pending}
+            tdsSections={tdsSections}
+            edits={draft?.id === active.id ? draft.edits : null}
+            onEdit={(edits) =>
+              setDraft(edits ? { id: active.id, edits } : null)
+            }
             onApprove={() => approve([active.id])}
             onReject={() => setRejecting(active)}
           />
@@ -330,6 +381,9 @@ function InboxDetail({
   canApprove,
   canReject,
   pending,
+  tdsSections,
+  edits,
+  onEdit,
   onApprove,
   onReject,
 }: {
@@ -337,6 +391,9 @@ function InboxDetail({
   canApprove: boolean
   canReject: boolean
   pending: boolean
+  tdsSections: readonly TdsSection[]
+  edits: TaxEditsForm | null
+  onEdit: (edits: TaxEditsForm | null) => void
   onApprove: () => void
   onReject: () => void
 }) {
@@ -352,8 +409,28 @@ function InboxDetail({
         </div>
         <h2 className="text-base font-semibold">{row.narration}</h2>
         <p className="text-sm text-fg-secondary">{row.reason}</p>
-        <SourceLink>{row.sourceLabel}</SourceLink>
+        {row.sourceUrl ? (
+          <SourceLink href={row.sourceUrl} target="_blank" rel="noreferrer">
+            {row.sourceLabel}
+          </SourceLink>
+        ) : (
+          <SourceLink kind="payment">{row.sourceLabel}</SourceLink>
+        )}
       </header>
+
+      {row.flags.length > 0 ? (
+        <div className="flex flex-col gap-1 rounded-md bg-warning-subtle px-3 py-2 text-sm">
+          <h3 className="text-xs font-medium text-warning">Check these</h3>
+          <ul className="flex flex-col gap-0.5">
+            {row.flags.map((flag) => (
+              <li key={`${flag.field}-${flag.reason}`}>
+                <span className="font-mono text-xs">{flag.field}</span>:{" "}
+                {flag.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div>
@@ -371,11 +448,22 @@ function InboxDetail({
       <LineGroup title="Recorded as" lines={row.goesTo} />
       <LineGroup title="Paid from or owed to" lines={row.comesFrom} />
 
+      {row.gst || row.tds || (row.taxEditable && canApprove) ? (
+        <TaxSection
+          row={row}
+          editable={row.taxEditable && canApprove}
+          tdsSections={tdsSections}
+          edits={edits}
+          onEdit={onEdit}
+        />
+      ) : null}
+
       {canApprove || canReject ? (
         <footer className="flex flex-wrap gap-2 border-t border-subtle pt-4">
           {canApprove ? (
             <Button variant="primary" loading={pending} onClick={onApprove}>
-              <CheckIcon aria-hidden /> Approve <Kbd>a</Kbd>
+              <CheckIcon aria-hidden /> {edits ? "Approve with edits" : "Approve"}{" "}
+              <Kbd>a</Kbd>
             </Button>
           ) : null}
           {canReject ? (
@@ -390,6 +478,247 @@ function InboxDetail({
         </p>
       )}
     </section>
+  )
+}
+
+const rupees = (amount: MoneyValue) => formatInr(amount, { symbol: false })
+
+function initialEdits(row: InboxRowView): TaxEditsForm {
+  return {
+    ...(row.gst
+      ? {
+          gst: {
+            taxable: rupees(row.gst.taxable),
+            cgst: rupees(row.gst.cgst),
+            sgst: rupees(row.gst.sgst),
+            igst: rupees(row.gst.igst),
+          },
+        }
+      : {}),
+    ...(row.tds
+      ? {
+          tds: {
+            section: row.tds.section,
+            rate: row.tds.rate,
+            amount: rupees(row.tds.amount),
+          },
+        }
+      : {}),
+  }
+}
+
+/**
+ * The GST split and TDS behind the entry. Reviewers can correct them; the
+ * backend rebuilds the tax lines from what they type and checks the entry
+ * balances. Nothing is calculated here.
+ */
+function TaxSection({
+  row,
+  editable,
+  tdsSections,
+  edits,
+  onEdit,
+}: {
+  row: InboxRowView
+  editable: boolean
+  tdsSections: readonly TdsSection[]
+  edits: TaxEditsForm | null
+  onEdit: (edits: TaxEditsForm | null) => void
+}) {
+  const fieldId = (name: string) => `tax-${row.id}-${name}`
+
+  if (!edits) {
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-medium text-fg-secondary">Tax</h3>
+          {editable ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onEdit(initialEdits(row))}
+            >
+              <PencilIcon aria-hidden /> Edit GST and TDS
+            </Button>
+          ) : null}
+        </div>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-subtle px-3 py-2 text-sm">
+          {row.gst ? (
+            <>
+              <dt className="text-fg-secondary">
+                Taxable value{row.gst.rateLabel ? ` · GST ${row.gst.rateLabel}` : ""}
+              </dt>
+              <dd className="text-right">
+                <Money value={row.gst.taxable} />
+              </dd>
+              {row.gst.interstate ? (
+                <>
+                  <dt className="text-fg-secondary">IGST</dt>
+                  <dd className="text-right">
+                    <Money value={row.gst.igst} />
+                  </dd>
+                </>
+              ) : (
+                <>
+                  <dt className="text-fg-secondary">CGST</dt>
+                  <dd className="text-right">
+                    <Money value={row.gst.cgst} />
+                  </dd>
+                  <dt className="text-fg-secondary">SGST</dt>
+                  <dd className="text-right">
+                    <Money value={row.gst.sgst} />
+                  </dd>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <dt className="text-fg-secondary">GST</dt>
+              <dd className="text-right text-fg-secondary">None</dd>
+            </>
+          )}
+          <dt className="text-fg-secondary">
+            TDS{row.tds ? ` · ${row.tds.section} at ${row.tds.rate}%` : ""}
+          </dt>
+          <dd className="text-right">
+            {row.tds ? (
+              <Money value={row.tds.amount} />
+            ) : (
+              <span className="text-fg-secondary">None</span>
+            )}
+          </dd>
+        </dl>
+      </div>
+    )
+  }
+
+  const gst = edits.gst
+  const tds = edits.tds
+  const setGst = (key: "taxable" | "cgst" | "sgst" | "igst", value: string) =>
+    gst && onEdit({ ...edits, gst: { ...gst, [key]: value } })
+  const setTds = (key: "section" | "rate" | "amount", value: string) =>
+    tds && onEdit({ ...edits, tds: { ...tds, [key]: value } })
+
+  return (
+    <fieldset className="flex flex-col gap-3 rounded-md border border-default p-3">
+      <legend className="px-1 text-xs font-medium text-fg-secondary">
+        Edit GST and TDS
+      </legend>
+      {gst ? (
+        <div className="grid grid-cols-2 gap-3">
+          {(
+            [
+              ["taxable", "Taxable value"],
+              ["cgst", "CGST"],
+              ["sgst", "SGST"],
+              ["igst", "IGST"],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key} className="flex flex-col gap-1.5">
+              <Label htmlFor={fieldId(key)}>{label} (₹)</Label>
+              <Input
+                id={fieldId(key)}
+                inputMode="decimal"
+                autoComplete="off"
+                className="tabular text-right"
+                value={gst[key]}
+                onChange={(e) => setGst(key, e.target.value)}
+              />
+            </div>
+          ))}
+          <p className="col-span-2 text-xs text-fg-secondary">
+            Use CGST + SGST for sales within your state, IGST otherwise.
+          </p>
+        </div>
+      ) : null}
+
+      {tds ? (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={fieldId("tds-section")}>TDS section</Label>
+            <select
+              id={fieldId("tds-section")}
+              value={tds.section}
+              onChange={(e) => setTds("section", e.target.value)}
+              className="h-8 rounded-sm border border-input bg-surface px-2 text-sm"
+            >
+              {tdsSections.map((section) => (
+                <option key={section} value={section}>
+                  {section}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={fieldId("tds-rate")}>Rate (%)</Label>
+            <Input
+              id={fieldId("tds-rate")}
+              inputMode="decimal"
+              autoComplete="off"
+              className="tabular text-right"
+              value={tds.rate}
+              onChange={(e) => setTds("rate", e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={fieldId("tds-amount")}>TDS (₹)</Label>
+            <Input
+              id={fieldId("tds-amount")}
+              inputMode="decimal"
+              autoComplete="off"
+              className="tabular text-right"
+              value={tds.amount}
+              onChange={(e) => setTds("amount", e.target.value)}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="col-span-3 justify-self-start"
+            onClick={() => {
+              const { tds: _removed, ...rest } = edits
+              // Null tells the backend to drop proposed TDS; omitted keeps none.
+              onEdit(row.tds ? { ...rest, tds: null } : rest)
+            }}
+          >
+            Remove TDS
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="justify-self-start"
+          onClick={() =>
+            onEdit({
+              ...edits,
+              tds: row.tds
+                ? {
+                    section: row.tds.section,
+                    rate: row.tds.rate,
+                    amount: rupees(row.tds.amount),
+                  }
+                : { section: tdsSections[0] ?? "194J", rate: "", amount: "" },
+            })
+          }
+        >
+          {tds === null ? "Keep the proposed TDS" : "Add TDS"}
+        </Button>
+      )}
+
+      <p className="text-xs text-fg-secondary">
+        Median rebuilds the tax lines from these and checks the entry balances
+        before posting.
+      </p>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="self-start"
+        onClick={() => onEdit(null)}
+      >
+        Discard edits
+      </Button>
+    </fieldset>
   )
 }
 
