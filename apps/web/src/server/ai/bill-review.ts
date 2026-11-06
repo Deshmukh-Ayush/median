@@ -68,7 +68,30 @@ function percentOf(amount: bigint, rate: { units: bigint; scale: bigint }) {
 
 const abs = (n: bigint) => (n < 0n ? -n : n)
 
-export function reviewBill(bill: AiBillExtraction, today: string): BillReview {
+/** A decimal percent as whole basis points, or null if it has finer precision. */
+function toBps(rate: { units: bigint; scale: bigint }): number | null {
+  const scaled = rate.units * 100n
+  return scaled % rate.scale === 0n ? Number(scaled / rate.scale) : null
+}
+
+export interface ReviewBillOptions {
+  /**
+   * Is `rateBps` a standard GST slab on `date` (YYYY-MM-DD)? Slabs are
+   * effective-dated (e.g. 12% and 28% ended on 21 Sep 2025), so a rate is
+   * checked against the bill date, not today. Without it the check is skipped.
+   *
+   * TODO(gst-rates): pass `isStandardGstSlab` from @workspace/contracts
+   * (backend PR #43) from extract-bill.ts once it is on main, and drop the
+   * option if nothing else needs to inject it.
+   */
+  readonly isStandardGstSlab?: (rateBps: number, date: string) => boolean
+}
+
+export function reviewBill(
+  bill: AiBillExtraction,
+  today: string,
+  options: ReviewBillOptions = {}
+): BillReview {
   const flags = new Map<string, ReviewFlag>()
   const add = (
     field: string,
@@ -143,7 +166,8 @@ export function reviewBill(bill: AiBillExtraction, today: string): BillReview {
   }
 
   // --- Dates
-  if (!isoDateSchema.safeParse(bill.billDate).success)
+  const billDateValid = isoDateSchema.safeParse(bill.billDate).success
+  if (!billDateValid)
     review("billDate", "not a valid date")
   else if (bill.billDate > today) review("billDate", "date is in the future")
   if (bill.dueDate === null) missing("dueDate")
@@ -201,6 +225,17 @@ export function reviewBill(bill: AiBillExtraction, today: string): BillReview {
       expectedTaxKnown = false
     } else {
       expectedTax += percentOf(taxable, gstRate)
+      // A rate off the slab list may be a misread or a special rate (3% on
+      // gold, 0.25% on rough diamonds): flag it for a person, never reject.
+      const isSlab = options.isStandardGstSlab
+      if (isSlab && billDateValid) {
+        const bps = toBps(gstRate)
+        if (bps === null || !isSlab(bps, bill.billDate))
+          review(
+            at("gstRatePercent"),
+            `${line.gstRatePercent}% isn’t a standard GST rate on the bill date (${bill.billDate}); check for a misread or a special rate`
+          )
+      }
     }
 
     for (const key of ["cgst", "sgst", "igst"] as const) {
