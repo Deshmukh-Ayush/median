@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-import { gstStateCodeSchema, gstinSchema, idSchema } from "./common"
+import {
+  gstStateCodeSchema,
+  gstinSchema,
+  idSchema,
+  isoDateSchema,
+} from "./common"
 import { isActiveGstStateCode } from "./gst-states"
 
 export interface GstProfile {
@@ -56,6 +61,10 @@ export interface GstRateMapping {
   readonly gstRateBps: number
   /** Null → the org's default revenue account. */
   readonly revenueAccountId: string | null
+  /** First day this rate applies (inclusive); null = since GST began. */
+  readonly effectiveFrom: string | null
+  /** Last day this rate applies (inclusive); null = still in force. */
+  readonly effectiveTo: string | null
 }
 
 export const upsertGstRateMappingInputSchema = z.object({
@@ -69,6 +78,12 @@ export const upsertGstRateMappingInputSchema = z.object({
     .nullable(),
   gstRateBps: rateBpsSchema,
   revenueAccountId: idSchema.nullable(),
+  /**
+   * Rate change from this date (YYYY-MM-DD): the window in force the day
+   * before ends then, so earlier payments keep the old rate. Omit to edit the
+   * undated mapping of a key that has never changed rate.
+   */
+  effectiveFrom: isoDateSchema.nullable().default(null),
 })
 export type UpsertGstRateMappingInput = z.input<
   typeof upsertGstRateMappingInputSchema
