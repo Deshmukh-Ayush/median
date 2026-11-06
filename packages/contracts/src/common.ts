@@ -93,6 +93,8 @@ export interface LedgerAccountSummary {
   readonly type: AccountType
   readonly parentId: string | null
   readonly isSystem: boolean
+  /** A bank account: offered when connecting a bank statement. */
+  readonly isBank: boolean
 }
 
 export interface PartyRef {

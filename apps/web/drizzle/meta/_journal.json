@@ -64,6 +64,13 @@
       "when": 1793992951396,
       "tag": "0008_connector_framework",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793995825154,
+      "tag": "0009_ledger_accounts_is_bank",
+      "breakpoints": true
     }
   ]
 }
