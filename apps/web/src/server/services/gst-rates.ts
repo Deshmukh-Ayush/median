@@ -21,7 +21,7 @@ import type {
 } from "@workspace/contracts"
 import { isEffectiveOn, resolveGstRate } from "@workspace/ledger"
 import type { EffectiveRate } from "@workspace/ledger"
-import { and, asc, desc, eq, inArray } from "drizzle-orm"
+import { and, asc, eq, inArray, sql } from "drizzle-orm"
 
 import { getDb, withTransaction } from "../db"
 import {
@@ -208,7 +208,7 @@ export async function listOrgDefaultGstRates(
     })
     .from(organizationDefaultGstRates)
     .where(eq(organizationDefaultGstRates.organizationId, ctx.orgId))
-    .orderBy(desc(organizationDefaultGstRates.effectiveFrom))
+    .orderBy(sql`${organizationDefaultGstRates.effectiveFrom} desc nulls last`)
     .limit(500)
   if (rows.length > 0) return rows
   return orgDefaultRates(ctx.orgId)

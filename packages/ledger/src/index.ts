@@ -75,3 +75,4 @@ export {
   resolveGstRate,
   windowsOverlap,
 } from "./gst-rates"
+export { percentChangeBps } from "./change"

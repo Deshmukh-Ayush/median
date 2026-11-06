@@ -9,10 +9,11 @@
 import { z } from "zod"
 
 import { isoDateSchema } from "./common"
+import { rateBpsSchema } from "./gst-profile"
 import type { IsoDate } from "./common"
 
 /** A GST rate in basis points, 0–100%. */
-export const gstRateBpsSchema = z.int().min(0).max(10_000)
+export const gstRateBpsSchema = rateBpsSchema
 
 /** Inclusive validity window; null = open-ended. */
 export const effectiveWindowSchema = z
