@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ChevronRightIcon, UsersIcon } from "lucide-react"
+import { ChevronRightIcon, PlugIcon, UsersIcon } from "lucide-react"
 
 import { PageHeader } from "@workspace/ui/components/app-shell"
 
@@ -20,6 +20,14 @@ export default function SettingsPage() {
         >
           <UsersIcon aria-hidden className="size-4 text-fg-secondary" />
           <span className="flex-1">Members</span>
+          <ChevronRightIcon aria-hidden className="size-4 text-fg-secondary" />
+        </Link>
+        <Link
+          href="/settings/integrations"
+          className="flex h-12 items-center gap-3 border-t border-subtle px-4 text-sm transition-colors hover:bg-hover"
+        >
+          <PlugIcon aria-hidden className="size-4 text-fg-secondary" />
+          <span className="flex-1">Integrations</span>
           <ChevronRightIcon aria-hidden className="size-4 text-fg-secondary" />
         </Link>
       </nav>

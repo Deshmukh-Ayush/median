@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
   // them from node_modules at runtime. Never import them in client components.
   serverExternalPackages: ["@react-pdf/renderer"],
   poweredByHeader: false,
+  experimental: {
+    // Settlement reports and bank statements are uploaded through server
+    // actions; the import form caps files at 4 MB.
+    serverActions: { bodySizeLimit: "5mb" },
+  },
   reactStrictMode: true,
 }
 
