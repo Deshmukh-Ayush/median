@@ -1,3 +1,4 @@
+import { isStandardGstSlab as contractsSlabCheck } from "@workspace/contracts"
 import { describe, expect, it } from "vitest"
 
 import type { AiBillExtraction } from "./bill-extraction"
@@ -186,7 +187,7 @@ describe("reviewBill", () => {
 })
 
 describe("reviewBill: GST rate on the bill date", () => {
-  // Stand-in for isStandardGstSlab from contracts (#43): same slab periods.
+  // Stand-in for isStandardGstSlab from contracts: same slab periods.
   const isStandardGstSlab = (rateBps: number, date: string) =>
     (date <= "2025-09-21"
       ? [0, 500, 1200, 1800, 2800]
@@ -238,7 +239,7 @@ describe("reviewBill: GST rate on the bill date", () => {
     expect(rateFlags(billAt("18.005", "2026-01-15"))).toHaveLength(1)
   })
 
-  it("skips the check without a slab list (until #43 lands)", () => {
+  it("skips the check without a slab list", () => {
     const b = billAt("12", "2025-10-01")
     expect(
       reviewBill(b, TODAY).needsReview.filter((f) =>
@@ -249,5 +250,17 @@ describe("reviewBill: GST rate on the bill date", () => {
 
   it("skips the check when the bill date is invalid", () => {
     expect(rateFlags(billAt("12", "05/10/2025"))).toEqual([])
+  })
+})
+
+describe("reviewBill with the contracts slab list", () => {
+  it("flags 12% after 22 Sep 2025 using isStandardGstSlab", () => {
+    const b = bill()
+    b.lines[0]!.gstRatePercent = "12"
+    expect(
+      reviewBill(b, TODAY, {
+        isStandardGstSlab: contractsSlabCheck,
+      }).needsReview.map((f) => f.field)
+    ).toContain("lines[0].gstRatePercent")
   })
 })

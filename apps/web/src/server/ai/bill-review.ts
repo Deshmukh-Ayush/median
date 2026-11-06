@@ -78,11 +78,9 @@ export interface ReviewBillOptions {
   /**
    * Is `rateBps` a standard GST slab on `date` (YYYY-MM-DD)? Slabs are
    * effective-dated (e.g. 12% and 28% ended on 21 Sep 2025), so a rate is
-   * checked against the bill date, not today. Without it the check is skipped.
-   *
-   * TODO(gst-rates): pass `isStandardGstSlab` from @workspace/contracts
-   * (backend PR #43) from extract-bill.ts once it is on main, and drop the
-   * option if nothing else needs to inject it.
+   * checked against the bill date, not today. extract-bill.ts passes
+   * `isStandardGstSlab` from @workspace/contracts; tests pass a stand-in.
+   * Without it the check is skipped.
    */
   readonly isStandardGstSlab?: (rateBps: number, date: string) => boolean
 }

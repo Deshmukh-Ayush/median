@@ -1,6 +1,6 @@
 import "server-only"
 
-import { ServiceError } from "@workspace/contracts"
+import { isStandardGstSlab, ServiceError } from "@workspace/contracts"
 import { generateText, NoObjectGeneratedError, Output } from "ai"
 
 import { todayIso } from "@/lib/format-date"
@@ -89,5 +89,8 @@ export async function extractBill(
       { issues: parsed.error.issues }
     )
   }
-  return { extraction: parsed.data, ...reviewBill(parsed.data, todayIso()) }
+  return {
+    extraction: parsed.data,
+    ...reviewBill(parsed.data, todayIso(), { isStandardGstSlab }),
+  }
 }
