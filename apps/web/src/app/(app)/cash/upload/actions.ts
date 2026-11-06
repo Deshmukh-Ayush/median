@@ -2,12 +2,14 @@
 
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
 import { idSchema, isServiceError } from "@workspace/contracts"
 import type { BankMatchKind, ImportFile } from "@workspace/contracts"
 
+import { fieldErrorsOf, formValues } from "@/lib/form-state"
 import { extractBankStatement } from "@/server/ai/extract-bank-statement"
-import { importFile, listConnections } from "@/server/services"
+import { connect, importFile, listConnections } from "@/server/services"
 
 import { getOrgContextOrRedirect } from "../../org-context"
 import { MAX_IMPORT_BYTES } from "../../settings/integrations/mode"
@@ -146,4 +148,54 @@ export async function uploadBankStatement(
     if (isServiceError(error)) return { status: "error", error: error.message }
     throw error
   }
+}
+
+export interface AddBankAccountState {
+  readonly error?: string
+  readonly fieldErrors?: Readonly<Record<string, string>>
+  readonly values?: Readonly<Record<string, string>>
+}
+
+const addBankAccountSchema = z.object({
+  label: z
+    .string()
+    .trim()
+    .min(1, "Name the account, e.g. HDFC current a/c.")
+    .max(100, "Keep it under 100 characters."),
+  ledgerAccountId: idSchema,
+})
+
+/**
+ * Connects a bank account for statement uploads: a label plus the bank
+ * ledger account its lines post to. Owners and finance only (settings).
+ */
+export async function addBankAccount(
+  _previous: AddBankAccountState,
+  formData: FormData
+): Promise<AddBankAccountState> {
+  const raw = formValues(formData, ["label", "ledgerAccountId"])
+  const parsed = addBankAccountSchema.safeParse(raw)
+  if (!parsed.success) {
+    return { fieldErrors: fieldErrorsOf(parsed.error), values: raw }
+  }
+  const ctx = await getOrgContextOrRedirect()
+  try {
+    await connect(ctx, "bank-statement", parsed.data)
+  } catch (error) {
+    if (isServiceError(error) && error.code === "CONSENT_REQUIRED") {
+      redirect(
+        `/settings/integrations/consent?next=${encodeURIComponent(RETURN_TO)}`
+      )
+    }
+    if (isServiceError(error) && error.code === "FORBIDDEN") {
+      return {
+        error: "Only an owner or finance member can add a bank account.",
+        values: raw,
+      }
+    }
+    if (isServiceError(error)) return { error: error.message, values: raw }
+    throw error
+  }
+  refresh()
+  return {}
 }

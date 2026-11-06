@@ -1,14 +1,13 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { LandmarkIcon, LockIcon } from "lucide-react"
 
 import { PageHeader } from "@workspace/ui/components/app-shell"
-import { buttonVariants } from "@workspace/ui/components/button"
 import { EmptyState } from "@workspace/ui/components/empty-state"
 
+import { AddBankAccountForm } from "@/components/cash/add-bank-account-form"
 import { BankStatementUpload } from "@/components/cash/bank-statement-upload"
 import { can } from "@/lib/permissions"
-import { listConnections } from "@/server/services"
+import { listConnections, listLedgerAccounts } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
 
@@ -49,24 +48,29 @@ async function Accounts({
     .filter((c) => c.provider === "bank-statement" && c.status !== "revoked")
     .map((c) => ({ id: c.id, label: c.label }))
 
-  if (accounts.length === 0) {
-    return (
-      <div className="rounded-lg border border-default bg-surface">
-        <EmptyState
-          icon={<LandmarkIcon />}
-          title="No bank account yet"
-          description="Add a bank account before uploading its statements."
-          action={
-            <Link
-              href="/settings/integrations"
-              className={buttonVariants({ size: "sm" })}
-            >
-              Go to Integrations
-            </Link>
-          }
+  if (accounts.length > 0) return <BankStatementUpload accounts={accounts} />
+
+  // No bank connection yet: add one here (owners and finance).
+  if (can(ctx.role, { resource: "settings", action: "update" })) {
+    const { items } = await listLedgerAccounts(ctx, null, { bankOnly: true })
+    if (items.length > 0) {
+      return (
+        <AddBankAccountForm
+          ledgerAccounts={items.map((a) => ({
+            id: a.id,
+            label: `${a.code} · ${a.name}`,
+          }))}
         />
-      </div>
-    )
+      )
+    }
   }
-  return <BankStatementUpload accounts={accounts} />
+  return (
+    <div className="rounded-lg border border-default bg-surface">
+      <EmptyState
+        icon={<LandmarkIcon />}
+        title="No bank account yet"
+        description="Ask an owner or finance member to add the bank account first."
+      />
+    </div>
+  )
 }
