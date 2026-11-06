@@ -3,4 +3,6 @@
 
 export * from "./common"
 export * from "./confidence"
+export * from "./connectors"
+export * from "./consent"
 export * from "./errors"

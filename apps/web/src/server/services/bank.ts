@@ -5,6 +5,7 @@ import { parseRupees } from "@workspace/ledger"
 import { z } from "zod"
 
 import type { OrgContext } from "./context"
+import { requireConsent } from "./consent"
 import { assertCan } from "./context"
 
 const amountText = z
@@ -81,6 +82,7 @@ export async function importBankRows(
 ): Promise<BankImportResult> {
   assertCan(ctx, "ledger", "post")
   parseInput(importBankRowsOptionsSchema, options)
+  await requireConsent(ctx)
   const errors: { rowIndex: number; message: string }[] = []
   const matched: BankImportResult["matched"][number][] = []
   const unmatched: BankImportResult["unmatched"][number][] = []
