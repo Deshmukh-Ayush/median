@@ -92,20 +92,25 @@ export async function recordConsent(
  * extraction). Throws CONSENT_REQUIRED until the current version is accepted.
  */
 export async function requireConsent(ctx: OrgContext): Promise<void> {
-  const [row] = await getDb()
-    .select({ id: consents.id })
-    .from(consents)
-    .where(
-      and(
-        eq(consents.organizationId, ctx.orgId),
-        eq(consents.consentVersion, CURRENT_CONSENT_VERSION)
-      )
-    )
-    .limit(1)
-  if (!row) {
+  if (!(await hasConsent(ctx.orgId))) {
     throw new ServiceError(
       "CONSENT_REQUIRED",
       "Accept the data-processing consent before connecting or importing data."
     )
   }
+}
+
+/** Has the organisation accepted the current consent version? (System jobs.) */
+export async function hasConsent(orgId: string): Promise<boolean> {
+  const [row] = await getDb()
+    .select({ id: consents.id })
+    .from(consents)
+    .where(
+      and(
+        eq(consents.organizationId, orgId),
+        eq(consents.consentVersion, CURRENT_CONSENT_VERSION)
+      )
+    )
+    .limit(1)
+  return row !== undefined
 }
