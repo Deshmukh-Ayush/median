@@ -1,7 +1,12 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Suspense } from "react"
-import { ChevronLeftIcon, PlugIcon, RefreshCwIcon, UnplugIcon } from "lucide-react"
+import {
+  ChevronLeftIcon,
+  PlugIcon,
+  RefreshCwIcon,
+  UnplugIcon,
+} from "lucide-react"
 
 import { isServiceError } from "@workspace/contracts"
 import { PageHeader } from "@workspace/ui/components/app-shell"
@@ -21,6 +26,7 @@ import {
   getConsentStatus,
   listConnections,
   listConnectors,
+  listLedgerAccounts,
 } from "@/server/services"
 import type {
   ConnectionStatus,
@@ -36,6 +42,7 @@ import {
   connectRazorpayTestKeys,
   disconnectConnection,
   importConnectorFile,
+  saveSettlementBank,
   syncNow,
 } from "./actions"
 import { isTestMode } from "./mode"
@@ -72,7 +79,10 @@ const STATUS: Record<
 
 /** Fixed messages for ?status=…; never echo text from the URL. */
 const NOTICES: Record<string, { tone: "success" | "danger"; text: string }> = {
-  connected: { tone: "success", text: "Razorpay is connected. First sync is on its way." },
+  connected: {
+    tone: "success",
+    text: "Razorpay is connected. First sync is on its way.",
+  },
   declined: {
     tone: "danger",
     text: "Razorpay access wasn't granted. Connect again when you're ready.",
@@ -82,17 +92,69 @@ const NOTICES: Record<string, { tone: "success" | "danger"; text: string }> = {
     text: "That Razorpay link expired or was for another organisation. Try connecting again.",
   },
   failed: { tone: "danger", text: "That didn't work. Try again in a minute." },
-  sync_failed: { tone: "danger", text: "Sync didn't finish. Try again in a minute." },
+  settlement_saved: { tone: "success", text: "Settlement bank account saved." },
+  sync_failed: {
+    tone: "danger",
+    text: "Sync didn't finish. Try again in a minute.",
+  },
+}
+
+interface BankAccountOption {
+  readonly id: string
+  readonly label: string
+}
+
+/** Which bank account Razorpay pays settlements into. No client JS. */
+function SettlementBankPicker({
+  connection,
+  bankAccounts,
+}: {
+  connection: ConnectionSummary
+  bankAccounts: readonly BankAccountOption[]
+}) {
+  const id = `settlement-${connection.id}`
+  return (
+    <form
+      action={saveSettlementBank.bind(null, connection.id)}
+      className="flex flex-wrap items-end gap-2"
+    >
+      <div className="flex flex-col gap-1">
+        <label htmlFor={id} className="text-xs font-medium">
+          Settlements paid into
+        </label>
+        <select
+          // Remount after a save so the saved value shows.
+          key={connection.settlementBankAccountId ?? "default"}
+          id={id}
+          name="settlementBankAccountId"
+          defaultValue={connection.settlementBankAccountId ?? ""}
+          className="h-8 min-w-56 rounded-sm border border-input bg-surface px-2 text-sm"
+        >
+          <option value="">First bank account (default)</option>
+          {bankAccounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Button type="submit" size="sm">
+        Save
+      </Button>
+    </form>
+  )
 }
 
 function ConnectionRow({
   connection,
   canManage,
   canSync,
+  bankAccounts,
 }: {
   connection: ConnectionSummary
   canManage: boolean
   canSync: boolean
+  bankAccounts: readonly BankAccountOption[]
 }) {
   const status = STATUS[connection.status]
   const live = connection.status !== "disconnected"
@@ -100,12 +162,16 @@ function ConnectionRow({
     <li className="flex flex-col gap-2 border-t border-subtle pt-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{connection.label}</span>
-        {connection.mode === "test" ? <StatusChip tone="info">Test mode</StatusChip> : null}
+        {connection.mode === "test" ? (
+          <StatusChip tone="info">Test mode</StatusChip>
+        ) : null}
         <StatusChip tone={status.tone} dot>
           {status.label}
         </StatusChip>
         {connection.keyHint ? (
-          <span className="font-mono text-xs text-fg-secondary">{connection.keyHint}</span>
+          <span className="font-mono text-xs text-fg-secondary">
+            {connection.keyHint}
+          </span>
         ) : null}
       </div>
       <p className="text-xs text-fg-secondary">
@@ -114,16 +180,27 @@ function ConnectionRow({
           : "Not synced yet"}
         {connection.lastError ? ` · ${connection.lastError}` : null}
       </p>
+      {live && canManage && connection.provider.startsWith("razorpay") ? (
+        <SettlementBankPicker
+          connection={connection}
+          bankAccounts={bankAccounts}
+        />
+      ) : null}
       {canManage || canSync ? (
         <div className="flex flex-wrap gap-2">
-          {status.reconnect && canManage && connection.provider === "razorpay" ? (
+          {status.reconnect &&
+          canManage &&
+          connection.provider === "razorpay" ? (
             <form action={connectRazorpay}>
               <Button type="submit" size="sm" variant="primary">
                 <PlugIcon aria-hidden /> Reconnect
               </Button>
             </form>
           ) : null}
-          {live && !status.reconnect && canSync && connection.authType !== "file" ? (
+          {live &&
+          !status.reconnect &&
+          canSync &&
+          connection.authType !== "file" ? (
             <form action={syncNow.bind(null, connection.id)}>
               <Button type="submit" size="sm">
                 <RefreshCwIcon aria-hidden /> Sync now
@@ -149,12 +226,14 @@ function ConnectorCard({
   canManage,
   canSync,
   testMode,
+  bankAccounts,
 }: {
   connector: ConnectorInfo
   connections: readonly ConnectionSummary[]
   canManage: boolean
   canSync: boolean
   testMode: boolean
+  bankAccounts: readonly BankAccountOption[]
 }) {
   const comingSoon = connector.availability === "coming_soon"
   const active = connections.filter((c) => c.status !== "disconnected")
@@ -179,6 +258,7 @@ function ConnectorCard({
               connection={connection}
               canManage={canManage}
               canSync={canSync}
+              bankAccounts={bankAccounts}
             />
           ))}
         </ul>
@@ -191,7 +271,8 @@ function ConnectorCard({
               <PlugIcon aria-hidden /> Connect {connector.displayName}
             </Button>
             <p className="mt-2 text-xs text-fg-secondary">
-              You approve read-only access on Razorpay&apos;s own screen. We never see your password.
+              You approve read-only access on Razorpay&apos;s own screen. We
+              never see your password.
             </p>
           </form>
         ) : null
@@ -266,11 +347,35 @@ async function Gallery({ ctx }: { ctx: OrgContext }) {
   }
   const connectors = visibleConnectors(data.connectors, testMode)
 
+  // Bank accounts for the Razorpay settlement picker, only when it shows.
+  const needsBanks =
+    canManage &&
+    data.connections.some(
+      (c) => c.provider.startsWith("razorpay") && c.status !== "disconnected"
+    )
+  const bankAccounts: BankAccountOption[] = needsBanks
+    ? (await listLedgerAccounts(ctx, null, { bankOnly: true })).items.map(
+        (a) => ({
+          id: a.id,
+          label: [
+            a.code,
+            a.bankName,
+            a.name,
+            a.accountLast4 ? `··${a.accountLast4}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })
+      )
+    : []
+
   return (
     <div className="flex flex-col gap-8">
       {!data.consent.accepted && canManage ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-default bg-surface px-4 py-3 text-sm">
-          <span>Before connecting anything, review how Median handles your data.</span>
+          <span>
+            Before connecting anything, review how Median handles your data.
+          </span>
           <Link
             href="/settings/integrations/consent"
             className="font-medium underline underline-offset-2"
@@ -283,8 +388,15 @@ async function Gallery({ ctx }: { ctx: OrgContext }) {
         const inCategory = connectors.filter((c) => c.category === category.id)
         if (inCategory.length === 0) return null
         return (
-          <section key={category.id} aria-labelledby={`cat-${category.id}`} className="flex flex-col gap-3">
-            <h2 id={`cat-${category.id}`} className="text-sm font-semibold text-fg-secondary">
+          <section
+            key={category.id}
+            aria-labelledby={`cat-${category.id}`}
+            className="flex flex-col gap-3"
+          >
+            <h2
+              id={`cat-${category.id}`}
+              className="text-sm font-semibold text-fg-secondary"
+            >
               {category.label}
             </h2>
             <ul className="grid gap-3 md:grid-cols-2">
@@ -296,6 +408,7 @@ async function Gallery({ ctx }: { ctx: OrgContext }) {
                   canManage={canManage}
                   canSync={canSync}
                   testMode={testMode}
+                  bankAccounts={bankAccounts}
                 />
               ))}
             </ul>
