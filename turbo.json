@@ -17,6 +17,7 @@
         "CREDENTIALS_ENCRYPTION_KEY",
         "RAZORPAY_MODE",
         "CRON_SECRET",
+        "BLOB_READ_WRITE_TOKEN",
         "ANALYZE"
       ]
     },
