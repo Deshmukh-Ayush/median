@@ -2,14 +2,23 @@
 
 import { refresh } from "next/cache"
 import { redirect } from "next/navigation"
-import { z } from "zod"
-
-import { idSchema, isServiceError } from "@workspace/contracts"
+import {
+  createBankAccountInputSchema,
+  idSchema,
+  isServiceError,
+} from "@workspace/contracts"
 import type { BankMatchKind, ImportFile } from "@workspace/contracts"
 
 import { fieldErrorsOf, formValues } from "@/lib/form-state"
+import { can } from "@/lib/permissions"
 import { extractBankStatement } from "@/server/ai/extract-bank-statement"
-import { connect, importFile, listConnections } from "@/server/services"
+import {
+  connect,
+  createBankAccount,
+  getConsentStatus,
+  importFile,
+  listConnections,
+} from "@/server/services"
 
 import { getOrgContextOrRedirect } from "../../org-context"
 import { MAX_IMPORT_BYTES } from "../../settings/integrations/mode"
@@ -156,42 +165,45 @@ export interface AddBankAccountState {
   readonly values?: Readonly<Record<string, string>>
 }
 
-const addBankAccountSchema = z.object({
-  label: z
-    .string()
-    .trim()
-    .min(1, "Name the account, e.g. HDFC current a/c.")
-    .max(100, "Keep it under 100 characters."),
-  ledgerAccountId: idSchema,
-})
-
 /**
- * Connects a bank account for statement uploads: a label plus the bank
- * ledger account its lines post to. Owners and finance only (settings).
+ * Adds a bank account: a new sub-account of 1110 Bank in the books
+ * (createBankAccount), connected for statement uploads. Owners and finance
+ * only (settings). Consent is checked first, so a consent redirect never
+ * leaves a ledger account without its connection.
  */
 export async function addBankAccount(
   _previous: AddBankAccountState,
   formData: FormData
 ): Promise<AddBankAccountState> {
-  const raw = formValues(formData, ["label", "ledgerAccountId"])
-  const parsed = addBankAccountSchema.safeParse(raw)
+  const raw = formValues(formData, ["name", "bankName", "last4"])
+  const parsed = createBankAccountInputSchema.safeParse(raw)
   if (!parsed.success) {
     return { fieldErrors: fieldErrorsOf(parsed.error), values: raw }
   }
   const ctx = await getOrgContextOrRedirect()
+  if (!can(ctx.role, { resource: "settings", action: "update" })) {
+    return {
+      error: "Only an owner or finance member can add a bank account.",
+      values: raw,
+    }
+  }
+  if (!(await getConsentStatus(ctx)).accepted) {
+    redirect(
+      `/settings/integrations/consent?next=${encodeURIComponent(RETURN_TO)}`
+    )
+  }
+  const { name, bankName, last4 } = parsed.data
   try {
-    await connect(ctx, "bank-statement", parsed.data)
+    const account = await createBankAccount(ctx, parsed.data)
+    await connect(ctx, "bank-statement", {
+      label: `${bankName} ${name} ··${last4}`.slice(0, 100),
+      ledgerAccountId: account.id,
+    })
   } catch (error) {
     if (isServiceError(error) && error.code === "CONSENT_REQUIRED") {
       redirect(
         `/settings/integrations/consent?next=${encodeURIComponent(RETURN_TO)}`
       )
-    }
-    if (isServiceError(error) && error.code === "FORBIDDEN") {
-      return {
-        error: "Only an owner or finance member can add a bank account.",
-        values: raw,
-      }
     }
     if (isServiceError(error)) return { error: error.message, values: raw }
     throw error

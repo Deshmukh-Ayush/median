@@ -13,6 +13,9 @@ export default defineConfig({
       ),
     },
   },
+  // tsconfig has jsx: "preserve" for Next; tests (the PDF documents) need
+  // the JSX compiled.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     include: ["src/**/*.test.ts"],
     environment: "node",
