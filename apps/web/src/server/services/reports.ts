@@ -95,6 +95,7 @@ export const listEntriesFiltersSchema = z.object({
       "inbox",
       "reversal",
       "opening_balance",
+      "credit_note",
     ])
     .optional(),
   search: z.string().trim().max(100).optional(),

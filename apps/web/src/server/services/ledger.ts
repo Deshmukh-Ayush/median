@@ -50,6 +50,7 @@ export const postEntryInputSchema = z.object({
     "inbox",
     "reversal",
     "opening_balance",
+    "credit_note",
   ]),
   sourceId: z.string().max(100).nullish(),
   reversesEntryId: idSchema.nullish(),

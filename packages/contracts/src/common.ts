@@ -115,6 +115,7 @@ export type JournalSourceType =
   | "inbox"
   | "reversal"
   | "opening_balance"
+  | "credit_note"
 
 export interface JournalLineView {
   readonly id: string

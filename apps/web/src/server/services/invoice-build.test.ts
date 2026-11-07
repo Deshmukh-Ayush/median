@@ -1,5 +1,5 @@
 import { ServiceError } from "@workspace/contracts"
-import { paise } from "@workspace/ledger"
+import { computeDocument, paise } from "@workspace/ledger"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -7,6 +7,8 @@ import {
   documentNumber,
   invoiceStatusFor,
   outstandingOf,
+  planCreditLines,
+  planRefundCredit,
   receiptAmount,
   salesEntryLines,
 } from "./invoice-build"
@@ -304,5 +306,190 @@ describe("outstanding and status", () => {
         "acme"
       )
     ).toBe(1_18_000_00n)
+  })
+})
+
+describe("credit notes: planCreditLines", () => {
+  const inv = [
+    {
+      id: "l1",
+      lineNo: 1,
+      description: "Seats",
+      hsnSac: "998314",
+      quantityMilli: 10_000n,
+      unitPrice: paise(1_000_00n),
+      gstRateBps: 1800,
+      revenueAccountId: "services",
+      taxable: paise(10_000_00n),
+      creditedTaxable: paise(2_000_00n),
+    },
+  ]
+
+  it("credits a returned quantity at the invoice price, keeping the line's account", () => {
+    expect(
+      planCreditLines(inv, [{ invoiceLineId: "l1", quantityMilli: 3000n }])
+    ).toEqual([
+      expect.objectContaining({
+        invoiceLineId: "l1",
+        quantityMilli: 3000n,
+        unitPrice: 1_000_00n,
+        gstRateBps: 1800,
+        revenueAccountId: "services",
+      }),
+    ])
+  })
+
+  it("credits a value as one unit of that value", () => {
+    expect(
+      planCreditLines(inv, [
+        { invoiceLineId: "l1", taxable: paise(500_00n) },
+      ])[0]
+    ).toMatchObject({
+      quantityMilli: 1000n,
+      unitPrice: 500_00n,
+    })
+  })
+
+  it("refuses more than what's left on the line, across requests", () => {
+    // ₹8,000 left: 5 seats + ₹3,000.01 is too much.
+    expect(() =>
+      planCreditLines(inv, [
+        { invoiceLineId: "l1", quantityMilli: 5000n },
+        { invoiceLineId: "l1", taxable: paise(3_000_01n) },
+      ])
+    ).toThrow(/Line 1 has only ₹8,000\.00 left/)
+    expect(() =>
+      planCreditLines(inv, [{ invoiceLineId: "nope", quantityMilli: 1000n }])
+    ).toThrow(ServiceError)
+  })
+})
+
+describe("credit notes: planRefundCredit (rule 10)", () => {
+  const supply = { intrastate: true, chargesGst: true }
+  const line = (id: string, taxable: bigint, rate = 1800, credited = 0n) => ({
+    id,
+    lineNo: Number(id.slice(1)),
+    description: id,
+    hsnSac: "998314",
+    quantityMilli: 1000n,
+    unitPrice: paise(taxable),
+    gstRateBps: rate,
+    revenueAccountId: null,
+    taxable: paise(taxable),
+    creditedTaxable: paise(credited),
+  })
+
+  it("a refund of everything left credits every line in full", () => {
+    const plan = planRefundCredit(
+      [line("l1", 1_000_00n), line("l2", 500_00n, 500)],
+      paise(1_705_00n),
+      supply
+    )
+    expect(plan).toEqual({
+      ok: true,
+      requests: [
+        { invoiceLineId: "l1", taxable: 1_000_00n },
+        { invoiceLineId: "l2", taxable: 500_00n },
+      ],
+    })
+  })
+
+  it("a partial refund at one rate splits by what's left on each line", () => {
+    // ₹590 at 18% → taxable 500, split 3:1 by what's left (1500 vs 500).
+    const plan = planRefundCredit(
+      [line("l1", 2_000_00n, 1800, 500_00n), line("l2", 500_00n)],
+      paise(590_00n),
+      supply
+    )
+    expect(plan).toEqual({
+      ok: true,
+      requests: [
+        { invoiceLineId: "l1", taxable: 375_00n },
+        { invoiceLineId: "l2", taxable: 125_00n },
+      ],
+    })
+    if (!plan.ok) return
+    // The credit note then hits the refund exactly.
+    const planned = planCreditLines(
+      [line("l1", 2_000_00n, 1800, 500_00n), line("l2", 500_00n)],
+      plan.requests
+    )
+    const { totals } = computeDocument(
+      planned.map((l) => ({
+        quantityMilli: l.quantityMilli,
+        unitPrice: l.unitPrice,
+        rateBps: l.gstRateBps,
+      })),
+      supply,
+      { exactTotal: paise(590_00n) }
+    )
+    expect(totals).toMatchObject({
+      taxable: 500_00n,
+      cgst: 45_00n,
+      sgst: 45_00n,
+      roundOff: 0n,
+      total: 590_00n,
+    })
+  })
+
+  it("an awkward refund still lands exactly through Round-off", () => {
+    const plan = planRefundCredit(
+      [line("l1", 1_000_00n)],
+      paise(333_33n),
+      supply
+    )
+    if (!plan.ok) throw new Error(plan.reason)
+    const planned = planCreditLines([line("l1", 1_000_00n)], plan.requests)
+    const { totals } = computeDocument(
+      planned.map((l) => ({
+        quantityMilli: l.quantityMilli,
+        unitPrice: l.unitPrice,
+        rateBps: l.gstRateBps,
+      })),
+      supply,
+      { exactTotal: paise(333_33n) }
+    )
+    expect(totals.total).toBe(333_33n)
+    expect(totals.taxable + totals.cgst + totals.sgst + totals.roundOff).toBe(
+      333_33n
+    )
+  })
+
+  it("no GST charged: the refund is all taxable value", () => {
+    const plan = planRefundCredit([line("l1", 1_000_00n)], paise(400_00n), {
+      intrastate: false,
+      chargesGst: false,
+    })
+    expect(plan).toEqual({
+      ok: true,
+      requests: [{ invoiceLineId: "l1", taxable: 400_00n }],
+    })
+  })
+
+  it("won't guess across GST rates, over-refunds or a fully credited invoice", () => {
+    expect(
+      planRefundCredit(
+        [line("l1", 1_000_00n), line("l2", 500_00n, 500)],
+        paise(100_00n),
+        supply
+      )
+    ).toEqual({
+      ok: false,
+      reason:
+        "The invoice has lines at different GST rates: choose which lines the refund is for.",
+    })
+    expect(
+      planRefundCredit([line("l1", 1_000_00n)], paise(1_181_00n), supply)
+    ).toMatchObject({ ok: false })
+    expect(
+      planRefundCredit(
+        [line("l1", 1_000_00n, 1800, 1_000_00n)],
+        paise(1_00n),
+        supply
+      )
+    ).toEqual({
+      ok: false,
+      reason: "The invoice has already been fully credited.",
+    })
   })
 })
