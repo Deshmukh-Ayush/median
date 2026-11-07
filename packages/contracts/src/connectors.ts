@@ -5,7 +5,7 @@
 import { z } from "zod"
 
 import type { BankLineMatched, BankLineUnmatched } from "./bank"
-import { idSchema, moneySchema } from "./common"
+import { gstStateCodeSchema, idSchema, moneySchema } from "./common"
 import type { IsoTimestamp } from "./common"
 
 export type ConnectorAuthType = "api_key" | "oauth" | "file"
@@ -54,6 +54,13 @@ export interface ConnectionSummary {
   readonly mode: "live" | "test" | null
   /** Bank connections: the ledger account their lines post to. */
   readonly ledgerAccountId: string | null
+  /** Razorpay: bank account settlements are paid into; null → first bank account. */
+  readonly settlementBankAccountId: string | null
+  /**
+   * Razorpay: GST state the gateway bills fees from (CGST+SGST vs IGST on
+   * fee input credit); null → "29" Karnataka. For the CA to verify.
+   */
+  readonly feeGstStateCode: string | null
   readonly status: ConnectionStatus
   readonly lastSyncedAt: IsoTimestamp | null
   /** Safe to show the user. */
@@ -104,6 +111,15 @@ export const sourceRecordSchema = z
   })
 export type SourceRecordInput = z.input<typeof sourceRecordSchema>
 export type SourceRecord = z.output<typeof sourceRecordSchema>
+
+/** Settings on a connection; omitted fields stay as they are, null clears. */
+export const updateConnectionSettingsInputSchema = z.object({
+  settlementBankAccountId: idSchema.nullable().optional(),
+  feeGstStateCode: gstStateCodeSchema.nullable().optional(),
+})
+export type UpdateConnectionSettingsInput = z.input<
+  typeof updateConnectionSettingsInputSchema
+>
 
 /** Razorpay API-key credentials: test mode only (live uses OAuth). */
 export const razorpayKeyCredentialsSchema = z.object({

@@ -588,6 +588,39 @@ export async function postNewRecords(
   const ctx = await loadRuleContext(orgId)
   const tally = newTally()
 
+  // The connection's settings: settlement bank and Razorpay fee GST state.
+  const db0 = getDb()
+  const [[connection], [firstBank]] = await db0.batch([
+    db0
+      .select({
+        ledgerAccountId: connections.ledgerAccountId,
+        settlementBankAccountId: connections.settlementBankAccountId,
+        feeGstStateCode: connections.feeGstStateCode,
+      })
+      .from(connections)
+      .where(
+        and(
+          eq(connections.organizationId, orgId),
+          eq(connections.id, connectionId)
+        )
+      )
+      .limit(1),
+    db0
+      .select({ id: ledgerAccounts.id })
+      .from(ledgerAccounts)
+      .where(
+        and(
+          eq(ledgerAccounts.organizationId, orgId),
+          eq(ledgerAccounts.isBank, true)
+        )
+      )
+      .orderBy(asc(ledgerAccounts.code))
+      .limit(1),
+  ])
+  // Settlements debit the chosen bank, else the first bank account.
+  const settlementBank =
+    connection?.settlementBankAccountId ?? firstBank?.id ?? ctx.accounts.bank
+
   // Phase 1: payments and fees.
   const payments = await newRecords(orgId, connectionId, ["payment", "fee"])
   const invoiceNumbers = [
@@ -602,7 +635,10 @@ export async function postNewRecords(
   for (const record of payments) {
     let decision: Decision
     if (record.kind === "fee") {
-      decision = feeRule(record, ctx)
+      decision = feeRule(record, {
+        ...ctx,
+        feeGstStateCode: connection?.feeGstStateCode ?? null,
+      })
     } else {
       const key = paymentMappingKey(record.payload)
       const number = paymentInvoiceNumber(record.payload)
@@ -765,7 +801,10 @@ export async function postNewRecords(
       await decideAndApply(
         orgId,
         record,
-        settlementRule(record, { accounts: ctx.accounts, linked }),
+        settlementRule(record, {
+          accounts: { ...ctx.accounts, bank: settlementBank },
+          linked,
+        }),
         source,
         tally
       )
@@ -776,16 +815,6 @@ export async function postNewRecords(
   const bankLines = await newRecords(orgId, connectionId, ["bank_line"])
   if (bankLines.length > 0) {
     const db = getDb()
-    const [connection] = await db
-      .select({ ledgerAccountId: connections.ledgerAccountId })
-      .from(connections)
-      .where(
-        and(
-          eq(connections.organizationId, orgId),
-          eq(connections.id, connectionId)
-        )
-      )
-      .limit(1)
     const bankAccountId = connection?.ledgerAccountId ?? ctx.accounts.bank
     const dates = bankLines.map((l) => istDateOf(l.occurredAt)).sort()
     const from = new Date(`${dates[0] ?? "1970-01-01"}T00:00:00+05:30`)
@@ -850,12 +879,34 @@ export async function postNewRecords(
           .limit(5_000),
       ])
     const taken = new Set(matchedSettlements.map((s) => s.settlementId))
+    // Which bank each posted settlement went to (its entry's debit line).
+    const settlementEntryIds = settlementRows.flatMap((s) =>
+      s.entryId ? [s.entryId] : []
+    )
+    const debitRows =
+      settlementEntryIds.length === 0
+        ? []
+        : await db
+            .select({
+              entryId: journalLines.entryId,
+              accountId: journalLines.accountId,
+            })
+            .from(journalLines)
+            .where(
+              and(
+                eq(journalLines.organizationId, orgId),
+                inArray(journalLines.entryId, settlementEntryIds),
+                sql`${journalLines.debitPaise} > 0`
+              )
+            )
+    const settledTo = new Map(debitRows.map((r) => [r.entryId, r.accountId]))
     const settlementsAvailable = settlementRows
       .filter((s) => s.externalId !== null && !taken.has(s.externalId))
       .map((s) => ({
         externalId: s.externalId ?? "",
         status: s.status,
         entryId: s.entryId,
+        bankAccountId: s.entryId ? (settledTo.get(s.entryId) ?? null) : null,
         amountPaise: s.amountPaise,
         date: istDateOf(s.occurredAt),
         utr: s.utr,
@@ -920,6 +971,38 @@ export async function postNewRecords(
 
 // ---------------------------------------------------------------------------
 // Running a sync
+
+/** Error name and message chain, for server logs. Never includes credentials. */
+function describeError(error: unknown): string {
+  const parts: string[] = []
+  let current: unknown = error
+  for (let depth = 0; current !== undefined && depth < 4; depth++) {
+    if (current instanceof Error) {
+      parts.push(`${current.name}: ${current.message}`)
+      current = current.cause
+    } else {
+      parts.push(typeof current === "string" ? current : "non-Error thrown")
+      break
+    }
+  }
+  return parts.join(" <- ")
+}
+
+/**
+ * Server-side log of why a sync failed; users only see the safe message on
+ * the connection. Credentials are decrypted inside Secret and never appear
+ * in errors.
+ */
+function logSyncFailure(
+  orgId: string,
+  connectionId: string,
+  provider: string,
+  error: unknown
+): void {
+  console.error(
+    `[sync] ${provider} connection ${connectionId} (org ${orgId}) failed: ${describeError(error)}`
+  )
+}
 
 export interface RunSyncResult
   extends Omit<StoreResult, "insertedIds">, Omit<PostResult, "outcomes"> {
@@ -1060,6 +1143,7 @@ export async function runSync(
       lastSyncedAt,
     }
   } catch (error) {
+    logSyncFailure(orgId, connectionId, connection.provider, error)
     if (error instanceof ConnectorAuthError) {
       await finish(error.status, error.message)
       throw new ServiceError("INTEGRATION", error.message)

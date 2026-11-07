@@ -42,6 +42,8 @@ const account = (
   parentId: null,
   isSystem: true,
   isBank: code === "1110",
+  bankName: null,
+  accountLast4: null,
 })
 
 export const STUB_ACCOUNTS = {

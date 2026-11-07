@@ -188,6 +188,19 @@ describe("gateway fees (rule 9)", () => {
     payload: { payment_id: "pay_1", fee: 2_360, tax: 360 },
   })
 
+  it("uses the connection's fee GST state, defaulting to Karnataka", () => {
+    // A Maharashtra org whose Razorpay bills from Maharashtra: CGST+SGST.
+    expect(
+      lines(feeRule(fee, { accounts, org: maharashtra, feeGstStateCode: "27" }))
+    ).toMatchObject({ "Dr in_cgst": 180n, "Dr in_sgst": 180n })
+    expect(
+      lines(feeRule(fee, { accounts, org: karnataka, feeGstStateCode: "27" }))
+    ).toMatchObject({ "Dr in_igst": 360n })
+    expect(
+      lines(feeRule(fee, { accounts, org: karnataka, feeGstStateCode: null }))
+    ).toMatchObject({ "Dr in_cgst": 180n })
+  })
+
   it("books Razorpay's fee and tax as returned, never computing 18%", () => {
     expect(lines(feeRule(fee, { accounts, org: karnataka }))).toEqual({
       "Dr gateway": 2_000n,
@@ -423,6 +436,7 @@ describe("bank lines", () => {
     externalId: "setl_1",
     status: "posted" as const,
     entryId: "e_setl",
+    bankAccountId: null as string | null,
     amountPaise: 115_640n,
     date: "2025-09-21",
     utr: "UTR1",
@@ -488,6 +502,27 @@ describe("bank lines", () => {
         bankLineRule(line("inflow", 115_640n), { ...base, match }) as Decision
       )
     ).toEqual({ "Dr hdfc": 115_640n, "Cr bank": 115_640n })
+    // Settled into ICICI (the connection's settlement bank): link there,
+    // transfer from it elsewhere.
+    const icici = {
+      kind: "settlement" as const,
+      settlement: { ...settlement, bankAccountId: "icici" },
+    }
+    expect(
+      bankLineRule(line("inflow", 115_640n), {
+        ...base,
+        bankAccountId: "icici",
+        match: icici,
+      })
+    ).toEqual({ action: "link", entryId: "e_setl" })
+    expect(
+      lines(
+        bankLineRule(line("inflow", 115_640n), {
+          ...base,
+          match: icici,
+        }) as Decision
+      )
+    ).toEqual({ "Dr hdfc": 115_640n, "Cr icici": 115_640n })
   })
 
   it("matches invoice receipts by number, amount or TDS (rule 11)", () => {

@@ -71,6 +71,13 @@
       "when": 1793995825154,
       "tag": "0009_ledger_accounts_is_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793998505250,
+      "tag": "0010_bank_accounts_connection_settings",
+      "breakpoints": true
     }
   ]
 }

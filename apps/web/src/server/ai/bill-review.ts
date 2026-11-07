@@ -165,8 +165,7 @@ export function reviewBill(
 
   // --- Dates
   const billDateValid = isoDateSchema.safeParse(bill.billDate).success
-  if (!billDateValid)
-    review("billDate", "not a valid date")
+  if (!billDateValid) review("billDate", "not a valid date")
   else if (bill.billDate > today) review("billDate", "date is in the future")
   if (bill.dueDate === null) missing("dueDate")
   else if (!isoDateSchema.safeParse(bill.dueDate).success)
