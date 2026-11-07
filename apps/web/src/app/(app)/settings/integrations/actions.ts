@@ -20,6 +20,7 @@ import {
   recordConsent,
   startRazorpayOAuth,
   syncConnection,
+  updateConnectionSettings,
 } from "@/server/services"
 
 import { getOrgContextOrRedirect } from "../../org-context"
@@ -110,7 +111,8 @@ export async function importConnectorFile(
   if (file.size > MAX_IMPORT_BYTES) {
     return { error: "That file is over 4 MB. Split it by month and retry." }
   }
-  const isCsv = file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv")
+  const isCsv =
+    file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv")
   if (!isCsv) return { error: "Upload the CSV export." }
 
   const ctx = await getOrgContextOrRedirect()
@@ -157,7 +159,9 @@ export async function syncNow(connectionId: string): Promise<void> {
   refresh()
 }
 
-export async function disconnectConnection(connectionId: string): Promise<void> {
+export async function disconnectConnection(
+  connectionId: string
+): Promise<void> {
   const id = idSchema.parse(connectionId)
   const ctx = await getOrgContextOrRedirect()
   try {
@@ -167,6 +171,32 @@ export async function disconnectConnection(connectionId: string): Promise<void> 
     throw error
   }
   refresh()
+}
+
+/**
+ * Sets the bank account a Razorpay connection's settlements are paid into.
+ * An empty choice resets it to the default (the first bank account).
+ */
+export async function saveSettlementBank(
+  connectionId: string,
+  formData: FormData
+): Promise<void> {
+  const id = idSchema.parse(connectionId)
+  const choice = formData.get("settlementBankAccountId")
+  const parsed = idSchema
+    .nullable()
+    .safeParse(typeof choice === "string" && choice !== "" ? choice : null)
+  if (!parsed.success) redirect(`${INTEGRATIONS}?status=failed`)
+  const ctx = await getOrgContextOrRedirect()
+  try {
+    await updateConnectionSettings(ctx, id, {
+      settlementBankAccountId: parsed.data,
+    })
+  } catch (error) {
+    if (isServiceError(error)) redirect(`${INTEGRATIONS}?status=failed`)
+    throw error
+  }
+  redirect(`${INTEGRATIONS}?status=settlement_saved`)
 }
 
 /** Records consent for the current version, then returns to `next`. */
