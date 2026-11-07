@@ -366,6 +366,7 @@ export async function createInvoice(
         quantityMilli: l.quantityMilli,
         unitPricePaise: l.unitPrice,
         gstRateBps: l.gstRateBps,
+        revenueAccountId: l.revenueAccountId ?? null,
         taxablePaise: l.taxable,
         cgstPaise: l.cgst,
         sgstPaise: l.sgst,

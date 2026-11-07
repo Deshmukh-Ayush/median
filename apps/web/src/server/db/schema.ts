@@ -925,6 +925,8 @@ export const invoiceLines = pgTable(
     unitPricePaise: paise().notNull(),
     /** GST rate in basis points (18% = 1800). */
     gstRateBps: integer().notNull(),
+    /** Income account credited; null → the org's default revenue account. */
+    revenueAccountId: uuid(),
     taxablePaise: paise().notNull(),
     cgstPaise: paise().notNull(),
     sgstPaise: paise().notNull(),
@@ -942,6 +944,11 @@ export const invoiceLines = pgTable(
       name: "invoice_lines_invoice_fk",
       columns: [t.organizationId, t.invoiceId],
       foreignColumns: [invoices.organizationId, invoices.id],
+    }),
+    foreignKey({
+      name: "invoice_lines_revenue_account_fk",
+      columns: [t.organizationId, t.revenueAccountId],
+      foreignColumns: [ledgerAccounts.organizationId, ledgerAccounts.id],
     }),
     check(
       "invoice_lines_amounts_check",
