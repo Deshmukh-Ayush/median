@@ -67,6 +67,8 @@ export type Decision =
       readonly reversesEntryId?: string | null
       /** Line dimensions to store, by line index (e.g. the GST rate). */
       readonly dimensions?: Readonly<Record<number, Record<string, string>>>
+      /** The invoice this receipt pays: applied when the entry posts. */
+      readonly invoiceId?: string | null
     }
   | {
       readonly action: "inbox"
@@ -76,6 +78,8 @@ export type Decision =
       readonly confidence: number
       readonly gst: InboxGstSplit | null
       readonly tds: InboxTds | null
+      /** The invoice this receipt pays: applied when it's approved. */
+      readonly invoiceId?: string | null
     }
   /** Not final yet (e.g. a pending refund); looked at again next sync. */
   | { readonly action: "wait"; readonly reason: string }
@@ -170,6 +174,8 @@ export interface OpenInvoice {
   readonly partyId: string
   readonly total: Money
   readonly taxable: Money
+  /** total − paid − credited. Receipts are matched against this. */
+  readonly outstanding: Money
 }
 
 export function paymentRule(
@@ -566,9 +572,11 @@ export function receiptRule(
 ): Decision {
   const { accounts } = ctx
   const narration = `Receipt against ${invoice.number} (${ctx.reference})`
-  if (received === invoice.total) {
+  const invoiceId = invoice.id
+  if (received === invoice.outstanding) {
     return {
       action: "post",
+      invoiceId,
       entry: {
         entryDate: ctx.entryDate,
         narration,
@@ -579,11 +587,15 @@ export function receiptRule(
       },
     }
   }
-  const tds = matchTdsReceipt({
-    received,
-    invoiceTotal: invoice.total,
-    taxable: invoice.taxable,
-  })
+  // TDS is deducted on the whole invoice, so only an untouched one fits.
+  const tds =
+    invoice.outstanding === invoice.total
+      ? matchTdsReceipt({
+          received,
+          invoiceTotal: invoice.total,
+          taxable: invoice.taxable,
+        })
+      : null
   if (tds) {
     const section = TDS_SECTION_FOR_RATE[tds.rateBps] ?? "194J"
     return {
@@ -607,6 +619,7 @@ export function receiptRule(
       confidence: 0.75,
       gst: null,
       tds: { section, rateBps: tds.rateBps, amount: tds.tds },
+      invoiceId,
     }
   }
   return {
@@ -620,10 +633,11 @@ export function receiptRule(
         cr(accounts.receivables, received, null, invoice.partyId),
       ],
     },
-    reason: `${formatInr(received)} doesn't match ${invoice.number} (${formatInr(invoice.total)}), even after TDS at 1%, 2% or 10%.`,
+    reason: `${formatInr(received)} doesn't match ${invoice.number} (${formatInr(invoice.outstanding)} outstanding), even after TDS at 1%, 2% or 10%.`,
     confidence: 0.4,
     gst: null,
     tds: null,
+    invoiceId,
   }
 }
 
@@ -815,12 +829,13 @@ export function findBankMatch(
     const received = paise(line.amountPaise)
     const byAmount = eligible.filter(
       (i) =>
-        i.total === received ||
-        matchTdsReceipt({
-          received,
-          invoiceTotal: i.total,
-          taxable: i.taxable,
-        }) !== null
+        i.outstanding === received ||
+        (i.outstanding === i.total &&
+          matchTdsReceipt({
+            received,
+            invoiceTotal: i.total,
+            taxable: i.taxable,
+          }) !== null)
     )
     const [onlyA] = byAmount
     if (byAmount.length === 1 && onlyA)
