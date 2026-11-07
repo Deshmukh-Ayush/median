@@ -78,6 +78,34 @@
       "when": 1793998505250,
       "tag": "0010_bank_accounts_connection_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794049387135,
+      "tag": "0011_invoice_credits_and_receipt_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794050509425,
+      "tag": "0012_invoice_line_revenue_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794050708164,
+      "tag": "0013_credit_note_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794052060762,
+      "tag": "0014_inbox_review_flags",
+      "breakpoints": true
     }
   ]
 }

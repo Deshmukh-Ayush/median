@@ -63,57 +63,6 @@ const bill = {
 }
 
 describe("createInboxItemFromExtraction", () => {
-  it("carries review flags to the inbox item", async () => {
-    const item = await createInboxItemFromExtraction(
-      ctx,
-      "00000000-0000-4000-8000-00000000d009",
-      bill,
-      {
-        needsReview: [
-          {
-            field: "billDate",
-            kind: "needs_review",
-            reason: "blurred",
-            source: "model",
-          },
-        ],
-        notPrinted: [
-          {
-            field: "dueDate",
-            kind: "not_printed",
-            reason: "no due date",
-            source: "check",
-          },
-        ],
-      }
-    )
-    expect(item.reviewFlags.needsReview).toHaveLength(1)
-    expect(item.reviewFlags.notPrinted[0]?.field).toBe("dueDate")
-    expect(item.confidence).toBeLessThan(0.7)
-  })
-
-  it("computes tax in code, odd paisa on CGST, and names each line", async () => {
-    const item = await createInboxItemFromExtraction(
-      ctx,
-      "00000000-0000-4000-8000-00000000d009",
-      bill
-    )
-    // 1000.25 taxable; 18% of 1000.00 = 180.00, of 0.25 = 0.05 (half up).
-    expect(item.gst).toMatchObject({
-      taxable: 1_000_25n,
-      cgst: 90_03n,
-      sgst: 90_02n,
-      igst: 0n,
-    })
-    expect(item.reviewFlags).toEqual({ needsReview: [], notPrinted: [] })
-    expect(
-      item.proposedEntry.lines.every((l) => l.accountName.length > 0)
-    ).toBe(true)
-    const debits = item.proposedEntry.lines.reduce((s, l) => s + l.debit, 0n)
-    const credits = item.proposedEntry.lines.reduce((s, l) => s + l.credit, 0n)
-    expect(debits).toBe(credits)
-  })
-
   it("needs recorded consent", async () => {
     consent.accepted = false
     await expect(

@@ -67,6 +67,8 @@ export type Decision =
       readonly reversesEntryId?: string | null
       /** Line dimensions to store, by line index (e.g. the GST rate). */
       readonly dimensions?: Readonly<Record<number, Record<string, string>>>
+      /** The invoice this receipt pays: applied when the entry posts. */
+      readonly invoiceId?: string | null
     }
   | {
       readonly action: "inbox"
@@ -76,6 +78,20 @@ export type Decision =
       readonly confidence: number
       readonly gst: InboxGstSplit | null
       readonly tds: InboxTds | null
+      /** The invoice this receipt pays: applied when it's approved. */
+      readonly invoiceId?: string | null
+    }
+  /**
+   * Rule 10: a refund of an invoiced sale. Book a credit note against the
+   * invoice, then the payout `entry` (Dr receivable, Cr clearing). If that
+   * can't be done safely, `entry` goes to the inbox with `reason`.
+   */
+  | {
+      readonly action: "credit_note"
+      readonly invoiceNumber: string
+      readonly reference: string
+      readonly entry: ProposedEntry
+      readonly reason: string
     }
   /** Not final yet (e.g. a pending refund); looked at again next sync. */
   | { readonly action: "wait"; readonly reason: string }
@@ -170,6 +186,8 @@ export interface OpenInvoice {
   readonly partyId: string
   readonly total: Money
   readonly taxable: Money
+  /** total − paid − credited. Receipts are matched against this. */
+  readonly outstanding: Money
 }
 
 export function paymentRule(
@@ -368,8 +386,8 @@ export interface OriginalPayment {
     readonly credit: bigint
     readonly dimensions: Readonly<Record<string, string>> | null
   }[]
-  /** Paid one of our invoices: its refund needs a credit note. */
-  readonly invoiced: boolean
+  /** Our invoice number the payment quoted (notes.invoice_number). */
+  readonly invoiceNumber: string | null
 }
 
 export function refundRule(
@@ -418,16 +436,33 @@ export function refundRule(
     return toInbox(
       `Refund ${ref}: payment ${original.externalId} is still in the inbox. Approve it first.`
     )
-  if (original.invoiced)
-    return toInbox(
-      `Refund ${ref} is for an invoiced sale: it needs a credit note against the invoice (rule 10).`,
-      0.6
-    )
   if (ctx.refundedBefore + record.amountPaise > original.amountPaise)
     return toInbox(
       `Refund ${ref} is more than what's left of payment ${original.externalId}.`,
       0.3
     )
+
+  // Rule 10: the payment settled one of our invoices (it credited the
+  // customer's receivable), so the refund is a credit note against it.
+  const receipt = original.lines.find(
+    (l) => l.accountId === accounts.receivables && l.credit > 0n && l.partyId
+  )
+  if (original.invoiceNumber && receipt?.partyId) {
+    return {
+      action: "credit_note",
+      invoiceNumber: original.invoiceNumber,
+      reference: ref,
+      entry: {
+        entryDate,
+        narration,
+        lines: [
+          dr(accounts.receivables, amount, null, receipt.partyId),
+          cr(accounts.clearing, amount),
+        ],
+      },
+      reason: `Refund ${ref} is for invoice ${original.invoiceNumber}: create a credit note for it, then approve this payout (rule 10).`,
+    }
+  }
 
   // Full refund with nothing refunded before: reverse the payment entry.
   if (
@@ -566,9 +601,11 @@ export function receiptRule(
 ): Decision {
   const { accounts } = ctx
   const narration = `Receipt against ${invoice.number} (${ctx.reference})`
-  if (received === invoice.total) {
+  const invoiceId = invoice.id
+  if (received === invoice.outstanding) {
     return {
       action: "post",
+      invoiceId,
       entry: {
         entryDate: ctx.entryDate,
         narration,
@@ -579,11 +616,15 @@ export function receiptRule(
       },
     }
   }
-  const tds = matchTdsReceipt({
-    received,
-    invoiceTotal: invoice.total,
-    taxable: invoice.taxable,
-  })
+  // TDS is deducted on the whole invoice, so only an untouched one fits.
+  const tds =
+    invoice.outstanding === invoice.total
+      ? matchTdsReceipt({
+          received,
+          invoiceTotal: invoice.total,
+          taxable: invoice.taxable,
+        })
+      : null
   if (tds) {
     const section = TDS_SECTION_FOR_RATE[tds.rateBps] ?? "194J"
     return {
@@ -607,6 +648,7 @@ export function receiptRule(
       confidence: 0.75,
       gst: null,
       tds: { section, rateBps: tds.rateBps, amount: tds.tds },
+      invoiceId,
     }
   }
   return {
@@ -620,10 +662,11 @@ export function receiptRule(
         cr(accounts.receivables, received, null, invoice.partyId),
       ],
     },
-    reason: `${formatInr(received)} doesn't match ${invoice.number} (${formatInr(invoice.total)}), even after TDS at 1%, 2% or 10%.`,
+    reason: `${formatInr(received)} doesn't match ${invoice.number} (${formatInr(invoice.outstanding)} outstanding), even after TDS at 1%, 2% or 10%.`,
     confidence: 0.4,
     gst: null,
     tds: null,
+    invoiceId,
   }
 }
 
@@ -815,12 +858,13 @@ export function findBankMatch(
     const received = paise(line.amountPaise)
     const byAmount = eligible.filter(
       (i) =>
-        i.total === received ||
-        matchTdsReceipt({
-          received,
-          invoiceTotal: i.total,
-          taxable: i.taxable,
-        }) !== null
+        i.outstanding === received ||
+        (i.outstanding === i.total &&
+          matchTdsReceipt({
+            received,
+            invoiceTotal: i.total,
+            taxable: i.taxable,
+          }) !== null)
     )
     const [onlyA] = byAmount
     if (byAmount.length === 1 && onlyA)

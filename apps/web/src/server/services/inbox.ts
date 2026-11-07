@@ -4,6 +4,7 @@ import {
   BULK_APPROVE_MAX,
   ServiceError,
   TDS_SECTIONS,
+  billReviewSchema,
   bulkApproveInboxItemsInputSchema,
   idSchema,
   inboxEditsSchema,
@@ -15,6 +16,7 @@ import {
 } from "@workspace/contracts"
 import type {
   ApproveInboxItemResult,
+  BillReview,
   BulkApproveResult,
   InboxEdits,
   InboxGstSplit,
@@ -43,6 +45,7 @@ import { assertCan } from "./context"
 import { documentPath } from "./documents"
 import { applyInboxEdits } from "./inbox-edits"
 import type { TaxAccounts } from "./inbox-edits"
+import { applyInvoiceReceipt } from "./invoices"
 import { postEntry } from "./ledger"
 import { decodeCursor, encodeCursor } from "./pagination"
 import { encodeProposedEntry, toProposedEntryView } from "./proposed-entry"
@@ -51,7 +54,7 @@ import { encodeProposedEntry, toProposedEntryView } from "./proposed-entry"
 // confidence waits here. Approving posts through postEntry (rules 1–4);
 // nothing reaches the ledger without it.
 
-const noFlags = { needsReview: [], notPrinted: [] }
+const noFlags: BillReview = { needsReview: [], notPrinted: [] }
 
 const gstJsonSchema = z
   .object({
@@ -82,10 +85,12 @@ const itemColumns = {
   proposedEntry: inboxItems.proposedEntry,
   gst: inboxItems.gst,
   tds: inboxItems.tds,
+  reviewFlags: inboxItems.reviewFlags,
   reviewedBy: inboxItems.reviewedBy,
   reviewedAt: inboxItems.reviewedAt,
   reviewNote: inboxItems.reviewNote,
   postedEntryId: inboxItems.postedEntryId,
+  invoiceId: inboxItems.invoiceId,
   createdAt: inboxItems.createdAt,
 }
 
@@ -100,10 +105,12 @@ interface ItemRow {
   readonly proposedEntry: unknown
   readonly gst: unknown
   readonly tds: unknown
+  readonly reviewFlags: unknown
   readonly reviewedBy: string | null
   readonly reviewedAt: Date | null
   readonly reviewNote: string | null
   readonly postedEntryId: string | null
+  readonly invoiceId: string | null
   readonly createdAt: Date
 }
 
@@ -112,6 +119,7 @@ interface DecodedItem {
   readonly entry: ProposedEntry
   readonly gst: InboxGstSplit | null
   readonly tds: InboxTds | null
+  readonly reviewFlags: BillReview
 }
 
 function decode(row: ItemRow): DecodedItem {
@@ -123,10 +131,11 @@ function decode(row: ItemRow): DecodedItem {
     entry: entry.data,
     gst: gstJsonSchema.catch(null).parse(row.gst ?? null),
     tds: tdsJsonSchema.catch(null).parse(row.tds ?? null),
+    reviewFlags: billReviewSchema.catch(noFlags).parse(row.reviewFlags ?? {}),
   }
 }
 
-function encodeGst(g: InboxGstSplit | null): unknown {
+export function encodeGst(g: InboxGstSplit | null): unknown {
   return (
     g && {
       ...g,
@@ -194,7 +203,7 @@ async function viewsFor(
     accountRows.map((a) => [a.id, a])
   )
   const partyMap = new Map<string, PartyRef>(partyRows.map((p) => [p.id, p]))
-  return items.map(({ row, entry, gst, tds }) => ({
+  return items.map(({ row, entry, gst, tds, reviewFlags }) => ({
     id: row.id,
     kind: row.kind,
     status: row.status,
@@ -207,13 +216,31 @@ async function viewsFor(
     proposedEntry: toProposedEntryView(entry, accounts, partyMap),
     gst,
     tds,
-    reviewFlags: noFlags,
+    reviewFlags,
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
     reviewNote: row.reviewNote,
     postedEntryId: row.postedEntryId,
     createdAt: row.createdAt.toISOString(),
   }))
+}
+
+/** Inbox items by id, as the app sees them (two lookups, no N+1). */
+export async function inboxItemViews(
+  orgId: string,
+  ids: readonly string[]
+): Promise<InboxItem[]> {
+  if (ids.length === 0) return []
+  const rows = await getDb()
+    .select(itemColumns)
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.organizationId, orgId),
+        inArray(inboxItems.id, [...ids])
+      )
+    )
+  return viewsFor(orgId, rows.map(decode))
 }
 
 /** Newest first. Defaults to pending items. */
@@ -376,6 +403,13 @@ export async function approveInboxItem(
       )
       .returning(itemColumns)
     if (!row) throw new ServiceError("CONFLICT", "Inbox item changed.")
+    if (item.row.invoiceId)
+      await applyInvoiceReceipt(
+        tx,
+        { orgId: ctx.orgId, userId: ctx.userId, source: "inbox" },
+        item.row.invoiceId,
+        { id: posted.id, lines: edited.entry.lines }
+      )
     if (item.row.sourceType === "source_record") {
       await tx
         .update(sourceRecords)
