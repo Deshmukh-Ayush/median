@@ -25,6 +25,7 @@ import {
 } from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
+import { isUniqueViolation } from "./db-errors"
 
 /**
  * Who is posting. `userId` is null when a deterministic rule posts on its
@@ -49,6 +50,7 @@ export const postEntryInputSchema = z.object({
     "inbox",
     "reversal",
     "opening_balance",
+    "credit_note",
   ]),
   sourceId: z.string().max(100).nullish(),
   reversesEntryId: idSchema.nullish(),
@@ -245,16 +247,6 @@ async function assertReferencesExist(
       "One of the parties doesn't exist in this organisation."
     )
   }
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  let e: unknown = error
-  // Drizzle wraps driver errors; the Postgres error is on `cause`.
-  for (let i = 0; i < 3 && typeof e === "object" && e !== null; i++) {
-    if ("code" in e && e.code === "23505") return true
-    e = "cause" in e ? e.cause : undefined
-  }
-  return false
 }
 
 /**

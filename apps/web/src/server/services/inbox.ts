@@ -43,6 +43,7 @@ import { assertCan } from "./context"
 import { documentPath } from "./documents"
 import { applyInboxEdits } from "./inbox-edits"
 import type { TaxAccounts } from "./inbox-edits"
+import { applyInvoiceReceipt } from "./invoices"
 import { postEntry } from "./ledger"
 import { decodeCursor, encodeCursor } from "./pagination"
 import { encodeProposedEntry, toProposedEntryView } from "./proposed-entry"
@@ -86,6 +87,7 @@ const itemColumns = {
   reviewedAt: inboxItems.reviewedAt,
   reviewNote: inboxItems.reviewNote,
   postedEntryId: inboxItems.postedEntryId,
+  invoiceId: inboxItems.invoiceId,
   createdAt: inboxItems.createdAt,
 }
 
@@ -104,6 +106,7 @@ interface ItemRow {
   readonly reviewedAt: Date | null
   readonly reviewNote: string | null
   readonly postedEntryId: string | null
+  readonly invoiceId: string | null
   readonly createdAt: Date
 }
 
@@ -376,6 +379,13 @@ export async function approveInboxItem(
       )
       .returning(itemColumns)
     if (!row) throw new ServiceError("CONFLICT", "Inbox item changed.")
+    if (item.row.invoiceId)
+      await applyInvoiceReceipt(
+        tx,
+        { orgId: ctx.orgId, userId: ctx.userId, source: "inbox" },
+        item.row.invoiceId,
+        { id: posted.id, lines: edited.entry.lines }
+      )
     if (item.row.sourceType === "source_record") {
       await tx
         .update(sourceRecords)

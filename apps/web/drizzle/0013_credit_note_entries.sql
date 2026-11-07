@@ -1,0 +1,2 @@
+ALTER TYPE "public"."journal_source_type" ADD VALUE 'credit_note';--> statement-breakpoint
+CREATE INDEX "credit_note_lines_org_invoice_line_idx" ON "credit_note_lines" USING btree ("organization_id","invoice_line_id");

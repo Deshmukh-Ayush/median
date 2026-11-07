@@ -12,7 +12,7 @@ import type {
 } from "@workspace/contracts"
 import { paise, resolveGstRate } from "@workspace/ledger"
 import type { EffectiveRate, SystemAccountKey } from "@workspace/ledger"
-import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm"
 import { z } from "zod"
 
 import { getDb, withTransaction } from "../db"
@@ -36,6 +36,9 @@ import {
 } from "../integrations/connector"
 import { decryptCredentials } from "../integrations/credentials"
 import { getConnector } from "../integrations/registry"
+import { outstandingOf } from "./invoice-build"
+import { creditInvoiceForRefund } from "./credit-notes"
+import { applyInvoiceReceipt } from "./invoices"
 import { postEntry } from "./ledger"
 import {
   bankLineRule,
@@ -444,6 +447,47 @@ async function applyDecision(
       await mark("posted", decision.entryId)
       return { status: "posted", entryId: decision.entryId, inboxItemId: null }
     }
+    if (decision.action === "credit_note") {
+      const [receivable, clearing] = decision.entry.lines
+      const partyId = receivable?.partyId
+      if (!receivable || !clearing || !partyId)
+        throw new Error("credit_note decision without its payout lines")
+      const matches = await tx
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.organizationId, orgId),
+            eq(invoices.number, decision.invoiceNumber),
+            eq(invoices.partyId, partyId),
+            ne(invoices.status, "cancelled")
+          )
+        )
+        .limit(2)
+      const [invoice] = matches
+      if (!invoice || matches.length > 1)
+        throw new ServiceError(
+          "VALIDATION",
+          matches.length > 1
+            ? `${decision.invoiceNumber} matches invoices in more than one financial year.`
+            : `Invoice ${decision.invoiceNumber} isn't open for this customer.`
+        )
+      const booked = await creditInvoiceForRefund(
+        tx,
+        { orgId, userId: null, source },
+        {
+          invoiceId: invoice.id,
+          amount: receivable.debit,
+          date: decision.entry.entryDate,
+          sourceRecordId: record.id,
+          reference: decision.reference,
+          clearingAccountId: clearing.accountId,
+          receivablesAccountId: receivable.accountId,
+        }
+      )
+      await mark("posted", booked.entryId)
+      return { status: "posted", entryId: booked.entryId, inboxItemId: null }
+    }
     if (decision.action === "post") {
       const posted = await postEntry(
         { orgId, userId: null, source },
@@ -464,6 +508,13 @@ async function applyDecision(
         },
         { tx }
       )
+      if (decision.invoiceId)
+        await applyInvoiceReceipt(
+          tx,
+          { orgId, userId: null, source },
+          decision.invoiceId,
+          { id: posted.id, lines: decision.entry.lines }
+        )
       await mark("posted", posted.id)
       return { status: "posted", entryId: posted.id, inboxItemId: null }
     }
@@ -479,6 +530,7 @@ async function applyDecision(
         tds: encodeTds(decision.tds),
         sourceType: "source_record",
         sourceId: record.id,
+        invoiceId: decision.invoiceId ?? null,
       })
       .onConflictDoNothing()
       .returning({ id: inboxItems.id })
@@ -513,9 +565,34 @@ async function decideAndApply(
   } catch (error) {
     if (!(error instanceof ServiceError)) throw error
     if (error.code === "CONFLICT" && error.message === ALREADY_BOOKED) return
-    if (decision.action !== "post" && decision.action !== "link") throw error
+    if (
+      decision.action !== "post" &&
+      decision.action !== "link" &&
+      decision.action !== "credit_note"
+    )
+      throw error
     // A rule's entry was refused (e.g. locked period): send it for review.
     tally.postingErrors.push({ recordId: record.id, message: error.message })
+    if (decision.action === "credit_note") {
+      count(
+        await applyDecision(
+          orgId,
+          record,
+          {
+            action: "inbox",
+            kind: "razorpay_record",
+            entry: decision.entry,
+            reason: `${decision.reason} Median couldn't create it automatically: ${error.message}`,
+            confidence: 0.5,
+            gst: null,
+            tds: null,
+          },
+          source
+        ),
+        null
+      )
+      return
+    }
     if (decision.action !== "post") throw error
     count(
       await applyDecision(
@@ -534,6 +611,7 @@ async function decideAndApply(
           confidence: 0.5,
           gst: null,
           tds: null,
+          invoiceId: decision.invoiceId ?? null,
         },
         source
       ),
@@ -554,6 +632,8 @@ async function openInvoicesByNumber(
       partyId: invoices.partyId,
       total: invoices.totalPaise,
       taxable: invoices.taxablePaise,
+      paid: invoices.paidPaise,
+      credited: invoices.creditedPaise,
     })
     .from(invoices)
     .where(
@@ -571,7 +651,14 @@ async function openInvoicesByNumber(
       .filter((r) => counts.get(r.number) === 1)
       .map((r) => [
         r.number,
-        { ...r, total: paise(r.total), taxable: paise(r.taxable) },
+        {
+          id: r.id,
+          number: r.number,
+          partyId: r.partyId,
+          total: paise(r.total),
+          taxable: paise(r.taxable),
+          outstanding: outstandingOf(r.total, r.paid, r.credited),
+        },
       ])
   )
 }
@@ -749,7 +836,7 @@ export async function postNewRecords(
                 credit: l.credit,
                 dimensions: l.dimensions,
               })),
-            invoiced: paymentInvoiceNumber(o.payload) !== null,
+            invoiceNumber: paymentInvoiceNumber(o.payload),
           }
         : null
       const decision = refundRule(record, {
@@ -758,7 +845,10 @@ export async function postNewRecords(
         refundedBefore: refundedBefore.get(record.reference) ?? 0n,
       })
       await decideAndApply(orgId, record, decision, source, tally)
-      if (decision.action === "post" && record.reference)
+      if (
+        (decision.action === "post" || decision.action === "credit_note") &&
+        record.reference
+      )
         refundedBefore.set(
           record.reference,
           (refundedBefore.get(record.reference) ?? 0n) + record.amountPaise
@@ -859,6 +949,8 @@ export async function postNewRecords(
             partyId: invoices.partyId,
             total: invoices.totalPaise,
             taxable: invoices.taxablePaise,
+            paid: invoices.paidPaise,
+            credited: invoices.creditedPaise,
             date: invoices.invoiceDate,
           })
           .from(invoices)
@@ -911,11 +1003,17 @@ export async function postNewRecords(
         date: istDateOf(s.occurredAt),
         utr: s.utr,
       }))
-    const openInvoices = invoiceRows.map((i) => ({
-      ...i,
-      total: paise(i.total),
-      taxable: paise(i.taxable),
-    }))
+    const openInvoices = invoiceRows
+      .map((i) => ({
+        id: i.id,
+        number: i.number,
+        partyId: i.partyId,
+        date: i.date,
+        total: paise(i.total),
+        taxable: paise(i.taxable),
+        outstanding: outstandingOf(i.total, i.paid, i.credited),
+      }))
+      .filter((i) => i.outstanding > 0n)
     const usedInvoices = new Set<string>()
     for (const line of bankLines) {
       const p = bankLinePayloadSchema.safeParse(line.payload).data
