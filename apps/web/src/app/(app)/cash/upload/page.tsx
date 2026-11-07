@@ -7,7 +7,7 @@ import { EmptyState } from "@workspace/ui/components/empty-state"
 import { AddBankAccountForm } from "@/components/cash/add-bank-account-form"
 import { BankStatementUpload } from "@/components/cash/bank-statement-upload"
 import { can } from "@/lib/permissions"
-import { listConnections, listLedgerAccounts } from "@/server/services"
+import { listConnections } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
 
@@ -48,22 +48,29 @@ async function Accounts({
     .filter((c) => c.provider === "bank-statement" && c.status !== "revoked")
     .map((c) => ({ id: c.id, label: c.label }))
 
-  if (accounts.length > 0) return <BankStatementUpload accounts={accounts} />
+  const canAdd = can(ctx.role, { resource: "settings", action: "update" })
+
+  if (accounts.length > 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        <BankStatementUpload accounts={accounts} />
+        {canAdd ? (
+          <details className="group">
+            <summary className="cursor-pointer text-sm font-medium text-fg-secondary hover:text-fg">
+              Add another bank account
+            </summary>
+            <div className="mt-3">
+              <AddBankAccountForm title="Add another bank account" />
+            </div>
+          </details>
+        ) : null}
+      </div>
+    )
+  }
 
   // No bank connection yet: add one here (owners and finance).
-  if (can(ctx.role, { resource: "settings", action: "update" })) {
-    const { items } = await listLedgerAccounts(ctx, null, { bankOnly: true })
-    if (items.length > 0) {
-      return (
-        <AddBankAccountForm
-          ledgerAccounts={items.map((a) => ({
-            id: a.id,
-            label: `${a.code} · ${a.name}`,
-          }))}
-        />
-      )
-    }
-  }
+  if (canAdd) return <AddBankAccountForm />
+
   return (
     <div className="rounded-lg border border-default bg-surface">
       <EmptyState
