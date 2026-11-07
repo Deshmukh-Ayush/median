@@ -36,6 +36,8 @@ import {
 } from "../integrations/connector"
 import { decryptCredentials } from "../integrations/credentials"
 import { getConnector } from "../integrations/registry"
+import { outstandingOf } from "./invoice-build"
+import { applyInvoiceReceipt } from "./invoices"
 import { postEntry } from "./ledger"
 import {
   bankLineRule,
@@ -464,6 +466,13 @@ async function applyDecision(
         },
         { tx }
       )
+      if (decision.invoiceId)
+        await applyInvoiceReceipt(
+          tx,
+          { orgId, userId: null, source },
+          decision.invoiceId,
+          { id: posted.id, lines: decision.entry.lines }
+        )
       await mark("posted", posted.id)
       return { status: "posted", entryId: posted.id, inboxItemId: null }
     }
@@ -479,6 +488,7 @@ async function applyDecision(
         tds: encodeTds(decision.tds),
         sourceType: "source_record",
         sourceId: record.id,
+        invoiceId: decision.invoiceId ?? null,
       })
       .onConflictDoNothing()
       .returning({ id: inboxItems.id })
@@ -534,6 +544,7 @@ async function decideAndApply(
           confidence: 0.5,
           gst: null,
           tds: null,
+          invoiceId: decision.invoiceId ?? null,
         },
         source
       ),
@@ -554,6 +565,8 @@ async function openInvoicesByNumber(
       partyId: invoices.partyId,
       total: invoices.totalPaise,
       taxable: invoices.taxablePaise,
+      paid: invoices.paidPaise,
+      credited: invoices.creditedPaise,
     })
     .from(invoices)
     .where(
@@ -571,7 +584,14 @@ async function openInvoicesByNumber(
       .filter((r) => counts.get(r.number) === 1)
       .map((r) => [
         r.number,
-        { ...r, total: paise(r.total), taxable: paise(r.taxable) },
+        {
+          id: r.id,
+          number: r.number,
+          partyId: r.partyId,
+          total: paise(r.total),
+          taxable: paise(r.taxable),
+          outstanding: outstandingOf(r.total, r.paid, r.credited),
+        },
       ])
   )
 }
@@ -859,6 +879,8 @@ export async function postNewRecords(
             partyId: invoices.partyId,
             total: invoices.totalPaise,
             taxable: invoices.taxablePaise,
+            paid: invoices.paidPaise,
+            credited: invoices.creditedPaise,
             date: invoices.invoiceDate,
           })
           .from(invoices)
@@ -911,11 +933,17 @@ export async function postNewRecords(
         date: istDateOf(s.occurredAt),
         utr: s.utr,
       }))
-    const openInvoices = invoiceRows.map((i) => ({
-      ...i,
-      total: paise(i.total),
-      taxable: paise(i.taxable),
-    }))
+    const openInvoices = invoiceRows
+      .map((i) => ({
+        id: i.id,
+        number: i.number,
+        partyId: i.partyId,
+        date: i.date,
+        total: paise(i.total),
+        taxable: paise(i.taxable),
+        outstanding: outstandingOf(i.total, i.paid, i.credited),
+      }))
+      .filter((i) => i.outstanding > 0n)
     const usedInvoices = new Set<string>()
     for (const line of bankLines) {
       const p = bankLinePayloadSchema.safeParse(line.payload).data
