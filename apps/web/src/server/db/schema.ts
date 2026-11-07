@@ -424,6 +424,7 @@ export const parties = pgTable(
       .where(sql`${t.gstin} is not null`),
     index("parties_org_gstin_idx").on(t.organizationId, t.gstin),
     index("parties_org_kind_name_idx").on(t.organizationId, t.kind, t.name),
+    index("parties_org_name_idx").on(t.organizationId, t.name, t.id),
     check(
       "parties_state_code_check",
       sql`${t.stateCode} is null or ${t.stateCode} ~ '^[0-9]{2}$'`
@@ -763,6 +764,8 @@ export const inboxItems = pgTable(
     reviewedAt: timestamp({ withTimezone: true }),
     reviewNote: text(),
     postedEntryId: uuid(),
+    /** The invoice a receipt pays; approval applies it to the invoice. */
+    invoiceId: uuid(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -783,6 +786,11 @@ export const inboxItems = pgTable(
       name: "inbox_items_posted_entry_fk",
       columns: [t.organizationId, t.postedEntryId],
       foreignColumns: [journalEntries.organizationId, journalEntries.id],
+    }),
+    foreignKey({
+      name: "inbox_items_invoice_fk",
+      columns: [t.organizationId, t.invoiceId],
+      foreignColumns: [invoices.organizationId, invoices.id],
     }),
     check(
       "inbox_items_confidence_check",
@@ -841,6 +849,10 @@ export const invoices = pgTable(
     paidPaise: paise()
       .notNull()
       .default(sql`0`),
+    /** Sum of credit notes against this invoice. */
+    creditedPaise: paise()
+      .notNull()
+      .default(sql`0`),
     status: invoiceStatus().notNull().default("issued"),
     notes: text(),
     journalEntryId: uuid(),
@@ -882,6 +894,11 @@ export const invoices = pgTable(
       "invoices_amounts_check",
       sql`${t.taxablePaise} >= 0 and ${t.cgstPaise} >= 0 and ${t.sgstPaise} >= 0 and ${t.igstPaise} >= 0 and ${t.paidPaise} >= 0 and ${t.roundOffPaise} between -50 and 50 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise} + ${t.roundOffPaise}`
     ),
+    // Credit notes never exceed the invoice.
+    check(
+      "invoices_credited_check",
+      sql`${t.creditedPaise} >= 0 and ${t.creditedPaise} <= ${t.totalPaise}`
+    ),
     check(
       "invoices_place_of_supply_check",
       sql`${t.placeOfSupply} ~ '^[0-9]{2}$'`
@@ -908,6 +925,8 @@ export const invoiceLines = pgTable(
     unitPricePaise: paise().notNull(),
     /** GST rate in basis points (18% = 1800). */
     gstRateBps: integer().notNull(),
+    /** Income account credited; null → the org's default revenue account. */
+    revenueAccountId: uuid(),
     taxablePaise: paise().notNull(),
     cgstPaise: paise().notNull(),
     sgstPaise: paise().notNull(),
@@ -925,6 +944,11 @@ export const invoiceLines = pgTable(
       name: "invoice_lines_invoice_fk",
       columns: [t.organizationId, t.invoiceId],
       foreignColumns: [invoices.organizationId, invoices.id],
+    }),
+    foreignKey({
+      name: "invoice_lines_revenue_account_fk",
+      columns: [t.organizationId, t.revenueAccountId],
+      foreignColumns: [ledgerAccounts.organizationId, ledgerAccounts.id],
     }),
     check(
       "invoice_lines_amounts_check",

@@ -211,3 +211,46 @@ export function financialYearOf(isoDate: string): string {
 export function isValidDocumentNumber(number: string): boolean {
   return number.length >= 1 && number.length <= 16
 }
+
+/** "7.5" → 7500n (thousandths). Throws on anything but a plain decimal. */
+export function quantityMilliOf(quantity: string): bigint {
+  const match = /^(\d{1,9})(?:\.(\d{1,3}))?$/.exec(quantity.trim())
+  if (!match) throw new InvalidMoneyError(`Not a quantity: ${quantity}`)
+  const milli =
+    BigInt(match[1] ?? "0") * 1000n + BigInt((match[2] ?? "").padEnd(3, "0"))
+  if (milli <= 0n) throw new InvalidMoneyError("Quantity must be positive")
+  return milli
+}
+
+/** 7500n → "7.5"; the inverse of quantityMilliOf. */
+export function formatQuantityMilli(milli: bigint): string {
+  const whole = milli / 1000n
+  const frac = (milli % 1000n).toString().padStart(3, "0").replace(/0+$/, "")
+  return frac ? `${whole}.${frac}` : String(whole)
+}
+
+/**
+ * Rules 6–7 for a whole invoice or credit note: per-line GST, then totals
+ * rounded to the nearest rupee. `exactTotal` replaces rupee rounding with a
+ * target total (a credit note for a refund must equal the refund); the
+ * difference still goes to Round-off and must be within ±50 paise.
+ */
+export function computeDocument(
+  lines: readonly LineInput[],
+  supply: { readonly intrastate: boolean; readonly chargesGst: boolean },
+  options: { readonly exactTotal?: Money } = {}
+): { readonly lines: readonly LineTax[]; readonly totals: DocumentTotals } {
+  const computed = lines.map((l) => computeLine(l, supply))
+  const totals = documentTotals(computed)
+  if (options.exactTotal === undefined) return { lines: computed, totals }
+  const exact = totals.total - totals.roundOff
+  const roundOff = options.exactTotal - exact
+  if (roundOff < -50n || roundOff > 50n)
+    throw new InvalidMoneyError(
+      `Target total is ${roundOff} paise from the computed total`
+    )
+  return {
+    lines: computed,
+    totals: { ...totals, roundOff: paise(roundOff), total: options.exactTotal },
+  }
+}

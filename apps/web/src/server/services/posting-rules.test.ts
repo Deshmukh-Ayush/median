@@ -382,6 +382,7 @@ describe("receipts against invoices (rule 11)", () => {
     partyId: "acme",
     total: paise(1_18_000_00n),
     taxable: paise(1_00_000_00n),
+    outstanding: paise(1_18_000_00n),
   }
   const ctx = {
     accounts,
@@ -391,8 +392,25 @@ describe("receipts against invoices (rule 11)", () => {
     kind: "bank_line" as const,
   }
 
-  it("posts exact receipts", () => {
-    expect(receiptRule(invoice.total, invoice, ctx).action).toBe("post")
+  it("posts exact receipts and names the invoice they pay", () => {
+    expect(receiptRule(invoice.total, invoice, ctx)).toMatchObject({
+      action: "post",
+      invoiceId: "inv_1",
+    })
+  })
+
+  it("matches what's outstanding, not the original total", () => {
+    const partPaid = { ...invoice, outstanding: paise(18_000_00n) }
+    expect(receiptRule(paise(18_000_00n), partPaid, ctx)).toMatchObject({
+      action: "post",
+      invoiceId: "inv_1",
+    })
+    // The full total no longer fits, and TDS isn't tried on a part-paid invoice.
+    expect(receiptRule(paise(1_16_000_00n), partPaid, ctx)).toMatchObject({
+      action: "inbox",
+      tds: null,
+      invoiceId: "inv_1",
+    })
   })
 
   it("proposes TDS receivable at 1%, 2% or 10% for review", () => {
@@ -447,6 +465,7 @@ describe("bank lines", () => {
     partyId: "acme",
     total: paise(1_18_000_00n),
     taxable: paise(1_00_000_00n),
+    outstanding: paise(1_18_000_00n),
     date: "2025-09-01",
   }
   const candidates = {
@@ -523,6 +542,16 @@ describe("bank lines", () => {
         }) as Decision
       )
     ).toEqual({ "Dr hdfc": 115_640n, "Cr icici": 115_640n })
+  })
+
+  it("matches by outstanding amount once an invoice is part-paid", () => {
+    const partPaid = { ...invoice, outstanding: paise(18_000_00n) }
+    expect(
+      find("inflow", 18_000_00n, "NEFT ACME", { invoices: [partPaid] })
+    ).toMatchObject({ kind: "invoice" })
+    expect(
+      find("inflow", 1_18_000_00n, "NEFT ACME", { invoices: [partPaid] })
+    ).toMatchObject({ kind: "none" })
   })
 
   it("matches invoice receipts by number, amount or TDS (rule 11)", () => {
