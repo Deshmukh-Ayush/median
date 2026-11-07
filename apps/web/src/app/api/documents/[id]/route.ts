@@ -9,7 +9,8 @@ import { openDocument, requireOrgContext } from "@/server/services"
  */
 export async function GET(
   _request: Request,
-  ctx: RouteContext<"/api/documents/[id]">
+  // Typed by hand: CI lints before `next typegen` creates RouteContext.
+  ctx: { readonly params: Promise<{ readonly id: string }> }
 ): Promise<Response> {
   const { id } = await ctx.params
   try {
