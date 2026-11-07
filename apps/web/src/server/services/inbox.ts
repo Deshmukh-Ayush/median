@@ -40,6 +40,7 @@ import {
 } from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
+import { documentPath } from "./documents"
 import { applyInboxEdits } from "./inbox-edits"
 import type { TaxAccounts } from "./inbox-edits"
 import { applyInvoiceReceipt } from "./invoices"
@@ -203,8 +204,9 @@ async function viewsFor(
     confidence: row.confidence,
     reason: row.reason,
     sourceRef: { type: row.sourceType, id: row.sourceId },
-    // Signed document URLs come with bill uploads (Day 4).
-    sourceDocumentUrl: null,
+    // Same-origin and session-checked; the file itself is private.
+    sourceDocumentUrl:
+      row.sourceType === "document" ? documentPath(row.sourceId) : null,
     proposedEntry: toProposedEntryView(entry, accounts, partyMap),
     gst,
     tds,
