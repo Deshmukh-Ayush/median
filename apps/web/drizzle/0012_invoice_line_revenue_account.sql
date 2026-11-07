@@ -1,0 +1,2 @@
+ALTER TABLE "invoice_lines" ADD COLUMN "revenue_account_id" uuid;--> statement-breakpoint
+ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_revenue_account_fk" FOREIGN KEY ("organization_id","revenue_account_id") REFERENCES "public"."ledger_accounts"("organization_id","id") ON DELETE no action ON UPDATE no action;
