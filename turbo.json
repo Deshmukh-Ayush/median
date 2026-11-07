@@ -16,6 +16,7 @@
         "RAZORPAY_KEY_SECRET",
         "CREDENTIALS_ENCRYPTION_KEY",
         "RAZORPAY_MODE",
+        "CRON_SECRET",
         "ANALYZE"
       ]
     },
