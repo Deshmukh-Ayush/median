@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   // Heavy, server-only libraries: keep them out of the server bundle and load
   // them from node_modules at runtime. Never import them in client components.
   serverExternalPackages: ["@react-pdf/renderer"],
+  // The PDF font files are read from disk at runtime, not imported.
+  outputFileTracingIncludes: {
+    "/invoices/**": ["./src/server/pdf/fonts/*.ttf"],
+  },
   poweredByHeader: false,
   experimental: {
     // Settlement reports and bank statements are uploaded through server
