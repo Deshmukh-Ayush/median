@@ -81,6 +81,18 @@ export type Decision =
       /** The invoice this receipt pays: applied when it's approved. */
       readonly invoiceId?: string | null
     }
+  /**
+   * Rule 10: a refund of an invoiced sale. Book a credit note against the
+   * invoice, then the payout `entry` (Dr receivable, Cr clearing). If that
+   * can't be done safely, `entry` goes to the inbox with `reason`.
+   */
+  | {
+      readonly action: "credit_note"
+      readonly invoiceNumber: string
+      readonly reference: string
+      readonly entry: ProposedEntry
+      readonly reason: string
+    }
   /** Not final yet (e.g. a pending refund); looked at again next sync. */
   | { readonly action: "wait"; readonly reason: string }
   /** Nothing to book (failed payment). */
@@ -374,8 +386,8 @@ export interface OriginalPayment {
     readonly credit: bigint
     readonly dimensions: Readonly<Record<string, string>> | null
   }[]
-  /** Paid one of our invoices: its refund needs a credit note. */
-  readonly invoiced: boolean
+  /** Our invoice number the payment quoted (notes.invoice_number). */
+  readonly invoiceNumber: string | null
 }
 
 export function refundRule(
@@ -424,16 +436,33 @@ export function refundRule(
     return toInbox(
       `Refund ${ref}: payment ${original.externalId} is still in the inbox. Approve it first.`
     )
-  if (original.invoiced)
-    return toInbox(
-      `Refund ${ref} is for an invoiced sale: it needs a credit note against the invoice (rule 10).`,
-      0.6
-    )
   if (ctx.refundedBefore + record.amountPaise > original.amountPaise)
     return toInbox(
       `Refund ${ref} is more than what's left of payment ${original.externalId}.`,
       0.3
     )
+
+  // Rule 10: the payment settled one of our invoices (it credited the
+  // customer's receivable), so the refund is a credit note against it.
+  const receipt = original.lines.find(
+    (l) => l.accountId === accounts.receivables && l.credit > 0n && l.partyId
+  )
+  if (original.invoiceNumber && receipt?.partyId) {
+    return {
+      action: "credit_note",
+      invoiceNumber: original.invoiceNumber,
+      reference: ref,
+      entry: {
+        entryDate,
+        narration,
+        lines: [
+          dr(accounts.receivables, amount, null, receipt.partyId),
+          cr(accounts.clearing, amount),
+        ],
+      },
+      reason: `Refund ${ref} is for invoice ${original.invoiceNumber}: create a credit note for it, then approve this payout (rule 10).`,
+    }
+  }
 
   // Full refund with nothing refunded before: reverse the payment entry.
   if (

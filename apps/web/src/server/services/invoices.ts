@@ -67,7 +67,7 @@ import {
 } from "./invoice-build"
 import type { BuiltInvoice, OrgGst, SalesAccounts } from "./invoice-build"
 import { postEntry } from "./ledger"
-import { decodeCursor, encodeCursor } from "./pagination"
+import { dateTimeCursorKey, decodeCursor, encodeCursor } from "./pagination"
 import { istDateOf } from "./posting-rules"
 
 // Sales invoices (rules 5–7): numbered per financial year, GST per line,
@@ -539,15 +539,6 @@ export async function getInvoice(
   }
 }
 
-/** Page cursor key for the invoice list: "<invoice date>|<created at>". */
-function listCursorKey(k: string): { date: string; at: Date } {
-  const [date = "", at = ""] = k.split("|")
-  const parsed = new Date(at)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()))
-    throw new ServiceError("VALIDATION", "Invalid page cursor.")
-  return { date, at: parsed }
-}
-
 /**
  * Newest first (invoice date, then when it was created), with what's still
  * outstanding on each.
@@ -562,7 +553,7 @@ export async function listInvoices(
   const f = parseInput(listInvoicesFiltersSchema, filters)
   const { limit } = parseInput(pageOptionsSchema, options)
   const after = decodeCursor(cursor)
-  const key = after ? listCursorKey(after.k) : null
+  const key = after ? dateTimeCursorKey(after.k) : null
   const rows = await getDb()
     .select(headerColumns)
     .from(invoices)

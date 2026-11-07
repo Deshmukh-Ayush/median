@@ -6,9 +6,12 @@ import { ServiceError } from "@workspace/contracts"
 import type { InvoiceStatus, InvoiceSupplyType } from "@workspace/contracts"
 import {
   computeDocument,
+  formatInr,
+  lineTaxable,
   paise,
   quantityMilliOf,
   resolveSupply,
+  splitInclusive,
 } from "@workspace/ledger"
 import type { DocumentTotals, LineTax, Money } from "@workspace/ledger"
 
@@ -328,4 +331,150 @@ export function receiptAmount(
       )
       .reduce((sum, l) => sum + l.credit, 0n)
   )
+}
+
+// ---------------------------------------------------------------------------
+// Credit notes
+
+/** An invoice line as a credit note sees it. */
+export interface CreditableLine {
+  readonly id: string
+  readonly lineNo: number
+  readonly description: string
+  readonly hsnSac: string
+  readonly quantityMilli: bigint
+  readonly unitPrice: Money
+  readonly gstRateBps: number
+  readonly revenueAccountId: string | null
+  readonly taxable: Money
+  /** Taxable value already credited on earlier credit notes. */
+  readonly creditedTaxable: Money
+}
+
+export type CreditRequest =
+  | { readonly invoiceLineId: string; readonly quantityMilli: bigint }
+  | { readonly invoiceLineId: string; readonly taxable: Money }
+
+export interface PlannedCreditLine {
+  readonly invoiceLineId: string
+  readonly description: string
+  readonly hsnSac: string
+  readonly quantityMilli: bigint
+  readonly unitPrice: Money
+  readonly gstRateBps: number
+  readonly revenueAccountId: string | null
+}
+
+function remainingOf(l: CreditableLine): bigint {
+  return l.taxable - l.creditedTaxable
+}
+
+/**
+ * Turns credit requests into credit-note lines. A quantity is credited at
+ * the invoice's unit price; a taxable value as one unit of that value. No
+ * invoice line can be credited beyond its taxable value. Throws VALIDATION.
+ */
+export function planCreditLines(
+  invoiceLines: readonly CreditableLine[],
+  requests: readonly CreditRequest[]
+): PlannedCreditLine[] {
+  const byId = new Map(invoiceLines.map((l) => [l.id, l]))
+  const asked = new Map<string, bigint>()
+  const planned = requests.map((r): PlannedCreditLine => {
+    const line = byId.get(r.invoiceLineId)
+    if (!line)
+      throw new ServiceError("VALIDATION", "That line isn't on this invoice.", {
+        invoiceLineId: r.invoiceLineId,
+      })
+    const base = {
+      invoiceLineId: line.id,
+      description: line.description,
+      hsnSac: line.hsnSac,
+      gstRateBps: line.gstRateBps,
+      revenueAccountId: line.revenueAccountId,
+    }
+    const p: PlannedCreditLine =
+      "quantityMilli" in r
+        ? { ...base, quantityMilli: r.quantityMilli, unitPrice: line.unitPrice }
+        : { ...base, quantityMilli: 1000n, unitPrice: r.taxable }
+    asked.set(line.id, (asked.get(line.id) ?? 0n) + lineTaxable(p))
+    return p
+  })
+  for (const [id, amount] of asked) {
+    const line = byId.get(id)
+    if (line && amount > remainingOf(line))
+      throw new ServiceError(
+        "VALIDATION",
+        `Line ${line.lineNo} has only ${formatInr(paise(remainingOf(line)))} left to credit.`,
+        { invoiceLineId: id }
+      )
+  }
+  return planned
+}
+
+export type RefundCreditPlan =
+  | { readonly ok: true; readonly requests: readonly CreditRequest[] }
+  | { readonly ok: false; readonly reason: string }
+
+/**
+ * Rule 10: which invoice lines a GST-inclusive refund credits. Everything
+ * left → every line in full. Otherwise the refund is split at the invoice's
+ * one GST rate (rule 8 maths) across the open lines in proportion to what's
+ * left on each; with several rates there's no safe split, so a person picks.
+ * The credit note's total is then set to the refund exactly.
+ */
+export function planRefundCredit(
+  invoiceLines: readonly CreditableLine[],
+  refund: Money,
+  supply: { readonly intrastate: boolean; readonly chargesGst: boolean }
+): RefundCreditPlan {
+  const open = invoiceLines.filter((l) => remainingOf(l) > 0n)
+  if (open.length === 0)
+    return { ok: false, reason: "The invoice has already been fully credited." }
+  const everything = open.map((l) => ({
+    invoiceLineId: l.id,
+    taxable: paise(remainingOf(l)),
+  }))
+  const left = computeDocument(
+    everything.map((r) => ({
+      quantityMilli: 1000n,
+      unitPrice: r.taxable,
+      rateBps: byIdRate(open, r.invoiceLineId),
+    })),
+    supply
+  ).totals
+  const leftExact = left.total - left.roundOff
+  if (refund > leftExact + 50n)
+    return {
+      ok: false,
+      reason: `The refund is more than the ${formatInr(paise(leftExact))} left on the invoice.`,
+    }
+  if (refund >= leftExact - 50n) return { ok: true, requests: everything }
+
+  const rates = new Set(open.map((l) => l.gstRateBps))
+  const [rate] = rates
+  if (rates.size !== 1 || rate === undefined)
+    return {
+      ok: false,
+      reason:
+        "The invoice has lines at different GST rates: choose which lines the refund is for.",
+    }
+  const taxable = supply.chargesGst
+    ? splitInclusive(refund, rate).taxable
+    : refund
+  const totalLeft = open.reduce((s, l) => s + remainingOf(l), 0n)
+  let allocated = 0n
+  const requests = open.flatMap((l, i): CreditRequest[] => {
+    const share =
+      i === open.length - 1
+        ? taxable - allocated
+        : (taxable * remainingOf(l)) / totalLeft
+    allocated += share
+    return share > 0n ? [{ invoiceLineId: l.id, taxable: paise(share) }] : []
+  })
+  return { ok: true, requests }
+}
+
+function byIdRate(lines: readonly CreditableLine[], id: string): number {
+  return lines.find((l) => l.id === id)?.gstRateBps ?? 0
 }

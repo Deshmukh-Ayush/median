@@ -76,6 +76,7 @@ export const journalSourceType = pgEnum("journal_source_type", [
   "inbox",
   "reversal",
   "opening_balance",
+  "credit_note",
 ])
 
 /**
@@ -1094,6 +1095,11 @@ export const creditNoteLines = pgTable(
       columns: [t.organizationId, t.creditNoteId],
       foreignColumns: [creditNotes.organizationId, creditNotes.id],
     }),
+    // What's already been credited on each invoice line.
+    index("credit_note_lines_org_invoice_line_idx").on(
+      t.organizationId,
+      t.invoiceLineId
+    ),
     check(
       "credit_note_lines_amounts_check",
       sql`${t.quantityMilli} > 0 and ${t.unitPricePaise} >= 0 and ${t.gstRateBps} between 0 and 10000 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise}`
