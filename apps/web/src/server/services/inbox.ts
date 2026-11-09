@@ -29,6 +29,7 @@ import type {
   PartyRef,
   ProposedEntry,
 } from "@workspace/contracts"
+import { paise } from "@workspace/ledger"
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm"
 import { z } from "zod"
 
@@ -36,6 +37,7 @@ import { getDb, withTransaction } from "../db"
 import type { Tx } from "../db"
 import {
   inboxItems,
+  invoices,
   ledgerAccounts,
   parties,
   sourceRecords,
@@ -91,6 +93,7 @@ const itemColumns = {
   reviewNote: inboxItems.reviewNote,
   postedEntryId: inboxItems.postedEntryId,
   invoiceId: inboxItems.invoiceId,
+  refundInvoiceId: inboxItems.refundInvoiceId,
   createdAt: inboxItems.createdAt,
 }
 
@@ -111,6 +114,7 @@ interface ItemRow {
   readonly reviewNote: string | null
   readonly postedEntryId: string | null
   readonly invoiceId: string | null
+  readonly refundInvoiceId: string | null
   readonly createdAt: Date
 }
 
@@ -164,41 +168,92 @@ async function viewsFor(
       )
     ),
   ]
+  const refunds = items.flatMap(({ row }) =>
+    row.refundInvoiceId && row.sourceType === "source_record"
+      ? [{ invoiceId: row.refundInvoiceId, recordId: row.sourceId }]
+      : []
+  )
   const db = getDb()
-  const [accountRows, partyRows] = await Promise.all([
-    accountIds.length === 0
-      ? []
-      : db
-          .select({
-            id: ledgerAccounts.id,
-            code: ledgerAccounts.code,
-            name: ledgerAccounts.name,
-            type: ledgerAccounts.type,
-            parentId: ledgerAccounts.parentId,
-            isSystem: ledgerAccounts.isSystem,
-            isBank: ledgerAccounts.isBank,
-            bankName: ledgerAccounts.bankName,
-            accountLast4: ledgerAccounts.accountLast4,
-          })
-          .from(ledgerAccounts)
-          .where(
-            and(
-              eq(ledgerAccounts.organizationId, orgId),
-              inArray(ledgerAccounts.id, accountIds)
-            )
-          ),
-    partyIds.length === 0
-      ? []
-      : db
-          .select({ id: parties.id, name: parties.name, gstin: parties.gstin })
-          .from(parties)
-          .where(
-            and(
-              eq(parties.organizationId, orgId),
-              inArray(parties.id, partyIds)
-            )
-          ),
-  ])
+  const [accountRows, partyRows, refundInvoices, refundRecords] =
+    await Promise.all([
+      accountIds.length === 0
+        ? []
+        : db
+            .select({
+              id: ledgerAccounts.id,
+              code: ledgerAccounts.code,
+              name: ledgerAccounts.name,
+              type: ledgerAccounts.type,
+              parentId: ledgerAccounts.parentId,
+              isSystem: ledgerAccounts.isSystem,
+              isBank: ledgerAccounts.isBank,
+              bankName: ledgerAccounts.bankName,
+              accountLast4: ledgerAccounts.accountLast4,
+            })
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.organizationId, orgId),
+                inArray(ledgerAccounts.id, accountIds)
+              )
+            ),
+      partyIds.length === 0
+        ? []
+        : db
+            .select({
+              id: parties.id,
+              name: parties.name,
+              gstin: parties.gstin,
+            })
+            .from(parties)
+            .where(
+              and(
+                eq(parties.organizationId, orgId),
+                inArray(parties.id, partyIds)
+              )
+            ),
+      refunds.length === 0
+        ? []
+        : db
+            .select({ id: invoices.id, number: invoices.number })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.organizationId, orgId),
+                inArray(invoices.id, [
+                  ...new Set(refunds.map((r) => r.invoiceId)),
+                ])
+              )
+            ),
+      refunds.length === 0
+        ? []
+        : db
+            .select({ id: sourceRecords.id, amount: sourceRecords.amountPaise })
+            .from(sourceRecords)
+            .where(
+              and(
+                eq(sourceRecords.organizationId, orgId),
+                inArray(
+                  sourceRecords.id,
+                  refunds.map((r) => r.recordId)
+                )
+              )
+            ),
+    ])
+  const invoiceNumbers = new Map(refundInvoices.map((i) => [i.id, i.number]))
+  const refundAmounts = new Map(refundRecords.map((r) => [r.id, r.amount]))
+  const refundOf = (row: ItemRow): Exclude<InboxItem["refund"], undefined> => {
+    if (!row.refundInvoiceId || row.sourceType !== "source_record") return null
+    const number = invoiceNumbers.get(row.refundInvoiceId)
+    const amount = refundAmounts.get(row.sourceId)
+    return number !== undefined && amount !== undefined
+      ? {
+          invoiceId: row.refundInvoiceId,
+          invoiceNumber: number,
+          amount: paise(amount),
+        }
+      : null
+  }
   const accounts = new Map<string, LedgerAccountSummary>(
     accountRows.map((a) => [a.id, a])
   )
@@ -220,6 +275,7 @@ async function viewsFor(
     reviewedBy: row.reviewedBy,
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
     reviewNote: row.reviewNote,
+    refund: refundOf(row),
     postedEntryId: row.postedEntryId,
     createdAt: row.createdAt.toISOString(),
   }))

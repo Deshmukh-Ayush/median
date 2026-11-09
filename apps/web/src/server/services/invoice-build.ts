@@ -363,6 +363,11 @@ export interface PlannedCreditLine {
   readonly unitPrice: Money
   readonly gstRateBps: number
   readonly revenueAccountId: string | null
+  /**
+   * Credits a value (discount, correction) rather than units: computed as
+   * one unit at that value, stored with quantity 0.
+   */
+  readonly byValue: boolean
 }
 
 function remainingOf(l: CreditableLine): bigint {
@@ -395,8 +400,13 @@ export function planCreditLines(
     }
     const p: PlannedCreditLine =
       "quantityMilli" in r
-        ? { ...base, quantityMilli: r.quantityMilli, unitPrice: line.unitPrice }
-        : { ...base, quantityMilli: 1000n, unitPrice: r.taxable }
+        ? {
+            ...base,
+            quantityMilli: r.quantityMilli,
+            unitPrice: line.unitPrice,
+            byValue: false,
+          }
+        : { ...base, quantityMilli: 1000n, unitPrice: r.taxable, byValue: true }
     asked.set(line.id, (asked.get(line.id) ?? 0n) + lineTaxable(p))
     return p
   })

@@ -69,6 +69,16 @@ export interface InboxItem {
   readonly reviewedBy: string | null
   readonly reviewedAt: IsoTimestamp | null
   readonly reviewNote: string | null
+  /**
+   * Refunds of an invoiced sale that couldn't become a credit note
+   * automatically: the invoice and the refund amount, so the item can offer
+   * "create credit note". Null for everything else.
+   */
+  readonly refund?: {
+    readonly invoiceId: string
+    readonly invoiceNumber: string
+    readonly amount: Money
+  } | null
   /** Set once approved and posted. */
   readonly postedEntryId: string | null
   readonly createdAt: IsoTimestamp

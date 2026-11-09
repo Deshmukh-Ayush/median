@@ -793,6 +793,11 @@ export const inboxItems = pgTable(
     postedEntryId: uuid(),
     /** The invoice a receipt pays; approval applies it to the invoice. */
     invoiceId: uuid(),
+    /**
+     * Refunds only: the invoice the refund is for, so the inbox can offer
+     * "create credit note". Approval never applies it as a receipt.
+     */
+    refundInvoiceId: uuid(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -817,6 +822,11 @@ export const inboxItems = pgTable(
     foreignKey({
       name: "inbox_items_invoice_fk",
       columns: [t.organizationId, t.invoiceId],
+      foreignColumns: [invoices.organizationId, invoices.id],
+    }),
+    foreignKey({
+      name: "inbox_items_refund_invoice_fk",
+      columns: [t.organizationId, t.refundInvoiceId],
       foreignColumns: [invoices.organizationId, invoices.id],
     }),
     check(
@@ -1128,7 +1138,8 @@ export const creditNoteLines = pgTable(
     ),
     check(
       "credit_note_lines_amounts_check",
-      sql`${t.quantityMilli} > 0 and ${t.unitPricePaise} >= 0 and ${t.gstRateBps} between 0 and 10000 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise}`
+      // quantity 0: credited by value (a discount or correction), no units.
+      sql`${t.quantityMilli} >= 0 and ${t.unitPricePaise} >= 0 and ${t.gstRateBps} between 0 and 10000 and ${t.totalPaise} = ${t.taxablePaise} + ${t.cgstPaise} + ${t.sgstPaise} + ${t.igstPaise}`
     ),
   ]
 )
