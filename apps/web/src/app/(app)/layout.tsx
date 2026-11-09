@@ -10,6 +10,7 @@ import { Toaster } from "@workspace/ui/components/sonner"
 import type { SidebarSection } from "@workspace/ui/components/sidebar"
 
 import { signOut } from "@/app/(auth)/actions"
+import { AiTierBanner } from "@/components/shell/ai-tier-banner"
 import { AppCommandBar } from "@/components/shell/app-command-bar"
 import { AppSidebar } from "@/components/shell/app-sidebar"
 import { navigationFor } from "@/lib/navigation"
@@ -126,6 +127,7 @@ export default async function AppLayout({
         </TopBar>
       }
     >
+      <AiTierBanner role={ctx.role} />
       {children}
       <Toaster />
     </AppShell>

@@ -3,6 +3,7 @@ import Link from "next/link"
 import {
   ChevronRightIcon,
   FileInputIcon,
+  SparklesIcon,
   PlugIcon,
   UsersIcon,
 } from "lucide-react"
@@ -41,6 +42,14 @@ export default function SettingsPage() {
         >
           <FileInputIcon aria-hidden className="size-4 text-fg-secondary" />
           <span className="flex-1">Move from Tally</span>
+          <ChevronRightIcon aria-hidden className="size-4 text-fg-secondary" />
+        </Link>
+        <Link
+          href="/settings/ai"
+          className="flex h-12 items-center gap-3 border-t border-subtle px-4 text-sm transition-colors hover:bg-hover"
+        >
+          <SparklesIcon aria-hidden className="size-4 text-fg-secondary" />
+          <span className="flex-1">AI provider</span>
           <ChevronRightIcon aria-hidden className="size-4 text-fg-secondary" />
         </Link>
       </nav>
