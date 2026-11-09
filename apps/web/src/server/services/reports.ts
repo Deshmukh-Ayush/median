@@ -2,171 +2,153 @@ import "server-only"
 
 import {
   ServiceError,
-  idSchema,
   isoDateSchema,
+  listEntriesFiltersSchema,
   pageOptionsSchema,
   parseInput,
 } from "@workspace/contracts"
 import type {
-  AccountType,
+  BalanceSheet,
   IsoDate,
   JournalEntryView,
-  LedgerAccountSummary,
-  Money,
+  ListEntriesFilters,
   Page,
   PageOptions,
+  ProfitAndLoss,
+  ReportSection,
+  TrialBalance,
 } from "@workspace/contracts"
-import { paise } from "@workspace/ledger"
+import {
+  LINE_ITEM_LABELS,
+  buildBalanceSheet,
+  buildProfitAndLoss,
+  buildTrialBalance,
+  financialYearStart,
+  paise,
+} from "@workspace/ledger"
+import type { AccountTotals, StatementSectionResult } from "@workspace/ledger"
+import { and, asc, desc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm"
+import type { AnyColumn } from "drizzle-orm"
 import { z } from "zod"
 
+import { getDb } from "../db"
+import {
+  journalEntries,
+  journalLines,
+  ledgerAccounts,
+  parties,
+} from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
-import { STUB_ACCOUNTS, STUB_ENTRIES } from "./stub-data"
+import { decodeCursor, encodeCursor } from "./pagination"
 
-export interface TrialBalanceRow {
-  readonly accountId: string
-  readonly code: string
-  readonly name: string
-  readonly type: AccountType
-  /** Closing balance on the debit side (zero if the balance is a credit). */
-  readonly debit: Money
-  readonly credit: Money
-}
-
-export interface TrialBalance {
-  readonly asOf: IsoDate
-  readonly rows: readonly TrialBalanceRow[]
-  readonly totalDebit: Money
-  readonly totalCredit: Money
-}
-
-export interface ReportRow {
-  readonly accountId: string
-  readonly code: string
-  readonly name: string
-  /** Positive in the section's natural direction (income credit, expense debit…). */
-  readonly amount: Money
-}
-
-export interface ReportSection {
-  readonly key: string
-  readonly label: string
-  readonly rows: readonly ReportRow[]
-  readonly total: Money
-}
-
-export interface ProfitAndLoss {
-  readonly from: IsoDate
-  readonly to: IsoDate
-  /** Schedule III order: revenue from operations, other income, expenses by nature. */
-  readonly income: readonly ReportSection[]
-  readonly expenses: readonly ReportSection[]
-  readonly totalIncome: Money
-  readonly totalExpenses: Money
-  /** Negative for a loss. */
-  readonly netProfit: Money
-}
-
-export interface BalanceSheet {
-  readonly asOf: IsoDate
-  /** Schedule III: shareholders' funds, non-current liabilities, current liabilities. */
-  readonly equityAndLiabilities: readonly ReportSection[]
-  /** Schedule III: non-current assets, current assets. */
-  readonly assets: readonly ReportSection[]
-  readonly totalEquityAndLiabilities: Money
-  readonly totalAssets: Money
-  /** Profit for the year not yet closed to reserves, included in shareholders' funds. */
-  readonly currentYearProfit: Money
-}
-
-export const listEntriesFiltersSchema = z.object({
-  from: isoDateSchema.optional(),
-  to: isoDateSchema.optional(),
-  /** Drill down from a report row. */
-  accountId: idSchema.optional(),
-  partyId: idSchema.optional(),
-  sourceType: z
-    .enum([
-      "manual",
-      "razorpay",
-      "bank",
-      "invoice",
-      "bill",
-      "inbox",
-      "reversal",
-      "opening_balance",
-      "credit_note",
-    ])
-    .optional(),
-  search: z.string().trim().max(100).optional(),
-})
-export type ListEntriesFilters = z.input<typeof listEntriesFiltersSchema>
+// Reports read journal_lines only (entry_date is copied onto each line), so
+// every statement is one aggregate over journal_lines_org_date_cover_idx, an
+// index-only range scan, joined to the chart of accounts. The statements
+// themselves are built by pure code in @workspace/ledger.
 
 const rangeSchema = z
   .object({ from: isoDateSchema, to: isoDateSchema })
   .refine((r) => r.from <= r.to, "'from' is after 'to'")
 
-const row = (a: LedgerAccountSummary, amount: bigint): ReportRow => ({
-  accountId: a.id,
-  code: a.code,
-  name: a.name,
-  amount: paise(amount),
-})
-const section = (
-  key: string,
-  label: string,
-  rows: readonly ReportRow[]
-): ReportSection => ({
-  key,
-  label,
-  rows,
-  total: paise(rows.reduce((s, r) => s + r.amount, 0n)),
-})
+type AccountKind = AccountTotals["type"]
 
-/** Closing balance of every account with activity up to `asOf`. STUB. */
+/**
+ * Debit and credit totals per account for lines dated in [from, to]
+ * (`from` null: since the beginning), optionally only some account types.
+ */
+export function accountTotalsQuery(
+  orgId: string,
+  range: { from: IsoDate | null; to: IsoDate },
+  types?: readonly AccountKind[]
+) {
+  const db = getDb()
+  const sums = db
+    .select({
+      accountId: journalLines.accountId,
+      debit: sql<string>`sum(${journalLines.debitPaise})::text`.as("debit"),
+      credit: sql<string>`sum(${journalLines.creditPaise})::text`.as("credit"),
+    })
+    .from(journalLines)
+    .where(
+      and(
+        eq(journalLines.organizationId, orgId),
+        range.from ? gte(journalLines.entryDate, range.from) : undefined,
+        lte(journalLines.entryDate, range.to)
+      )
+    )
+    .groupBy(journalLines.accountId)
+    .as("sums")
+  return db
+    .select({
+      accountId: ledgerAccounts.id,
+      code: ledgerAccounts.code,
+      name: ledgerAccounts.name,
+      type: ledgerAccounts.type,
+      systemKey: ledgerAccounts.systemKey,
+      isBank: ledgerAccounts.isBank,
+      debit: sums.debit,
+      credit: sums.credit,
+    })
+    .from(sums)
+    .innerJoin(
+      ledgerAccounts,
+      and(
+        eq(ledgerAccounts.organizationId, orgId),
+        eq(ledgerAccounts.id, sums.accountId),
+        types ? inArray(ledgerAccounts.type, [...types]) : undefined
+      )
+    )
+}
+
+export interface AccountTotalsRow extends AccountTotals {
+  readonly systemKey: string | null
+  readonly isBank: boolean
+}
+
+export function toAccountTotals(
+  rows: readonly {
+    accountId: string
+    code: string
+    name: string
+    type: AccountKind
+    systemKey: string | null
+    isBank: boolean
+    debit: string
+    credit: string
+  }[]
+): AccountTotalsRow[] {
+  return rows.map((r) => ({
+    ...r,
+    debit: paise(BigInt(r.debit)),
+    credit: paise(BigInt(r.credit)),
+  }))
+}
+
+function toSections(
+  sections: readonly StatementSectionResult[]
+): ReportSection[] {
+  return sections.map((s) => ({
+    ...s,
+    rows: s.rows.map((r) => ({
+      ...r,
+      lineItemLabel: LINE_ITEM_LABELS[r.lineItem],
+    })),
+  }))
+}
+
+/** Closing balance of every account with lines up to `asOf`. */
 export async function getTrialBalance(
   ctx: OrgContext,
   asOf: IsoDate
 ): Promise<TrialBalance> {
   assertCan(ctx, "report", "read")
   const date = parseInput(isoDateSchema, asOf)
-  const tb = (
-    a: LedgerAccountSummary,
-    debit: bigint,
-    credit: bigint
-  ): TrialBalanceRow => ({
-    accountId: a.id,
-    code: a.code,
-    name: a.name,
-    type: a.type,
-    debit: paise(debit),
-    credit: paise(credit),
-  })
-  const rows = [
-    tb(STUB_ACCOUNTS.bank, 24_31_850_00n, 0n),
-    tb(STUB_ACCOUNTS.razorpayClearing, 1_12_400_00n, 0n),
-    tb(STUB_ACCOUNTS.receivables, 3_42_200_00n, 0n),
-    tb(STUB_ACCOUNTS.inputIgst, 18_406_20n, 0n),
-    tb(STUB_ACCOUNTS.payables, 0n, 1_24_560_00n),
-    tb(STUB_ACCOUNTS.outputCgst, 0n, 61_200_00n),
-    tb(STUB_ACCOUNTS.outputSgst, 0n, 61_200_00n),
-    tb(STUB_ACCOUNTS.outputIgst, 0n, 45_000_00n),
-    tb(STUB_ACCOUNTS.capital, 0n, 25_00_000_00n),
-    tb(STUB_ACCOUNTS.saasRevenue, 0n, 9_30_000_00n),
-    tb(STUB_ACCOUNTS.salaries, 5_55_000_00n, 0n),
-    tb(STUB_ACCOUNTS.hosting, 1_26_000_00n, 0n),
-    tb(STUB_ACCOUNTS.gatewayCharges, 11_103_80n, 0n),
-  ]
-  await Promise.resolve()
-  return {
-    asOf: date,
-    rows,
-    totalDebit: paise(rows.reduce((s, r) => s + r.debit, 0n)),
-    totalCredit: paise(rows.reduce((s, r) => s + r.credit, 0n)),
-  }
+  const rows = await accountTotalsQuery(ctx.orgId, { from: null, to: date })
+  return { asOf: date, ...buildTrialBalance(toAccountTotals(rows)) }
 }
 
-/** Profit and loss for a date range (inclusive). STUB. */
+/** Profit and loss for a date range (inclusive), Schedule III grouping. */
 export async function getProfitAndLoss(
   ctx: OrgContext,
   from: IsoDate,
@@ -174,83 +156,50 @@ export async function getProfitAndLoss(
 ): Promise<ProfitAndLoss> {
   assertCan(ctx, "report", "read")
   const r = parseInput(rangeSchema, { from, to })
-  const income = [
-    section("revenue_from_operations", "Revenue from operations", [
-      row(STUB_ACCOUNTS.saasRevenue, 9_30_000_00n),
-    ]),
-    section("other_income", "Other income", []),
-  ]
-  const expenses = [
-    section("employee_benefits", "Employee benefits expense", [
-      row(STUB_ACCOUNTS.salaries, 5_55_000_00n),
-    ]),
-    section("other_expenses", "Other expenses", [
-      row(STUB_ACCOUNTS.hosting, 1_26_000_00n),
-      row(STUB_ACCOUNTS.gatewayCharges, 11_103_80n),
-    ]),
-  ]
-  const totalIncome = paise(income.reduce((s, x) => s + x.total, 0n))
-  const totalExpenses = paise(expenses.reduce((s, x) => s + x.total, 0n))
-  await Promise.resolve()
+  const rows = await accountTotalsQuery(ctx.orgId, r, ["income", "expense"])
+  const pl = buildProfitAndLoss(toAccountTotals(rows))
   return {
     ...r,
-    income,
-    expenses,
-    totalIncome,
-    totalExpenses,
-    netProfit: paise(totalIncome - totalExpenses),
+    ...pl,
+    income: toSections(pl.income),
+    expenses: toSections(pl.expenses),
   }
 }
 
-/** Balance sheet as of a date, Schedule III-style grouping. STUB. */
+/** Balance sheet as of a date, Schedule III grouping. */
 export async function getBalanceSheet(
   ctx: OrgContext,
   asOf: IsoDate
 ): Promise<BalanceSheet> {
   assertCan(ctx, "report", "read")
   const date = parseInput(isoDateSchema, asOf)
-  const profit = 2_37_896_20n
-  const equityAndLiabilities = [
-    section("shareholders_funds", "Shareholders' funds", [
-      row(STUB_ACCOUNTS.capital, 25_00_000_00n),
-      {
-        accountId: "current-year-profit",
-        code: "",
-        name: "Surplus (current year)",
-        amount: paise(profit),
-      },
-    ]),
-    section("non_current_liabilities", "Non-current liabilities", []),
-    section("current_liabilities", "Current liabilities", [
-      row(STUB_ACCOUNTS.payables, 1_24_560_00n),
-      row(STUB_ACCOUNTS.outputCgst, 61_200_00n),
-      row(STUB_ACCOUNTS.outputSgst, 61_200_00n),
-      row(STUB_ACCOUNTS.outputIgst, 45_000_00n),
-    ]),
-  ]
-  const assets = [
-    section("non_current_assets", "Non-current assets", []),
-    section("current_assets", "Current assets", [
-      row(STUB_ACCOUNTS.bank, 24_31_850_00n),
-      row(STUB_ACCOUNTS.razorpayClearing, 1_12_400_00n),
-      row(STUB_ACCOUNTS.receivables, 3_42_200_00n),
-      row(STUB_ACCOUNTS.inputIgst, 18_406_20n),
-    ]),
-  ]
-  await Promise.resolve()
+  const db = getDb()
+  const [cumulative, currentYear] = await db.batch([
+    accountTotalsQuery(ctx.orgId, { from: null, to: date }),
+    accountTotalsQuery(
+      ctx.orgId,
+      { from: financialYearStart(date), to: date },
+      ["income", "expense"]
+    ),
+  ])
+  const bs = buildBalanceSheet(
+    toAccountTotals(cumulative),
+    toAccountTotals(currentYear)
+  )
   return {
     asOf: date,
-    equityAndLiabilities,
-    assets,
-    totalEquityAndLiabilities: paise(
-      equityAndLiabilities.reduce((s, x) => s + x.total, 0n)
-    ),
-    totalAssets: paise(assets.reduce((s, x) => s + x.total, 0n)),
-    currentYearProfit: paise(profit),
+    ...bs,
+    equityAndLiabilities: toSections(bs.equityAndLiabilities),
+    assets: toSections(bs.assets),
   }
 }
 
-/** Journal entries, newest first, with their lines. STUB. */
+/**
+ * Journal entries, newest first (entry date, then id), with their lines.
+ * With `accountId` or `partyId` the page is found from the lines (the
+ * drill-down from a report row); otherwise from journal_entries. Either way
+ * one query finds the page and one batch loads its lines and reversals.
+ */
 export async function listEntries(
   ctx: OrgContext,
   filters: ListEntriesFilters,
@@ -260,14 +209,197 @@ export async function listEntries(
   assertCan(ctx, "ledger", "read")
   const f = parseInput(listEntriesFiltersSchema, filters)
   const { limit } = parseInput(pageOptionsSchema, options)
-  if (f.from && f.to && f.from > f.to)
-    throw new ServiceError("VALIDATION", "'from' is after 'to'.")
-  const items = STUB_ENTRIES.filter(
-    (e) =>
-      (!f.accountId || e.lines.some((l) => l.account.id === f.accountId)) &&
-      (!f.sourceType || e.sourceType === f.sourceType) &&
-      (!f.search || e.narration.toLowerCase().includes(f.search.toLowerCase()))
-  ).reverse()
-  await Promise.resolve()
-  return { items: cursor ? [] : items.slice(0, limit), nextCursor: null }
+  const after = decodeCursor(cursor)
+  if (after && !isoDateSchema.safeParse(after.k).success)
+    throw new ServiceError("VALIDATION", "Invalid page cursor.")
+  if (after && !z.uuid().safeParse(after.id).success)
+    throw new ServiceError("VALIDATION", "Invalid page cursor.")
+
+  const db = getDb()
+  const e = journalEntries
+  const entryFilters = [
+    f.sourceType ? eq(e.sourceType, f.sourceType) : undefined,
+    f.search
+      ? ilike(e.narration, `%${f.search.replace(/[\\%_]/g, "\\$&")}%`)
+      : undefined,
+  ]
+  // (date, id) < cursor, newest first.
+  const keyset = (date: AnyColumn, id: AnyColumn) =>
+    after
+      ? sql`(${date}, ${id}) < (${after.k}::date, ${after.id}::uuid)`
+      : undefined
+
+  let page: { id: string; entryDate: string }[]
+  if (f.accountId || f.partyId) {
+    const l = journalLines
+    page = await db
+      .select({ id: l.entryId, entryDate: l.entryDate })
+      .from(l)
+      .innerJoin(
+        e,
+        and(eq(e.organizationId, l.organizationId), eq(e.id, l.entryId))
+      )
+      .where(
+        and(
+          eq(l.organizationId, ctx.orgId),
+          f.accountId ? eq(l.accountId, f.accountId) : undefined,
+          f.partyId ? eq(l.partyId, f.partyId) : undefined,
+          f.from ? gte(l.entryDate, f.from) : undefined,
+          f.to ? lte(l.entryDate, f.to) : undefined,
+          keyset(l.entryDate, l.entryId),
+          ...entryFilters
+        )
+      )
+      // An entry can have several lines on the same account.
+      .groupBy(l.entryDate, l.entryId)
+      .orderBy(desc(l.entryDate), desc(l.entryId))
+      .limit(limit + 1)
+  } else {
+    page = await db
+      .select({ id: e.id, entryDate: e.entryDate })
+      .from(e)
+      .where(
+        and(
+          eq(e.organizationId, ctx.orgId),
+          f.from ? gte(e.entryDate, f.from) : undefined,
+          f.to ? lte(e.entryDate, f.to) : undefined,
+          keyset(e.entryDate, e.id),
+          ...entryFilters
+        )
+      )
+      .orderBy(desc(e.entryDate), desc(e.id))
+      .limit(limit + 1)
+  }
+
+  const shown = page.slice(0, limit)
+  const last = shown.at(-1)
+  return {
+    items: await entryViews(
+      ctx.orgId,
+      shown.map((p) => p.id)
+    ),
+    nextCursor:
+      page.length > limit && last
+        ? encodeCursor({ k: last.entryDate, id: last.id })
+        : null,
+  }
+}
+
+/** Entries with their lines and reversal links, in the order of `ids`. */
+export async function entryViews(
+  orgId: string,
+  ids: readonly string[]
+): Promise<JournalEntryView[]> {
+  if (ids.length === 0) return []
+  const db = getDb()
+  const [entries, lines, reversals] = await db.batch([
+    db
+      .select({
+        id: journalEntries.id,
+        entryDate: journalEntries.entryDate,
+        narration: journalEntries.narration,
+        sourceType: journalEntries.sourceType,
+        sourceId: journalEntries.sourceId,
+        reversesEntryId: journalEntries.reversesEntryId,
+        createdBy: journalEntries.createdBy,
+        createdAt: journalEntries.createdAt,
+      })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.organizationId, orgId),
+          inArray(journalEntries.id, [...ids])
+        )
+      ),
+    db
+      .select({
+        id: journalLines.id,
+        entryId: journalLines.entryId,
+        accountId: ledgerAccounts.id,
+        accountCode: ledgerAccounts.code,
+        accountName: ledgerAccounts.name,
+        accountType: ledgerAccounts.type,
+        partyId: parties.id,
+        partyName: parties.name,
+        partyGstin: parties.gstin,
+        debit: journalLines.debitPaise,
+        credit: journalLines.creditPaise,
+        description: journalLines.description,
+      })
+      .from(journalLines)
+      .innerJoin(
+        ledgerAccounts,
+        and(
+          eq(ledgerAccounts.organizationId, journalLines.organizationId),
+          eq(ledgerAccounts.id, journalLines.accountId)
+        )
+      )
+      .leftJoin(
+        parties,
+        and(
+          eq(parties.organizationId, journalLines.organizationId),
+          eq(parties.id, journalLines.partyId)
+        )
+      )
+      .where(
+        and(
+          eq(journalLines.organizationId, orgId),
+          inArray(journalLines.entryId, [...ids])
+        )
+      )
+      .orderBy(asc(journalLines.entryId), asc(journalLines.lineNo)),
+    db
+      .select({
+        id: journalEntries.id,
+        reversesEntryId: journalEntries.reversesEntryId,
+      })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.organizationId, orgId),
+          inArray(journalEntries.reversesEntryId, [...ids])
+        )
+      ),
+  ])
+
+  const reversedBy = new Map(
+    reversals.flatMap((r) =>
+      r.reversesEntryId ? [[r.reversesEntryId, r.id]] : []
+    )
+  )
+  const linesBy = new Map<string, JournalEntryView["lines"][number][]>()
+  for (const l of lines) {
+    const list = linesBy.get(l.entryId) ?? []
+    list.push({
+      id: l.id,
+      account: {
+        id: l.accountId,
+        code: l.accountCode,
+        name: l.accountName,
+        type: l.accountType,
+      },
+      party: l.partyId
+        ? { id: l.partyId, name: l.partyName ?? "", gstin: l.partyGstin }
+        : null,
+      debit: paise(l.debit),
+      credit: paise(l.credit),
+      description: l.description,
+    })
+    linesBy.set(l.entryId, list)
+  }
+  const byId = new Map(entries.map((x) => [x.id, x]))
+  return ids.flatMap((id) => {
+    const x = byId.get(id)
+    if (!x) return []
+    const own = linesBy.get(id) ?? []
+    return [
+      {
+        ...x,
+        createdAt: x.createdAt.toISOString(),
+        reversedByEntryId: reversedBy.get(id) ?? null,
+        lines: own,
+        total: paise(own.reduce((s, l) => s + l.debit, 0n)),
+      },
+    ]
+  })
 }

@@ -4,7 +4,7 @@ import type { IsoTimestamp, Period } from "./common"
 
 export interface DashboardSummary {
   readonly asOf: IsoTimestamp
-  /** Bank + Razorpay clearing balances. */
+  /** Cash and cash equivalents (cash, bank and Razorpay clearing balances). */
   readonly cash: Money
   readonly revenueThisMonth: Money
   readonly revenueLastMonth: Money

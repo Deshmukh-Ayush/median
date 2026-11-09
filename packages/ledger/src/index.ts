@@ -79,3 +79,28 @@ export {
   windowsOverlap,
 } from "./gst-rates"
 export { percentChangeBps } from "./change"
+export type {
+  AccountTotals,
+  Classification,
+  LineItem,
+  StatementRow,
+  StatementSection,
+  StatementSectionResult,
+  TrialBalanceRow,
+} from "./reports"
+export {
+  BALANCE_SHEET_SECTIONS,
+  CURRENT_YEAR_PROFIT_ID,
+  LINE_ITEM_LABELS,
+  PREVIOUS_YEARS_SURPLUS_ID,
+  PROFIT_AND_LOSS_SECTIONS,
+  SECTION_LABELS,
+  buildBalanceSheet,
+  buildProfitAndLoss,
+  buildTrialBalance,
+  classifyAccount,
+  financialYearStart,
+  isDebitNatured,
+  naturalBalance,
+  profitOf,
+} from "./reports"
