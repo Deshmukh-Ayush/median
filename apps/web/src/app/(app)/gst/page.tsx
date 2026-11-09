@@ -1,26 +1,15 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
-import { CalendarClockIcon, DownloadIcon, PercentIcon } from "lucide-react"
+import { CalendarClockIcon, PercentIcon } from "lucide-react"
 
 import { isServiceError } from "@workspace/contracts"
-import type { Money as MoneyValue, Period } from "@workspace/contracts"
-import { paise } from "@workspace/ledger"
+import type { Period } from "@workspace/contracts"
 import { PageHeader } from "@workspace/ui/components/app-shell"
 import { buttonVariants } from "@workspace/ui/components/button"
-import { EmptyState } from "@workspace/ui/components/empty-state"
-import { Money } from "@workspace/ui/components/money"
 import { Skeleton } from "@workspace/ui/components/skeleton"
-import { StatusChip } from "@workspace/ui/components/status-chip"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@workspace/ui/components/table"
 
+import { GstSummaryView } from "@/components/gst/gst-summary"
+import { Gstr1Draft } from "@/components/gst/gstr1-draft"
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import { formatDate, formatPeriod, todayIso } from "@/lib/format-date"
 import {
@@ -31,8 +20,9 @@ import {
   periodParam,
 } from "@/lib/gst-deadlines"
 import type { SearchParams } from "@/lib/page-props"
-import { getGstProfile, getGstSummary } from "@/server/services"
-import type { GstTaxAmounts, OrgContext } from "@/server/services"
+import { can } from "@/lib/permissions"
+import { getGstProfile } from "@/server/services"
+import type { OrgContext } from "@/server/services"
 
 import { getPageContext } from "../org-context"
 
@@ -46,160 +36,6 @@ function SummarySkeleton() {
     <div className="flex flex-col gap-4">
       <Skeleton className="h-24 rounded-lg" />
       <Skeleton className="h-56 rounded-lg" />
-    </div>
-  )
-}
-
-/** Tax amounts as cells: IGST, CGST, SGST, total. */
-function TaxCells({ t }: { t: GstTaxAmounts }) {
-  return (
-    <>
-      <TableCell numeric>
-        <Money value={t.igst} />
-      </TableCell>
-      <TableCell numeric>
-        <Money value={t.cgst} />
-      </TableCell>
-      <TableCell numeric>
-        <Money value={t.sgst} />
-      </TableCell>
-      <TableCell numeric className="font-medium">
-        <Money value={t.total} />
-      </TableCell>
-    </>
-  )
-}
-
-/** A negative net is credit carried forward: shown positive, labelled so. */
-function NetLine({ label, value }: { label: string; value: MoneyValue }) {
-  const raw: bigint = value
-  const credit = raw < 0n
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-fg-secondary">
-        {label}
-        {credit ? " (credit carried forward)" : ""}
-      </span>
-      <Money value={credit ? paise(-raw) : value} className="font-medium" />
-    </div>
-  )
-}
-
-async function Summary({ ctx, period }: { ctx: OrgContext; period: Period }) {
-  let s
-  try {
-    s = await getGstSummary(ctx, period)
-  } catch (error) {
-    if (!isServiceError(error)) throw error
-    return (
-      <div className="rounded-lg border border-default bg-surface">
-        <EmptyState
-          icon={<PercentIcon />}
-          title="We couldn't load the GST summary"
-          description={error.message}
-        />
-      </div>
-    )
-  }
-
-  const payable: bigint = s.netPayable.total
-  const carried = payable < 0n
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg border border-default bg-surface px-5 py-4">
-        <div className="flex flex-col gap-1">
-          <span className="flex items-center gap-2 text-xs text-fg-secondary">
-            {carried ? "Tax credit carried forward" : "Tax to pay"} for{" "}
-            {formatPeriod(s.period)}
-            {s.isLocked ? (
-              <StatusChip tone="success">Locked</StatusChip>
-            ) : (
-              <StatusChip tone="warning">Open: can still change</StatusChip>
-            )}
-          </span>
-          <Money
-            value={carried ? paise(-payable) : s.netPayable.total}
-            className="text-2xl font-semibold"
-          />
-        </div>
-        <div className="flex gap-6">
-          <NetLine label="IGST" value={s.netPayable.igst} />
-          <NetLine label="CGST" value={s.netPayable.cgst} />
-          <NetLine label="SGST" value={s.netPayable.sgst} />
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-default bg-surface">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>GSTR-3B</TableHead>
-              <TableHead numeric>Taxable value</TableHead>
-              <TableHead numeric>IGST</TableHead>
-              <TableHead numeric>CGST</TableHead>
-              <TableHead numeric>SGST</TableHead>
-              <TableHead numeric>Total tax</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {s.outward.length === 0 ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={6} className="text-fg-secondary">
-                  No taxable sales this month.
-                </TableCell>
-              </TableRow>
-            ) : (
-              s.outward.map((row) => (
-                <TableRow key={row.rateBps}>
-                  <TableCell className="pl-6">
-                    Sales at {row.rateBps / 100}%
-                  </TableCell>
-                  <TableCell numeric>
-                    <Money value={row.taxable} />
-                  </TableCell>
-                  <TaxCells t={row} />
-                </TableRow>
-              ))
-            )}
-            <TableRow className="hover:bg-transparent">
-              <TableCell className="font-medium">
-                3.1(a) Output tax on sales
-              </TableCell>
-              <TableCell numeric className="font-medium">
-                <Money value={s.outwardTotal.taxable} />
-              </TableCell>
-              <TaxCells t={s.outwardTotal} />
-            </TableRow>
-            <TableRow className="hover:bg-transparent">
-              <TableCell className="font-medium">
-                4(A)(5) Input tax credit on purchases
-              </TableCell>
-              <TableCell />
-              <TaxCells t={s.inputTaxCredit} />
-            </TableRow>
-          </TableBody>
-          <TableFooter>
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={2}>
-                Net: output tax minus input tax credit
-              </TableCell>
-              <TableCell numeric>
-                <Money value={s.netPayable.igst} variant="ledger" />
-              </TableCell>
-              <TableCell numeric>
-                <Money value={s.netPayable.cgst} variant="ledger" />
-              </TableCell>
-              <TableCell numeric>
-                <Money value={s.netPayable.sgst} variant="ledger" />
-              </TableCell>
-              <TableCell numeric>
-                <Money value={s.netPayable.total} variant="ledger" />
-              </TableCell>
-            </TableRow>
-          </TableFooter>
-        </Table>
-      </div>
     </div>
   )
 }
@@ -327,32 +163,20 @@ export default async function Page({
       />
 
       <Suspense key={period} fallback={<SummarySkeleton />}>
-        <Summary ctx={ctx} period={period} />
+        <GstSummaryView ctx={ctx} period={period} />
       </Suspense>
 
       <section aria-labelledby="returns" className="flex flex-col gap-3">
         <h2 id="returns" className="text-sm font-semibold">
           Returns for {formatPeriod(period)}
         </h2>
-        <div className="flex flex-col gap-2 rounded-lg border border-default bg-surface px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              aria-disabled
-              className={buttonVariants({
-                size: "sm",
-                className: "pointer-events-none opacity-50",
-              })}
-            >
-              <DownloadIcon aria-hidden />
-              Download GSTR-1 (draft)
-            </span>
-            <StatusChip>Coming soon</StatusChip>
-          </div>
-          <p className="text-xs text-fg-secondary">
-            This is a draft. Your CA checks it in the GST offline tool before
-            filing; Median doesn&apos;t file returns for you.
-          </p>
-        </div>
+        <Suspense key={`g:${period}`} fallback={<Skeleton className="h-20" />}>
+          <Gstr1Draft
+            ctx={ctx}
+            period={period}
+            canExport={can(ctx.role, { resource: "report", action: "export" })}
+          />
+        </Suspense>
         <Suspense key={`d:${period}`} fallback={<Skeleton className="h-24" />}>
           <Deadlines ctx={ctx} period={period} today={today} />
         </Suspense>
