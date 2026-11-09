@@ -80,6 +80,8 @@ export type Decision =
       readonly tds: InboxTds | null
       /** The invoice this receipt pays: applied when it's approved. */
       readonly invoiceId?: string | null
+      /** The invoice a refund is for (not applied on approval). */
+      readonly refundInvoiceId?: string | null
     }
   /**
    * Rule 10: a refund of an invoiced sale. Book a credit note against the

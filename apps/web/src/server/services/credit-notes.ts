@@ -10,6 +10,7 @@ import {
 import type {
   CreateCreditNoteInput,
   CreditNote,
+  CreditNotePreview,
   CreditNoteReason,
   Page,
   PageOptions,
@@ -27,7 +28,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm"
 import { z } from "zod"
 
 import { getDb, withTransaction } from "../db"
-import type { Tx } from "../db"
+import type { Db, Tx } from "../db"
 import {
   auditLog,
   creditNoteLines,
@@ -36,6 +37,7 @@ import {
   invoiceLines,
   invoices,
   parties,
+  periodLocks,
 } from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
@@ -70,19 +72,21 @@ interface InsertCreditNote {
   readonly sourceRecordId: string | null
 }
 
+type PlanInput = Omit<InsertCreditNote, "notes" | "sourceRecordId" | "reason">
+
 /**
- * Writes a credit note, its entry (Dr revenue + output GST, Cr the
- * customer's receivable), the invoice's new credited amount and status, and
- * an audit row, inside the caller's transaction. Throws NOT_FOUND,
- * VALIDATION, PERIOD_LOCKED.
+ * The credit note's lines and totals, from the invoice and what's already
+ * credited: the maths createCreditNote and previewCreditNote share. With
+ * `lock`, the invoice row is locked for the caller's transaction. Throws
+ * NOT_FOUND, VALIDATION.
  */
-async function insertCreditNote(
-  tx: Tx,
-  actor: LedgerActor,
-  c: InsertCreditNote
-): Promise<{ id: string; number: string; total: Money; partyId: string }> {
-  const { orgId } = actor
-  const [invoice] = await tx
+async function planCreditNote(
+  db: Db | Tx,
+  orgId: string,
+  c: PlanInput,
+  lock: boolean
+) {
+  const invoiceQuery = db
     .select({
       id: invoices.id,
       number: invoices.number,
@@ -100,7 +104,7 @@ async function insertCreditNote(
     .where(
       and(eq(invoices.organizationId, orgId), eq(invoices.id, c.invoiceId))
     )
-    .for("update")
+  const [invoice] = lock ? await invoiceQuery.for("update") : await invoiceQuery
   if (!invoice) throw new ServiceError("NOT_FOUND", "Invoice not found.")
   if (c.creditNoteDate < invoice.invoiceDate)
     throw new ServiceError(
@@ -109,7 +113,7 @@ async function insertCreditNote(
     )
 
   const [lineRows, creditedRows, accounts] = await Promise.all([
-    tx
+    db
       .select({
         id: invoiceLines.id,
         lineNo: invoiceLines.lineNo,
@@ -129,7 +133,7 @@ async function insertCreditNote(
         )
       )
       .orderBy(asc(invoiceLines.lineNo)),
-    tx
+    db
       .select({
         invoiceLineId: creditNoteLines.invoiceLineId,
         taxable: sql<string>`sum(${creditNoteLines.taxablePaise})::text`,
@@ -149,7 +153,7 @@ async function insertCreditNote(
         )
       )
       .groupBy(creditNoteLines.invoiceLineId),
-    salesAccounts(tx, orgId),
+    salesAccounts(db, orgId),
   ])
   const creditedByLine = new Map(
     creditedRows.map((r) => [r.invoiceLineId, BigInt(r.taxable)])
@@ -201,6 +205,32 @@ async function insertCreditNote(
       "Credit notes can't add up to more than the invoice."
     )
 
+  const lines = planned.map((l, i) => {
+    const tax = computed.lines[i]
+    if (!tax) throw new Error("unreachable")
+    return { ...l, ...tax }
+  })
+  return { invoice, accounts, lines, totals: computed.totals }
+}
+
+/**
+ * Writes a credit note, its entry (Dr revenue + output GST, Cr the
+ * customer's receivable), the invoice's new credited amount and status, and
+ * an audit row, inside the caller's transaction. Throws NOT_FOUND,
+ * VALIDATION, PERIOD_LOCKED.
+ */
+async function insertCreditNote(
+  tx: Tx,
+  actor: LedgerActor,
+  c: InsertCreditNote
+): Promise<{ id: string; number: string; total: Money; partyId: string }> {
+  const { orgId } = actor
+  const {
+    invoice,
+    accounts,
+    lines,
+    totals: t,
+  } = await planCreditNote(tx, orgId, c, true)
   const fy = financialYearOf(c.creditNoteDate)
   const [series] = await tx
     .insert(creditNoteSeries)
@@ -224,11 +254,6 @@ async function insertCreditNote(
   if (!series) throw new Error("credit_note_series upsert returned nothing")
   const number = documentNumber(series.prefix, fy, series.next - 1)
   const id = crypto.randomUUID()
-  const lines = planned.map((l, i) => {
-    const tax = computed.lines[i]
-    if (!tax) throw new Error("unreachable")
-    return { ...l, ...tax }
-  })
 
   const entry = await postEntry(
     actor,
@@ -276,7 +301,7 @@ async function insertCreditNote(
       invoiceLineId: l.invoiceLineId,
       description: l.description,
       hsnSac: l.hsnSac,
-      quantityMilli: l.quantityMilli,
+      quantityMilli: l.byValue ? 0n : l.quantityMilli,
       unitPricePaise: l.unitPrice,
       gstRateBps: l.gstRateBps,
       taxablePaise: l.taxable,
@@ -312,6 +337,111 @@ async function insertCreditNote(
   return { id, number, total: t.total, partyId: invoice.partyId }
 }
 
+function requestsOf(
+  lines: z.output<typeof createCreditNoteInputSchema>["lines"]
+): CreditRequest[] {
+  return lines.map((l): CreditRequest =>
+    "quantity" in l
+      ? {
+          invoiceLineId: l.invoiceLineId,
+          quantityMilli: quantityMilliOf(l.quantity),
+        }
+      : { invoiceLineId: l.invoiceLineId, taxable: l.taxable }
+  )
+}
+
+/**
+ * What createCreditNote would issue for the same input (lines, tax,
+ * round-off, totals, the next number and what's left outstanding),
+ * computed by the same code; nothing is saved. Throws NOT_FOUND and
+ * VALIDATION like createCreditNote; a locked month is a warning here.
+ */
+export async function previewCreditNote(
+  ctx: OrgContext,
+  input: CreateCreditNoteInput
+): Promise<CreditNotePreview> {
+  assertCan(ctx, "ledger", "post")
+  const i = parseInput(createCreditNoteInputSchema, input)
+  const db = getDb()
+  const plan = await planCreditNote(
+    db,
+    ctx.orgId,
+    {
+      invoiceId: i.invoiceId,
+      creditNoteDate: i.creditNoteDate,
+      credit: { kind: "lines", requests: requestsOf(i.lines) },
+    },
+    false
+  )
+  const fy = financialYearOf(i.creditNoteDate)
+  const [[series], locks] = await db.batch([
+    db
+      .select({
+        prefix: creditNoteSeries.prefix,
+        next: creditNoteSeries.nextNumber,
+      })
+      .from(creditNoteSeries)
+      .where(
+        and(
+          eq(creditNoteSeries.organizationId, ctx.orgId),
+          eq(creditNoteSeries.financialYear, fy)
+        )
+      ),
+    db
+      .select({ id: periodLocks.id })
+      .from(periodLocks)
+      .where(
+        and(
+          eq(periodLocks.organizationId, ctx.orgId),
+          eq(periodLocks.period, i.creditNoteDate.slice(0, 7))
+        )
+      ),
+  ])
+  const t = plan.totals
+  const inv = plan.invoice
+  const outstandingAfter = inv.total - inv.paid - inv.credited - t.total
+  return {
+    nextNumber: documentNumber(
+      series?.prefix ?? CREDIT_NOTE_PREFIX,
+      fy,
+      series?.next ?? 1
+    ),
+    invoice: {
+      id: inv.id,
+      number: inv.number,
+      total: paise(inv.total),
+      credited: paise(inv.credited),
+      outstandingAfter: paise(outstandingAfter > 0n ? outstandingAfter : 0n),
+    },
+    supplyType: inv.supplyType,
+    lines: plan.lines.map((l) => ({
+      invoiceLineId: l.invoiceLineId,
+      description: l.description,
+      hsnSac: l.hsnSac,
+      quantity: l.byValue ? null : formatQuantityMilli(l.quantityMilli),
+      unitPrice: l.unitPrice,
+      gstRateBps: l.gstRateBps,
+      taxable: l.taxable,
+      cgst: l.cgst,
+      sgst: l.sgst,
+      igst: l.igst,
+      total: l.total,
+    })),
+    taxable: t.taxable,
+    cgst: t.cgst,
+    sgst: t.sgst,
+    igst: t.igst,
+    roundOff: t.roundOff,
+    total: t.total,
+    warnings:
+      locks.length > 0
+        ? [
+            `${i.creditNoteDate.slice(0, 7)} is locked: date the credit note in an open month.`,
+          ]
+        : [],
+  }
+}
+
 /**
  * Issues a credit note against an invoice: returned quantities or credited
  * values per invoice line, taxed like the invoice (rule 6) and rounded to
@@ -327,14 +457,7 @@ export async function createCreditNote(
 ): Promise<CreditNote> {
   assertCan(ctx, "ledger", "post")
   const i = parseInput(createCreditNoteInputSchema, input)
-  const requests = i.lines.map((l): CreditRequest =>
-    "quantity" in l
-      ? {
-          invoiceLineId: l.invoiceLineId,
-          quantityMilli: quantityMilliOf(l.quantity),
-        }
-      : { invoiceLineId: l.invoiceLineId, taxable: l.taxable }
-  )
+  const requests = requestsOf(i.lines)
   const { id } = await withTransaction((tx) =>
     insertCreditNote(
       tx,
@@ -518,7 +641,8 @@ export async function getCreditNote(
       invoiceLineId: l.invoiceLineId,
       description: l.description,
       hsnSac: l.hsnSac,
-      quantity: formatQuantityMilli(l.quantityMilli),
+      quantity:
+        l.quantityMilli === 0n ? null : formatQuantityMilli(l.quantityMilli),
       unitPrice: paise(l.unitPricePaise),
       gstRateBps: l.gstRateBps,
       taxable: paise(l.taxablePaise),
