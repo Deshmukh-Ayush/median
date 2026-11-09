@@ -1,11 +1,10 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Suspense } from "react"
-import { LandmarkIcon, ListChecksIcon, UploadIcon } from "lucide-react"
+import { LandmarkIcon, UploadIcon } from "lucide-react"
 
 import { isServiceError } from "@workspace/contracts"
-import type { IsoDate } from "@workspace/contracts"
-import { paise } from "@workspace/ledger"
+import type { CashAccountPosition, IsoDate } from "@workspace/contracts"
 import { PageHeader } from "@workspace/ui/components/app-shell"
 import { buttonVariants } from "@workspace/ui/components/button"
 import { EmptyState } from "@workspace/ui/components/empty-state"
@@ -25,11 +24,7 @@ import {
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import { formatDate, formatDateTime, todayIso } from "@/lib/format-date"
 import { journalHref } from "@/lib/report-params"
-import {
-  getDashboardSummary,
-  getTrialBalance,
-  listLedgerAccounts,
-} from "@/server/services"
+import { getCashPosition } from "@/server/services"
 import type { OrgContext } from "@/server/services"
 
 import { getPageContext } from "../org-context"
@@ -39,50 +34,70 @@ export const metadata: Metadata = { title: "Cash · Median" }
 const TITLE = "Cash"
 const DESCRIPTION = "Bank and Razorpay balances, and what's reconciled."
 
-async function TotalCash({ ctx }: { ctx: OrgContext }) {
-  let s
-  try {
-    s = await getDashboardSummary(ctx)
-  } catch (error) {
-    if (!isServiceError(error)) throw error
-    return <StatCard label="Cash in bank and Razorpay" error={error.message} />
+const KIND_LABELS: Record<CashAccountPosition["kind"], string> = {
+  bank: "Bank",
+  razorpay: "Razorpay",
+  cash: "Cash",
+}
+
+function Reconciliation({ a }: { a: CashAccountPosition }) {
+  if (a.kind === "cash") return <span className="text-fg-tertiary">—</span>
+  if (a.matched.count === 0 && a.unmatched.count === 0) {
+    return (
+      <span className="text-xs text-fg-secondary">
+        {a.kind === "bank" ? "No statement yet" : "Nothing synced yet"}
+      </span>
+    )
   }
   return (
-    <StatCard
-      label="Cash in bank and Razorpay"
-      value={s.cash}
-      compact
-      tone={s.cash < 0n ? "danger" : "default"}
-      caption={`Updated ${formatDateTime(s.asOf)}`}
-    />
+    <div className="flex flex-col items-start gap-0.5">
+      {a.unmatched.count === 0 ? (
+        <StatusChip tone="success" dot>
+          All {a.matched.count} lines reconciled
+        </StatusChip>
+      ) : (
+        <Link href="/inbox" className="hover:underline">
+          <StatusChip tone="warning" dot>
+            {a.unmatched.count} to review
+          </StatusChip>
+        </Link>
+      )}
+      <span className="text-xs text-fg-secondary">
+        {a.matched.count} matched
+        {a.unmatched.count > 0 ? (
+          <>
+            {" "}
+            · <Money
+              value={a.unmatched.amount}
+              className="text-fg-secondary"
+            />{" "}
+            waiting
+          </>
+        ) : null}
+      </span>
+    </div>
   )
 }
 
-/**
- * Each bank account's closing balance, from the trial balance. Rows are
- * matched by account code (unique per organisation); nothing is added up.
- */
-async function BankBalances({ ctx, asOf }: { ctx: OrgContext; asOf: IsoDate }) {
-  let banks, tb
+/** Each bank, Razorpay and cash account from getCashPosition. */
+async function Position({ ctx, asOf }: { ctx: OrgContext; asOf: IsoDate }) {
+  let p
   try {
-    ;[banks, tb] = await Promise.all([
-      listLedgerAccounts(ctx, null, { bankOnly: true }, { limit: 100 }),
-      getTrialBalance(ctx, asOf),
-    ])
+    p = await getCashPosition(ctx, asOf)
   } catch (error) {
     if (!isServiceError(error)) throw error
     return (
       <div className="rounded-lg border border-default bg-surface">
         <EmptyState
           icon={<LandmarkIcon />}
-          title="We couldn't load your bank balances"
+          title="We couldn't load your cash"
           description={error.message}
         />
       </div>
     )
   }
 
-  if (banks.items.length === 0) {
+  if (p.accounts.length === 0) {
     return (
       <div className="rounded-lg border border-default bg-surface">
         <EmptyState
@@ -102,57 +117,83 @@ async function BankBalances({ ctx, asOf }: { ctx: OrgContext; asOf: IsoDate }) {
     )
   }
 
-  const byCode = new Map(tb.rows.map((r) => [r.code, r]))
-
   return (
-    <div className="rounded-lg border border-default bg-surface">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead>Account</TableHead>
-            <TableHead>Bank</TableHead>
-            <TableHead numeric className="w-44">
-              Balance on {formatDate(tb.asOf)}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {banks.items.map((a) => {
-            const row = byCode.get(a.code)
-            // A bank is an asset: a credit balance is an overdraft, shown
-            // as a negative amount (a sign flip, not a sum).
-            const credit: bigint = row?.credit ?? 0n
-            const overdrawn = credit > 0n
-            const balance = overdrawn
-              ? paise(-credit)
-              : (row?.debit ?? paise(0n))
-            const href = journalHref({ accountId: a.id, to: tb.asOf })
-            return (
-              <TableRow key={a.id}>
-                <TableCell>
-                  <Link href={href} className="hover:underline">
-                    <span className="text-fg-secondary tabular">{a.code}</span>{" "}
-                    {a.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-fg-secondary">
-                  {[a.bankName, a.accountLast4 ? `····${a.accountLast4}` : null]
-                    .filter(Boolean)
-                    .join(" ") || "—"}
-                </TableCell>
-                <TableCell numeric>
-                  <Link href={href} className="hover:underline">
-                    <Money
-                      value={balance}
-                      tone={overdrawn ? "danger" : "default"}
-                    />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+    <div className="flex flex-col gap-4">
+      <div className="max-w-sm">
+        <StatCard
+          label="Cash in bank and Razorpay"
+          value={p.total}
+          compact
+          tone={p.total < 0n ? "danger" : "default"}
+          caption={`As of ${formatDate(p.asOf)}`}
+        />
+      </div>
+      <div className="rounded-lg border border-default bg-surface">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Account</TableHead>
+              <TableHead className="w-28">Type</TableHead>
+              <TableHead numeric className="w-40">
+                Balance
+              </TableHead>
+              <TableHead className="w-40">Last statement</TableHead>
+              <TableHead className="w-56">Reconciliation</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {p.accounts.map((a) => {
+              const href = journalHref({ accountId: a.accountId, to: p.asOf })
+              return (
+                <TableRow key={a.accountId} className="align-top">
+                  <TableCell className="py-2 whitespace-normal">
+                    <Link href={href} className="hover:underline">
+                      <span className="text-fg-secondary tabular">
+                        {a.code}
+                      </span>{" "}
+                      {a.name}
+                    </Link>
+                    {a.bankName || a.accountLast4 ? (
+                      <span className="block text-xs text-fg-secondary">
+                        {[
+                          a.bankName,
+                          a.accountLast4 ? `····${a.accountLast4}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="py-2 text-fg-secondary">
+                    {KIND_LABELS[a.kind]}
+                  </TableCell>
+                  <TableCell numeric className="py-2">
+                    <Link href={href} className="hover:underline">
+                      <Money
+                        value={a.balance}
+                        tone={a.balance < 0n ? "danger" : "default"}
+                      />
+                    </Link>
+                  </TableCell>
+                  <TableCell className="py-2 text-fg-secondary">
+                    {a.lastStatementDate
+                      ? formatDate(a.lastStatementDate)
+                      : "—"}
+                    {a.lastSyncedAt ? (
+                      <span className="block text-xs">
+                        Synced {formatDateTime(a.lastSyncedAt)}
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <Reconciliation a={a} />
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
@@ -172,7 +213,6 @@ export default async function Page() {
       />
     )
   }
-  const today = todayIso()
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -186,43 +226,9 @@ export default async function Page() {
           </Link>
         }
       />
-      <div className="max-w-sm">
-        <Suspense
-          fallback={<StatCard label="Cash in bank and Razorpay" loading />}
-        >
-          <TotalCash ctx={ctx} />
-        </Suspense>
-      </div>
-
-      <section aria-labelledby="banks" className="flex flex-col gap-3">
-        <h2 id="banks" className="text-sm font-semibold">
-          Bank accounts
-        </h2>
-        <Suspense fallback={<Skeleton className="h-32 rounded-lg" />}>
-          <BankBalances ctx={ctx} asOf={today} />
-        </Suspense>
-      </section>
-
-      <section aria-labelledby="reconciliation" className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <h2 id="reconciliation" className="text-sm font-semibold">
-            Reconciliation
-          </h2>
-          <StatusChip>Coming soon</StatusChip>
-        </div>
-        <div className="rounded-lg border border-default bg-surface">
-          <EmptyState
-            icon={<ListChecksIcon />}
-            title="Reconciliation status is on its way"
-            description="Bank lines that need a decision are already in the AI inbox."
-            action={
-              <Link href="/inbox" className={buttonVariants({ size: "sm" })}>
-                Open AI inbox
-              </Link>
-            }
-          />
-        </div>
-      </section>
+      <Suspense fallback={<Skeleton className="h-64 rounded-lg" />}>
+        <Position ctx={ctx} asOf={todayIso()} />
+      </Suspense>
     </div>
   )
 }
