@@ -8,9 +8,13 @@ import {
   createCreditNoteInputSchema,
   isServiceError,
 } from "@workspace/contracts"
+import type {
+  CreateCreditNoteInput,
+  CreditNotePreview,
+} from "@workspace/contracts"
 import { InvalidMoneyError, parseRupees } from "@workspace/ledger"
 
-import { createCreditNote } from "@/server/services"
+import { createCreditNote, previewCreditNote } from "@/server/services"
 
 import { getOrgContextOrRedirect } from "../../../org-context"
 
@@ -39,19 +43,20 @@ const formText = (formData: FormData, key: string) => {
   return typeof value === "string" ? value : ""
 }
 
-/**
- * Issues a credit note. The form sends text; amounts and tax are worked out
- * by createCreditNote from the invoice's own lines, never here.
- */
-export async function createCreditNoteFromForm(
-  _previous: CreditNoteFormState,
+/** The form's text → createCreditNote's input, or field errors. */
+function parseCreditNoteForm(
   formData: FormData
-): Promise<CreditNoteFormState> {
+):
+  | { readonly ok: true; readonly input: CreateCreditNoteInput }
+  | { readonly ok: false; readonly state: CreditNoteFormState } {
+  const fail = (state: CreditNoteFormState) => ({ ok: false as const, state })
   let linesRaw: unknown
   try {
     linesRaw = JSON.parse(formText(formData, "lines"))
   } catch {
-    return { error: "Something went wrong with the lines. Reload and retry." }
+    return fail({
+      error: "Something went wrong with the lines. Reload and retry.",
+    })
   }
   const form = formSchema.safeParse({
     invoiceId: formText(formData, "invoiceId"),
@@ -61,11 +66,11 @@ export async function createCreditNoteFromForm(
     lines: linesRaw,
   })
   if (!form.success) {
-    return {
+    return fail({
       fieldErrors: Object.fromEntries(
         form.error.issues.map((i) => [i.path.map(String).join("."), i.message])
       ),
-    }
+    })
   }
 
   const fieldErrors: Record<string, string> = {}
@@ -86,7 +91,7 @@ export async function createCreditNoteFromForm(
     }
   })
   if (lines.length === 0 && Object.keys(fieldErrors).length === 0)
-    return { error: "Enter what to credit on at least one line." }
+    return fail({ error: "Enter what to credit on at least one line." })
 
   const checked = createCreditNoteInputSchema.safeParse({
     invoiceId: form.data.invoiceId,
@@ -106,18 +111,56 @@ export async function createCreditNoteFromForm(
   }
   if (!checked.success || Object.keys(fieldErrors).length > 0) {
     const { form: formError, ...rest } = fieldErrors
-    return formError
-      ? { error: formError, fieldErrors: rest }
-      : { fieldErrors: rest }
+    return fail(
+      formError
+        ? { error: formError, fieldErrors: rest }
+        : { fieldErrors: rest }
+    )
   }
+  return { ok: true, input: checked.data }
+}
 
+/**
+ * Issues a credit note. The form sends text; amounts and tax are worked out
+ * by createCreditNote from the invoice's own lines, never here.
+ */
+export async function createCreditNoteFromForm(
+  _previous: CreditNoteFormState,
+  formData: FormData
+): Promise<CreditNoteFormState> {
+  const parsed = parseCreditNoteForm(formData)
+  if (!parsed.ok) return parsed.state
   const ctx = await getOrgContextOrRedirect()
   let id: string
   try {
-    id = (await createCreditNote(ctx, checked.data)).id
+    id = (await createCreditNote(ctx, parsed.input)).id
   } catch (error) {
     if (isServiceError(error)) return { error: error.message }
     throw error
   }
   redirect(`/invoices/credit-notes/${id}`)
+}
+
+export type CreditNotePreviewState =
+  | { readonly status: "incomplete" }
+  | { readonly status: "error"; readonly message: string }
+  | { readonly status: "ready"; readonly preview: CreditNotePreview }
+
+/** What the credit note would come to, from previewCreditNote. Saves nothing. */
+export async function previewCreditNoteFromForm(
+  formData: FormData
+): Promise<CreditNotePreviewState> {
+  const parsed = parseCreditNoteForm(formData)
+  if (!parsed.ok) return { status: "incomplete" }
+  const ctx = await getOrgContextOrRedirect()
+  try {
+    return {
+      status: "ready",
+      preview: await previewCreditNote(ctx, parsed.input),
+    }
+  } catch (error) {
+    if (isServiceError(error))
+      return { status: "error", message: error.message }
+    throw error
+  }
 }

@@ -6,7 +6,7 @@ import { CheckIcon, InboxIcon, PencilIcon, XIcon } from "lucide-react"
 
 import type { Money as MoneyValue, TdsSection } from "@workspace/contracts"
 import { formatInr } from "@workspace/ledger"
-import { Button } from "@workspace/ui/components/button"
+import { Button, buttonVariants } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { ConfidenceBadge } from "@workspace/ui/components/confidence-badge"
@@ -26,10 +26,7 @@ import { StatusChip } from "@workspace/ui/components/status-chip"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { cn } from "cn"
 
-import type {
-  InboxActionResult,
-  TaxEditsForm,
-} from "@/app/(app)/inbox/actions"
+import type { InboxActionResult, TaxEditsForm } from "@/app/(app)/inbox/actions"
 
 export interface InboxLineView {
   account: string
@@ -69,6 +66,8 @@ export interface InboxRowView {
   taxEditable: boolean
   /** Fields extraction checks want a human to look at. */
   flags: { field: string; reason: string }[]
+  /** A refund of an invoiced sale: raise a credit note before approving. */
+  refund: { href: string; invoiceNumber: string; amount: MoneyValue } | null
 }
 
 interface InboxViewProps {
@@ -409,6 +408,22 @@ function InboxDetail({
         </div>
         <h2 className="text-base font-semibold">{row.narration}</h2>
         <p className="text-sm text-fg-secondary">{row.reason}</p>
+        {row.refund && canApprove ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-info-subtle px-3 py-2 text-sm">
+            <span className="flex-1 text-info">
+              Refund of{" "}
+              <Money value={row.refund.amount} className="text-info" /> against{" "}
+              {row.refund.invoiceNumber}. Create the credit note first, then
+              approve this payout.
+            </span>
+            <a
+              href={row.refund.href}
+              className={buttonVariants({ size: "sm", variant: "primary" })}
+            >
+              Create credit note
+            </a>
+          </div>
+        ) : null}
         {row.sourceUrl ? (
           <SourceLink href={row.sourceUrl} target="_blank" rel="noreferrer">
             {row.sourceLabel}
@@ -462,8 +477,8 @@ function InboxDetail({
         <footer className="flex flex-wrap gap-2 border-t border-subtle pt-4">
           {canApprove ? (
             <Button variant="primary" loading={pending} onClick={onApprove}>
-              <CheckIcon aria-hidden /> {edits ? "Approve with edits" : "Approve"}{" "}
-              <Kbd>a</Kbd>
+              <CheckIcon aria-hidden />{" "}
+              {edits ? "Approve with edits" : "Approve"} <Kbd>a</Kbd>
             </Button>
           ) : null}
           {canReject ? (
@@ -546,7 +561,8 @@ function TaxSection({
           {row.gst ? (
             <>
               <dt className="text-fg-secondary">
-                Taxable value{row.gst.rateLabel ? ` · GST ${row.gst.rateLabel}` : ""}
+                Taxable value
+                {row.gst.rateLabel ? ` · GST ${row.gst.rateLabel}` : ""}
               </dt>
               <dd className="text-right">
                 <Money value={row.gst.taxable} />
@@ -620,7 +636,7 @@ function TaxSection({
                 id={fieldId(key)}
                 inputMode="decimal"
                 autoComplete="off"
-                className="tabular text-right"
+                className="text-right tabular"
                 value={gst[key]}
                 onChange={(e) => setGst(key, e.target.value)}
               />
@@ -655,7 +671,7 @@ function TaxSection({
               id={fieldId("tds-rate")}
               inputMode="decimal"
               autoComplete="off"
-              className="tabular text-right"
+              className="text-right tabular"
               value={tds.rate}
               onChange={(e) => setTds("rate", e.target.value)}
             />
@@ -666,7 +682,7 @@ function TaxSection({
               id={fieldId("tds-amount")}
               inputMode="decimal"
               autoComplete="off"
-              className="tabular text-right"
+              className="text-right tabular"
               value={tds.amount}
               onChange={(e) => setTds("amount", e.target.value)}
             />

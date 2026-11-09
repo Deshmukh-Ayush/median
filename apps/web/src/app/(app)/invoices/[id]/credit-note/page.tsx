@@ -2,8 +2,10 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { LockIcon } from "lucide-react"
+import { z } from "zod"
 
 import { idSchema } from "@workspace/contracts"
+import { paise } from "@workspace/ledger"
 import { PageHeader } from "@workspace/ui/components/app-shell"
 import { buttonVariants } from "@workspace/ui/components/button"
 import { EmptyState } from "@workspace/ui/components/empty-state"
@@ -12,14 +14,25 @@ import { CreditNoteForm } from "@/components/invoices/credit-note-form"
 import { todayIso } from "@/lib/format-date"
 import type { PagePropsWith } from "@/lib/page-props"
 import { can } from "@/lib/permissions"
+import { firstParam } from "@/lib/report-params"
 import { getInvoice } from "@/server/services"
 
 import { getPageContext } from "../../../org-context"
 
 export const metadata: Metadata = { title: "New credit note · Median" }
 
-export default async function Page({ params }: PagePropsWith<{ id: string }>) {
-  const { id } = await params
+/** Refund amount in paise from an inbox link; shown and compared only. */
+const refundParamSchema = z
+  .string()
+  .regex(/^[1-9]\d{0,14}$/)
+  .transform((v) => paise(BigInt(v)))
+
+export default async function Page({
+  params,
+  searchParams,
+}: PagePropsWith<{ id: string }>) {
+  const [{ id }, query] = await Promise.all([params, searchParams])
+  const refund = refundParamSchema.safeParse(firstParam(query.refund))
   if (!idSchema.safeParse(id).success) notFound()
   const { ctx, allowed } = await getPageContext("/invoices")
   if (!allowed) notFound()
@@ -85,6 +98,7 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
           gstRateBps: l.gstRateBps,
         }))}
         today={todayIso()}
+        refund={refund.success ? { amount: refund.data } : null}
       />
     </div>
   )

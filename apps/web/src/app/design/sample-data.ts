@@ -146,7 +146,10 @@ export const inboxRows: readonly InboxRowView[] = [
     },
     tds: null,
     taxEditable: true,
-    flags: [{ field: "vendor.gstin", reason: "Not seen on earlier AWS bills." }],
+    flags: [
+      { field: "vendor.gstin", reason: "Not seen on earlier AWS bills." },
+    ],
+    refund: null,
   },
   {
     id: "00000000-0000-4000-8000-00000000c002",
@@ -174,6 +177,7 @@ export const inboxRows: readonly InboxRowView[] = [
     tds: null,
     taxEditable: false,
     flags: [],
+    refund: null,
   },
   {
     id: "00000000-0000-4000-8000-00000000c003",
@@ -204,5 +208,6 @@ export const inboxRows: readonly InboxRowView[] = [
     tds: { section: "194J", rate: "2", amount: paise(2_000_00n) },
     taxEditable: true,
     flags: [],
+    refund: null,
   },
 ]
