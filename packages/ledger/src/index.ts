@@ -104,3 +104,5 @@ export {
   naturalBalance,
   profitOf,
 } from "./reports"
+export type { SetOffResult, TaxHeads } from "./gst-setoff"
+export { setOffGst } from "./gst-setoff"
