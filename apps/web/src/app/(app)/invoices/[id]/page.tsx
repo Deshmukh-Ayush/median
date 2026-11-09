@@ -39,7 +39,7 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
 
   const status = STATUS[invoice.status]
   const pos = gstStateByCode(invoice.placeOfSupply)
-  const intra = invoice.supplyType === "intra"
+  const intra = invoice.supplyType === "intrastate"
 
   return (
     <div className="flex flex-col gap-6 p-6">

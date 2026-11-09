@@ -6,7 +6,11 @@ import { paise } from "@workspace/ledger"
 
 import type { Invoice } from "@/server/services"
 
-import { invoiceDocument } from "./invoice-document"
+import {
+  exportEndorsement,
+  invoiceDocument,
+  supplyLabel,
+} from "./invoice-document"
 
 const p = (n: bigint) => paise(n)
 
@@ -18,7 +22,8 @@ const invoice: Invoice = {
   invoiceDate: "2026-11-07",
   dueDate: "2026-12-07",
   placeOfSupply: "27",
-  supplyType: "intra",
+  supplyType: "intrastate",
+  reverseCharge: false,
   lines: [
     {
       id: "l1",
@@ -38,8 +43,11 @@ const invoice: Invoice = {
   cgst: p(1111111_02n),
   sgst: p(1111111_02n),
   igst: p(0n),
-  total: p(14567900_04n),
+  roundOff: p(-4n),
+  total: p(14567900_00n),
   paid: p(0n),
+  credited: p(0n),
+  outstanding: p(14567900_00n),
   status: "issued",
   notes: null,
   journalEntryId: null,
@@ -81,4 +89,47 @@ describe("invoiceDocument", () => {
     // The subset's ToUnicode map has an entry for U+20B9 (₹).
     expect(text.toLowerCase()).toContain("<20b9>")
   }, 30_000)
+
+  it.each([
+    ["intrastate", false],
+    ["interstate", false],
+    ["export_with_payment", true],
+    ["export_lut", true],
+    ["sez", true],
+  ] as const)("renders a %s invoice", async (supplyType, endorsed) => {
+    const pdf = await import("@react-pdf/renderer")
+    const buffer = await pdf.renderToBuffer(
+      invoiceDocument({
+        pdf,
+        invoice: {
+          ...invoice,
+          supplyType,
+          placeOfSupply: supplyType.startsWith("export") ? "96" : "27",
+          reverseCharge: supplyType === "interstate",
+        },
+        supplier: { name: "Median Demo", gstin: null, stateCode: "29" },
+      })
+    )
+    expect(buffer.subarray(0, 5).toString()).toBe("%PDF-")
+    expect(exportEndorsement(supplyType) !== null).toBe(endorsed)
+  }, 30_000)
+})
+
+describe("supply labels", () => {
+  it("names each supply type", () => {
+    expect(supplyLabel("intrastate")).toBe("Intra-state (CGST + SGST)")
+    expect(supplyLabel("export_lut")).toContain("LUT")
+    expect(supplyLabel("sez")).toContain("SEZ")
+  })
+
+  it("endorses exports and SEZ supplies per rule 46", () => {
+    expect(exportEndorsement("export_lut")).toMatch(
+      /UNDER BOND OR LETTER OF UNDERTAKING WITHOUT PAYMENT OF INTEGRATED TAX$/
+    )
+    expect(exportEndorsement("export_with_payment")).toMatch(
+      /ON PAYMENT OF INTEGRATED TAX$/
+    )
+    expect(exportEndorsement("sez")).toMatch(/ON PAYMENT OF INTEGRATED TAX$/)
+    expect(exportEndorsement("interstate")).toBeNull()
+  })
 })

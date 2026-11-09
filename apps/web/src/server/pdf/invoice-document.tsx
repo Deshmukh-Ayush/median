@@ -47,6 +47,40 @@ const rs = (value: Invoice["total"]) => formatMoney(value, { symbol: false })
 /** Amount with the ₹ sign, for the totals. */
 const inr = (value: Invoice["total"]) => formatMoney(value)
 
+const SUPPLY_LABEL: Record<Invoice["supplyType"], string> = {
+  intrastate: "Intra-state (CGST + SGST)",
+  interstate: "Inter-state (IGST)",
+  export_with_payment: "Export with payment of IGST",
+  export_lut: "Export under LUT, without payment of IGST",
+  sez: "Supply to SEZ with payment of IGST",
+}
+
+/** The supply line printed beside the place of supply. */
+export function supplyLabel(supplyType: Invoice["supplyType"]): string {
+  return SUPPLY_LABEL[supplyType]
+}
+
+/**
+ * The endorsement rule 46 requires on export and SEZ invoices, or null for
+ * domestic supplies. SEZ supplies are taxed with IGST (see resolveSupply).
+ */
+export function exportEndorsement(
+  supplyType: Invoice["supplyType"]
+): string | null {
+  const prefix =
+    "SUPPLY MEANT FOR EXPORT/SUPPLY TO SEZ UNIT OR SEZ DEVELOPER FOR AUTHORISED OPERATIONS"
+  switch (supplyType) {
+    case "export_with_payment":
+    case "sez":
+      return `${prefix} ON PAYMENT OF INTEGRATED TAX`
+    case "export_lut":
+      return `${prefix} UNDER BOND OR LETTER OF UNDERTAKING WITHOUT PAYMENT OF INTEGRATED TAX`
+    case "intrastate":
+    case "interstate":
+      return null
+  }
+}
+
 function stateLabel(code: string | null): string {
   if (!code) return "—"
   const state = gstStateByCode(code)
@@ -72,7 +106,8 @@ export function invoiceDocument({
 }) {
   registerFonts(pdf)
   const { Document, Page, StyleSheet, Text, View } = pdf
-  const intra = invoice.supplyType === "intra"
+  const intra = invoice.supplyType === "intrastate"
+  const endorsement = exportEndorsement(invoice.supplyType)
   const s = StyleSheet.create({
     page: { padding: 36, fontSize: 9, fontFamily: FONT, color: "#111" },
     bold: { fontWeight: 700 },
@@ -135,6 +170,9 @@ export function invoiceDocument({
           ["SGST", invoice.sgst],
         ] as [string, Invoice["total"]][])
       : ([["IGST", invoice.igst]] as [string, Invoice["total"]][])),
+    ...(invoice.roundOff === 0n
+      ? []
+      : ([["Round-off", invoice.roundOff]] as [string, Invoice["total"]][])),
   ]
 
   return (
@@ -176,16 +214,23 @@ export function invoiceDocument({
             </Text>
             <Text>
               <Text style={s.bold}>Supply: </Text>
-              {intra ? "Intra-state (CGST + SGST)" : "Inter-state (IGST)"}
+              {supplyLabel(invoice.supplyType)}
             </Text>
-            {/* TODO(invoice-flags): print the backend's reverseCharge flag
-                once createInvoice takes it; invoices are forward charge today. */}
             <Text>
               <Text style={s.bold}>Tax payable on reverse charge: </Text>
-              No
+              {invoice.reverseCharge ? "Yes" : "No"}
             </Text>
+            {invoice.reverseCharge ? (
+              <Text style={s.muted}>
+                GST on this supply is payable by the recipient.
+              </Text>
+            ) : null}
           </View>
         </View>
+
+        {endorsement ? (
+          <Text style={[s.bold, { marginBottom: 8 }]}>{endorsement}</Text>
+        ) : null}
 
         <View style={[s.row, { borderBottom: "1 solid #999" }]}>
           {columns.map((c, i) => cell(i, c.title, true))}

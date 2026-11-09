@@ -48,12 +48,15 @@ export type {
 } from "./gst"
 export {
   TDS_RATES_BPS,
+  computeDocument,
   computeLine,
   documentTotals,
   financialYearOf,
+  formatQuantityMilli,
   isValidDocumentNumber,
   lineTaxable,
   matchTdsReceipt,
+  quantityMilliOf,
   resolveSupply,
   splitInclusive,
   splitTax,
