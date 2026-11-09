@@ -1,0 +1,4 @@
+ALTER TABLE "credit_note_lines" DROP CONSTRAINT "credit_note_lines_amounts_check";--> statement-breakpoint
+ALTER TABLE "inbox_items" ADD COLUMN "refund_invoice_id" uuid;--> statement-breakpoint
+ALTER TABLE "inbox_items" ADD CONSTRAINT "inbox_items_refund_invoice_fk" FOREIGN KEY ("organization_id","refund_invoice_id") REFERENCES "public"."invoices"("organization_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "credit_note_lines" ADD CONSTRAINT "credit_note_lines_amounts_check" CHECK ("credit_note_lines"."quantity_milli" >= 0 and "credit_note_lines"."unit_price_paise" >= 0 and "credit_note_lines"."gst_rate_bps" between 0 and 10000 and "credit_note_lines"."total_paise" = "credit_note_lines"."taxable_paise" + "credit_note_lines"."cgst_paise" + "credit_note_lines"."sgst_paise" + "credit_note_lines"."igst_paise");

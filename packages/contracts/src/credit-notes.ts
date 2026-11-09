@@ -24,7 +24,9 @@ export interface CreditNoteLine {
   readonly invoiceLineId: string | null
   readonly description: string
   readonly hsnSac: string
-  readonly quantity: string
+  /** Units returned, e.g. "3"; null when the line credits a value (discount, correction). */
+  readonly quantity: string | null
+  /** Per unit; for a value credit, the value credited. */
   readonly unitPrice: Money
   readonly gstRateBps: number
   readonly taxable: Money
@@ -88,3 +90,28 @@ export const createCreditNoteInputSchema = z.object({
   lines: z.array(creditNoteLineInputSchema).min(1).max(100),
 })
 export type CreateCreditNoteInput = z.input<typeof createCreditNoteInputSchema>
+
+/** What createCreditNote would issue, computed the same way; nothing saved. */
+export interface CreditNotePreview {
+  /** The number it would get now (another note may take it first). */
+  readonly nextNumber: string
+  readonly invoice: {
+    readonly id: string
+    readonly number: string
+    readonly total: Money
+    /** Credited before this note. */
+    readonly credited: Money
+    /** Outstanding after this note. */
+    readonly outstandingAfter: Money
+  }
+  readonly supplyType: InvoiceSupplyType
+  readonly lines: readonly Omit<CreditNoteLine, "id">[]
+  readonly taxable: Money
+  readonly cgst: Money
+  readonly sgst: Money
+  readonly igst: Money
+  readonly roundOff: Money
+  readonly total: Money
+  /** e.g. the date is in a locked month. */
+  readonly warnings: readonly string[]
+}

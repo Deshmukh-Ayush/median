@@ -531,6 +531,7 @@ async function applyDecision(
         sourceType: "source_record",
         sourceId: record.id,
         invoiceId: decision.invoiceId ?? null,
+        refundInvoiceId: decision.refundInvoiceId ?? null,
       })
       .onConflictDoNothing()
       .returning({ id: inboxItems.id })
@@ -540,6 +541,28 @@ async function applyDecision(
 }
 
 const ALREADY_BOOKED = "Record already booked."
+
+/** The one open invoice a refund names, or null if none or ambiguous. */
+async function refundInvoiceOf(
+  orgId: string,
+  invoiceNumber: string,
+  partyId: string | null
+): Promise<string | null> {
+  if (!partyId) return null
+  const rows = await getDb()
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.organizationId, orgId),
+        eq(invoices.number, invoiceNumber),
+        eq(invoices.partyId, partyId),
+        ne(invoices.status, "cancelled")
+      )
+    )
+    .limit(2)
+  return rows.length === 1 ? (rows[0]?.id ?? null) : null
+}
 
 async function decideAndApply(
   orgId: string,
@@ -586,6 +609,11 @@ async function decideAndApply(
             confidence: 0.5,
             gst: null,
             tds: null,
+            refundInvoiceId: await refundInvoiceOf(
+              orgId,
+              decision.invoiceNumber,
+              decision.entry.lines[0]?.partyId ?? null
+            ),
           },
           source
         ),

@@ -339,7 +339,7 @@ describe("credit notes: planCreditLines", () => {
     ])
   })
 
-  it("credits a value as one unit of that value", () => {
+  it("credits a value as one unit of that value, marked by value", () => {
     expect(
       planCreditLines(inv, [
         { invoiceLineId: "l1", taxable: paise(500_00n) },
@@ -347,7 +347,13 @@ describe("credit notes: planCreditLines", () => {
     ).toMatchObject({
       quantityMilli: 1000n,
       unitPrice: 500_00n,
+      byValue: true,
     })
+    // A returned quantity is not by value, so it keeps its units.
+    expect(
+      planCreditLines(inv, [{ invoiceLineId: "l1", quantityMilli: 1000n }])[0]
+        ?.byValue
+    ).toBe(false)
   })
 
   it("refuses more than what's left on the line, across requests", () => {
