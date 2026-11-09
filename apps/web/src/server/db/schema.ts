@@ -511,17 +511,22 @@ export const journalLines = pgTable(
       t.entryId,
       t.lineNo
     ),
-    // Account and party drill-downs (listEntries), newest first by entry.
+    // Account drill-downs (listEntries, newest first by entry) and
+    // cumulative per-account sums (trial balance, balance sheet), both as
+    // index-only scans.
     index("journal_lines_org_account_date_idx").on(
       t.organizationId,
       t.accountId,
       t.entryDate,
-      t.entryId
+      t.entryId,
+      t.debitPaise,
+      t.creditPaise
     ),
+    // Party drill-downs, newest first by entry.
     index("journal_lines_org_party_date_idx")
       .on(t.organizationId, t.partyId, t.entryDate, t.entryId)
       .where(sql`${t.partyId} is not null`),
-    // Reports: per-account sums over a date range as an index-only scan.
+    // Per-account sums over a short date range (P&L, dashboard months).
     index("journal_lines_org_date_cover_idx").on(
       t.organizationId,
       t.entryDate,
