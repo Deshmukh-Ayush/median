@@ -1,17 +1,40 @@
 "use client"
 
-import { PlusIcon, Trash2Icon } from "lucide-react"
-import { startTransition, useActionState, useState } from "react"
+import { PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import type { ReactNode } from "react"
+
+import { GST_EXPORT_PLACE_OF_SUPPLY } from "@workspace/contracts"
 
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { Money } from "@workspace/ui/components/money"
 import { Textarea } from "@workspace/ui/components/textarea"
 
-import { createInvoiceFromForm } from "@/app/(app)/invoices/new/actions"
-import type { InvoiceFormState } from "@/app/(app)/invoices/new/actions"
+import {
+  createInvoiceFromForm,
+  previewInvoiceFromForm,
+} from "@/app/(app)/invoices/new/actions"
+import type {
+  InvoiceFormState,
+  InvoicePreviewState,
+} from "@/app/(app)/invoices/new/actions"
 import { FormError } from "@/components/forms/field"
+import {
+  SPECIAL_SUPPLIES,
+  SUPPLY_LABELS,
+  isExport,
+  isIntrastate,
+  specialSupplyOf,
+} from "@/lib/invoices"
+import type { SpecialSupply } from "@/lib/invoices"
 
 export interface SlabPeriod {
   effectiveFrom: string | null
@@ -60,6 +83,9 @@ function addDays(date: string, days: number): string {
 
 const percent = (bps: number) => `${bps / 100}%`
 
+/** Wait this long after the last keystroke before asking for a preview. */
+const PREVIEW_DELAY_MS = 400
+
 export function InvoiceBuilder({
   customers,
   states,
@@ -86,6 +112,8 @@ export function InvoiceBuilder({
   )
   const [invoiceDate, setInvoiceDate] = useState(today)
   const [dueDate, setDueDate] = useState(addDays(today, 30))
+  const [specialSupply, setSpecialSupply] = useState<SpecialSupply | null>(null)
+  const [reverseCharge, setReverseCharge] = useState(false)
   const [nextKey, setNextKey] = useState(1)
   const rates = slabsOn(slabPeriods, invoiceDate)
   const defaultRate = String(rates.includes(1800) ? 1800 : (rates[0] ?? 0))
@@ -101,18 +129,61 @@ export function InvoiceBuilder({
   ])
 
   const customer = customers.find((c) => c.id === partyId)
-  // A label only: the backend decides the supply type on create.
-  const expectedSupply =
-    !orgStateCode || !placeOfSupply
-      ? null
-      : placeOfSupply === orgStateCode
-        ? "Intra-state: CGST + SGST"
-        : "Inter-state: IGST"
+  const exporting = isExport(specialSupply)
+
+  // Live preview from previewInvoice: the UI never adds anything up. Only
+  // the newest response is shown, so a slow one can't overwrite a newer one.
+  const formRef = useRef<HTMLFormElement>(null)
+  const latest = useRef(0)
+  const [preview, setPreview] = useState<InvoicePreviewState>({
+    status: "incomplete",
+  })
+  const [previewing, setPreviewing] = useState(false)
+  useEffect(() => {
+    const form = formRef.current
+    if (!form) return
+    const request = ++latest.current
+    const timer = setTimeout(() => {
+      setPreviewing(true)
+      previewInvoiceFromForm(formDataOf(form, lines))
+        .then((result) => {
+          if (request === latest.current) setPreview(result)
+        })
+        .catch(() => {
+          if (request === latest.current)
+            setPreview({
+              status: "error",
+              message: "Couldn't work out the totals. Check your connection.",
+            })
+        })
+        .finally(() => {
+          if (request === latest.current) setPreviewing(false)
+        })
+    }, PREVIEW_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [
+    partyId,
+    placeOfSupply,
+    specialSupply,
+    reverseCharge,
+    invoiceDate,
+    dueDate,
+    lines,
+  ])
+  const ready = preview.status === "ready" ? preview.preview : null
 
   function chooseCustomer(id: string) {
     setPartyId(id)
     const stateCode = customers.find((c) => c.id === id)?.stateCode
-    if (stateCode) setPlaceOfSupply(stateCode)
+    if (stateCode && !exporting) setPlaceOfSupply(stateCode)
+  }
+
+  function chooseSpecialSupply(value: string) {
+    const next = specialSupplyOf(value)
+    setSpecialSupply(next)
+    if (isExport(next)) setPlaceOfSupply(GST_EXPORT_PLACE_OF_SUPPLY)
+    else if (placeOfSupply === GST_EXPORT_PLACE_OF_SUPPLY)
+      setPlaceOfSupply(customer?.stateCode ?? orgStateCode ?? "")
   }
 
   function setLine(key: number, patch: Partial<LineDraft>) {
@@ -158,13 +229,10 @@ export function InvoiceBuilder({
     <form
       // Not action={action}: React resets a form after its action, which
       // would drop the controlled selects back to their first options.
+      ref={formRef}
       onSubmit={(event) => {
         event.preventDefault()
-        const formData = new FormData(event.currentTarget)
-        formData.set(
-          "lines",
-          JSON.stringify(lines.map(({ key: _key, ...line }) => line))
-        )
+        const formData = formDataOf(event.currentTarget, lines)
         startTransition(() => action(formData))
       }}
       className="flex flex-col gap-6"
@@ -196,18 +264,56 @@ export function InvoiceBuilder({
           value={placeOfSupply}
           onChange={setPlaceOfSupply}
           error={err("placeOfSupply")}
+          disabled={exporting}
           hint={
-            expectedSupply ??
-            "Set your state in GST details to see the supply type."
+            ready
+              ? SUPPLY_LABELS[ready.supplyType]
+              : "The supply type shows once the invoice is filled in."
           }
         >
           <option value="">Choose a state</option>
+          {exporting ? (
+            <option value={GST_EXPORT_PLACE_OF_SUPPLY}>
+              {GST_EXPORT_PLACE_OF_SUPPLY} · Outside India
+            </option>
+          ) : null}
           {states.map((s) => (
             <option key={s.code} value={s.code}>
               {s.code} · {s.name}
             </option>
           ))}
         </SelectField>
+
+        <SelectField
+          id="specialSupply"
+          label="Export or SEZ"
+          value={specialSupply ?? ""}
+          onChange={chooseSpecialSupply}
+          error={err("specialSupply")}
+          hint="Exports are placed outside India (96)."
+        >
+          {SPECIAL_SUPPLIES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </SelectField>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium">Reverse charge</span>
+          <label className="flex h-8 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={reverseCharge}
+              onChange={(e) => setReverseCharge(e.target.checked)}
+              className="size-4"
+            />
+            The customer pays the GST
+          </label>
+          <p className="text-xs text-fg-secondary">
+            For services notified under reverse charge.
+          </p>
+        </div>
 
         <DateField
           id="invoiceDate"
@@ -313,6 +419,10 @@ export function InvoiceBuilder({
                     <Trash2Icon aria-hidden />
                   </Button>
                 </div>
+                <LinePreview
+                  line={ready?.lines[index]}
+                  intrastate={ready ? isIntrastate(ready.supplyType) : true}
+                />
               </li>
             )
           })}
@@ -341,9 +451,17 @@ export function InvoiceBuilder({
         />
       </section>
 
+      <PreviewPanel state={preview} pending={previewing} />
+
       {/* Header fields travel as named inputs; lines as JSON. */}
       <input type="hidden" name="partyId" value={partyId} />
       <input type="hidden" name="placeOfSupply" value={placeOfSupply} />
+      <input type="hidden" name="specialSupply" value={specialSupply ?? ""} />
+      <input
+        type="hidden"
+        name="reverseCharge"
+        value={reverseCharge ? "on" : ""}
+      />
       <input type="hidden" name="invoiceDate" value={invoiceDate} />
       <input type="hidden" name="dueDate" value={dueDate} />
 
@@ -353,7 +471,8 @@ export function InvoiceBuilder({
           Create invoice
         </Button>
         <p className="text-xs text-fg-secondary">
-          This posts the invoice to the books and gives it the next number.
+          This posts the invoice to the books and gives it the next number
+          {ready ? ` (${ready.nextNumber})` : ""}.
         </p>
       </div>
     </form>
@@ -367,6 +486,7 @@ function SelectField({
   onChange,
   error,
   hint,
+  disabled = false,
   children,
 }: {
   id: string
@@ -375,6 +495,7 @@ function SelectField({
   onChange: (value: string) => void
   error: string | undefined
   hint?: string
+  disabled?: boolean
   children: ReactNode
 }) {
   return (
@@ -386,7 +507,8 @@ function SelectField({
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error ? true : undefined}
         aria-describedby={`${id}-note`}
-        className={SELECT}
+        disabled={disabled}
+        className={`${SELECT} disabled:bg-app disabled:text-fg-secondary`}
       >
         {children}
       </select>
@@ -466,5 +588,145 @@ function LineInput({
         </p>
       ) : null}
     </div>
+  )
+}
+
+/** The form as the actions read it: named inputs, plus lines as JSON. */
+function formDataOf(form: HTMLFormElement, lines: readonly LineDraft[]) {
+  const formData = new FormData(form)
+  formData.set(
+    "lines",
+    JSON.stringify(lines.map(({ key: _key, ...line }) => line))
+  )
+  return formData
+}
+
+type Preview = Extract<InvoicePreviewState, { status: "ready" }>["preview"]
+type PreviewLine = Preview["lines"][number]
+
+/** One line's taxable value, tax and total, as previewInvoice worked them out. */
+function LinePreview({
+  line,
+  intrastate,
+}: {
+  line: PreviewLine | undefined
+  intrastate: boolean
+}) {
+  if (!line) return null
+  return (
+    <p className="flex flex-wrap gap-x-4 text-xs text-fg-secondary sm:col-span-full">
+      <span>
+        Taxable <Money value={line.taxable} className="text-fg-secondary" />
+      </span>
+      {intrastate ? (
+        <span>
+          CGST <Money value={line.cgst} className="text-fg-secondary" /> · SGST{" "}
+          <Money value={line.sgst} className="text-fg-secondary" />
+        </span>
+      ) : (
+        <span>
+          IGST <Money value={line.igst} className="text-fg-secondary" />
+        </span>
+      )}
+      <span>
+        Line total <Money value={line.total} />
+      </span>
+    </p>
+  )
+}
+
+function PreviewRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string
+  value: Preview["total"]
+  strong?: boolean
+}) {
+  return (
+    <>
+      <dt className={strong ? "font-semibold" : "text-fg-secondary"}>
+        {label}
+      </dt>
+      <dd className={`text-right ${strong ? "font-semibold" : ""}`}>
+        <Money value={value} />
+      </dd>
+    </>
+  )
+}
+
+/** Totals and warnings from previewInvoice. Nothing here is computed. */
+function PreviewPanel({
+  state,
+  pending,
+}: {
+  state: InvoicePreviewState
+  pending: boolean
+}) {
+  return (
+    <section
+      aria-labelledby="invoice-totals"
+      aria-busy={pending || undefined}
+      className="flex flex-col gap-3 rounded-lg border border-default bg-surface p-5"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="invoice-totals" className="text-sm font-semibold">
+          Totals
+        </h2>
+        {pending ? (
+          <span className="text-xs text-fg-secondary">Updating…</span>
+        ) : null}
+      </div>
+      {state.status === "incomplete" ? (
+        <p className="text-sm text-fg-secondary">
+          Totals appear once every line has a description, HSN/SAC, quantity and
+          price.
+        </p>
+      ) : state.status === "error" ? (
+        <p className="text-sm text-danger">{state.message}</p>
+      ) : (
+        <>
+          {state.preview.warnings.length > 0 ? (
+            <ul className="flex flex-col gap-1.5">
+              {state.preview.warnings.map((w) => (
+                <li
+                  key={w}
+                  className="flex items-start gap-2 rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning"
+                >
+                  <TriangleAlertIcon
+                    aria-hidden
+                    className="mt-0.5 size-4 shrink-0"
+                  />
+                  {w}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="text-xs text-fg-secondary">
+            {SUPPLY_LABELS[state.preview.supplyType]}
+            {state.preview.reverseCharge
+              ? " · reverse charge: the customer pays the GST"
+              : ""}
+            {state.preview.chargesGst ? "" : " · no GST charged"}
+          </p>
+          <dl className="ml-auto grid w-full max-w-xs grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <PreviewRow label="Taxable value" value={state.preview.taxable} />
+            {isIntrastate(state.preview.supplyType) ? (
+              <>
+                <PreviewRow label="CGST" value={state.preview.cgst} />
+                <PreviewRow label="SGST" value={state.preview.sgst} />
+              </>
+            ) : (
+              <PreviewRow label="IGST" value={state.preview.igst} />
+            )}
+            {state.preview.roundOff !== 0n ? (
+              <PreviewRow label="Round-off" value={state.preview.roundOff} />
+            ) : null}
+            <PreviewRow label="Total" value={state.preview.total} strong />
+          </dl>
+        </>
+      )}
+    </section>
   )
 }

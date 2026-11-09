@@ -4,9 +4,15 @@ import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { isServiceError } from "@workspace/contracts"
+import type { CreateInvoiceInput, InvoicePreview } from "@workspace/contracts"
 import { InvalidMoneyError, parseRupees } from "@workspace/ledger"
 
-import { createInvoice, createInvoiceInputSchema } from "@/server/services"
+import { specialSupplyOf } from "@/lib/invoices"
+import {
+  createInvoice,
+  createInvoiceInputSchema,
+  previewInvoice,
+} from "@/server/services"
 
 import { getOrgContextOrRedirect } from "../../org-context"
 
@@ -15,6 +21,11 @@ export interface InvoiceFormState {
   /** Keyed by field: "partyId", "dueDate", "lines.0.hsnSac", … */
   readonly fieldErrors?: Readonly<Record<string, string>>
 }
+
+export type InvoicePreviewState =
+  | { readonly status: "incomplete" }
+  | { readonly status: "error"; readonly message: string }
+  | { readonly status: "ready"; readonly preview: InvoicePreview }
 
 /** One line as the builder sends it: text, parsed here. */
 const lineFormSchema = z.object({
@@ -30,6 +41,8 @@ const formSchema = z.object({
   invoiceDate: z.string().min(1, "Enter the invoice date."),
   dueDate: z.string().min(1, "Enter the due date."),
   placeOfSupply: z.string().min(1, "Choose the place of supply."),
+  specialSupply: z.string(),
+  reverseCharge: z.string(),
   notes: z.string(),
   lines: z.array(lineFormSchema).min(1, "Add at least one line."),
 })
@@ -43,32 +56,43 @@ const formText = (formData: FormData, key: string) => {
 const keyOf = (path: readonly PropertyKey[]) => path.map(String).join(".")
 
 /**
- * Creates and posts the invoice. The UI sends text only; tax, totals and the
- * supply type are worked out by createInvoice, never here.
+ * The builder's text fields → createInvoice's input, or field errors. Only
+ * parses text (rupees → paise); tax and totals are the service's job.
  */
-export async function createInvoiceFromForm(
-  _previous: InvoiceFormState,
+function parseInvoiceForm(
   formData: FormData
-): Promise<InvoiceFormState> {
+):
+  | { readonly ok: true; readonly input: CreateInvoiceInput }
+  | { readonly ok: false; readonly state: InvoiceFormState } {
   let linesRaw: unknown
   try {
     linesRaw = JSON.parse(formText(formData, "lines"))
   } catch {
-    return { error: "Something went wrong with the lines. Reload and retry." }
+    return {
+      ok: false,
+      state: {
+        error: "Something went wrong with the lines. Reload and retry.",
+      },
+    }
   }
   const form = formSchema.safeParse({
     partyId: formText(formData, "partyId"),
     invoiceDate: formText(formData, "invoiceDate"),
     dueDate: formText(formData, "dueDate"),
     placeOfSupply: formText(formData, "placeOfSupply"),
+    specialSupply: formText(formData, "specialSupply"),
+    reverseCharge: formText(formData, "reverseCharge"),
     notes: formText(formData, "notes"),
     lines: linesRaw,
   })
   if (!form.success) {
     return {
-      fieldErrors: Object.fromEntries(
-        form.error.issues.map((i) => [keyOf(i.path), i.message])
-      ),
+      ok: false,
+      state: {
+        fieldErrors: Object.fromEntries(
+          form.error.issues.map((i) => [keyOf(i.path), i.message])
+        ),
+      },
     }
   }
 
@@ -96,6 +120,8 @@ export async function createInvoiceFromForm(
     invoiceDate: form.data.invoiceDate,
     dueDate: form.data.dueDate,
     placeOfSupply: form.data.placeOfSupply,
+    specialSupply: specialSupplyOf(form.data.specialSupply),
+    reverseCharge: form.data.reverseCharge === "on",
     notes: form.data.notes.trim() || null,
     lines,
   }
@@ -109,18 +135,57 @@ export async function createInvoiceFromForm(
   }
   if (!checked.success || Object.keys(fieldErrors).length > 0) {
     const { form: formError, ...rest } = fieldErrors
-    return formError
-      ? { error: formError, fieldErrors: rest }
-      : { fieldErrors: rest }
+    return {
+      ok: false,
+      state: formError
+        ? { error: formError, fieldErrors: rest }
+        : { fieldErrors: rest },
+    }
   }
+  return { ok: true, input: checked.data }
+}
+
+/**
+ * Creates and posts the invoice. The UI sends text only; tax, totals and the
+ * supply type are worked out by createInvoice, never here.
+ */
+export async function createInvoiceFromForm(
+  _previous: InvoiceFormState,
+  formData: FormData
+): Promise<InvoiceFormState> {
+  const parsed = parseInvoiceForm(formData)
+  if (!parsed.ok) return parsed.state
 
   const ctx = await getOrgContextOrRedirect()
   let invoiceId: string
   try {
-    invoiceId = (await createInvoice(ctx, checked.data)).id
+    invoiceId = (await createInvoice(ctx, parsed.input)).id
   } catch (error) {
     if (isServiceError(error)) return { error: error.message }
     throw error
   }
   redirect(`/invoices/${invoiceId}`)
+}
+
+/**
+ * What the invoice would come to, from previewInvoice. Saves nothing. A
+ * half-filled form is "incomplete", not an error: the builder is live.
+ */
+export async function previewInvoiceFromForm(
+  formData: FormData
+): Promise<InvoicePreviewState> {
+  const parsed = parseInvoiceForm(formData)
+  if (!parsed.ok) return { status: "incomplete" }
+
+  const ctx = await getOrgContextOrRedirect()
+  try {
+    return {
+      status: "ready",
+      preview: await previewInvoice(ctx, parsed.input),
+    }
+  } catch (error) {
+    if (isServiceError(error))
+      return { status: "error", message: error.message }
+    throw error
+  }
 }
