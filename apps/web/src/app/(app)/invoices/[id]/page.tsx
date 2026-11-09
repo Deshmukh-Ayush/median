@@ -12,22 +12,12 @@ import { StatusChip } from "@workspace/ui/components/status-chip"
 
 import { formatDate } from "@/lib/format-date"
 import type { PagePropsWith } from "@/lib/page-props"
+import { INVOICE_STATUS, SUPPLY_LABELS, isIntrastate } from "@/lib/invoices"
 import { getInvoice } from "@/server/services"
-import type { InvoiceStatus } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
 
 export const metadata: Metadata = { title: "Invoice · Median" }
-
-const STATUS: Record<
-  InvoiceStatus,
-  { label: string; tone: "neutral" | "success" | "warning" | "danger" }
-> = {
-  issued: { label: "Issued", tone: "neutral" },
-  partially_paid: { label: "Partly paid", tone: "warning" },
-  paid: { label: "Paid", tone: "success" },
-  cancelled: { label: "Cancelled", tone: "danger" },
-}
 
 export default async function Page({ params }: PagePropsWith<{ id: string }>) {
   const { id } = await params
@@ -37,9 +27,9 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
   const invoice = await getInvoice(ctx, id)
   if (!invoice) notFound()
 
-  const status = STATUS[invoice.status]
+  const status = INVOICE_STATUS[invoice.status]
   const pos = gstStateByCode(invoice.placeOfSupply)
-  const intra = invoice.supplyType === "intrastate"
+  const intra = isIntrastate(invoice.supplyType)
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -73,8 +63,13 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
         <Fact label="Place of supply">
           {pos ? `${pos.name} (${pos.code})` : invoice.placeOfSupply}
           <span className="block text-xs text-fg-secondary">
-            {intra ? "Intra-state: CGST + SGST" : "Inter-state: IGST"}
+            {SUPPLY_LABELS[invoice.supplyType]}
           </span>
+          {invoice.reverseCharge ? (
+            <span className="block text-xs text-fg-secondary">
+              Reverse charge: the customer pays the GST
+            </span>
+          ) : null}
         </Fact>
       </dl>
 
@@ -148,9 +143,18 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
           ) : (
             <Total label="IGST" value={invoice.igst} />
           )}
+          {invoice.roundOff !== 0n ? (
+            <Total label="Round-off" value={invoice.roundOff} />
+          ) : null}
           <Total label="Total" value={invoice.total} strong />
           {invoice.paid > 0n ? (
             <Total label="Received" value={invoice.paid} />
+          ) : null}
+          {invoice.credited > 0n ? (
+            <Total label="Credit notes" value={invoice.credited} />
+          ) : null}
+          {invoice.paid > 0n || invoice.credited > 0n ? (
+            <Total label="Outstanding" value={invoice.outstanding} strong />
           ) : null}
         </dl>
       </div>
