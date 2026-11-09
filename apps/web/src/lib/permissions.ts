@@ -32,6 +32,30 @@ export const ROLE_DESCRIPTIONS: Record<InvitableRole, string> = {
   investor: "Read-only access to reports and the ledger.",
 }
 
+const ALL_ROLES = [
+  "owner",
+  "finance",
+  "ca",
+  "investor",
+] as const satisfies readonly OrgRole[]
+
+/** Plural, lower-case role names for sentences: "owners, finance and CAs". */
+const ROLE_PLURALS: Record<OrgRole, string> = {
+  owner: "owners",
+  finance: "finance",
+  ca: "CAs",
+  investor: "investors",
+}
+
+/** "owners, finance and CAs": who holds the permission, for UI copy. */
+export function whoCan(permission: Permission): string {
+  const names = ALL_ROLES.filter((role) => can(role, permission)).map(
+    (role) => ROLE_PLURALS[role]
+  )
+  if (names.length <= 1) return names[0] ?? "nobody"
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`
+}
+
 export function isOrgRole(value: string): value is OrgRole {
   return Object.hasOwn(roles, value)
 }

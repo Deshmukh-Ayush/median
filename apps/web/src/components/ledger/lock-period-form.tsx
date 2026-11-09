@@ -22,7 +22,10 @@ import type { LockPeriodResult } from "@/app/(app)/ledger/review/actions"
 export function LockPeriodForm({
   months,
   lockPeriod,
+  unlockers,
 }: {
+  /** Who can unlock, e.g. "owners" (from the permission table). */
+  unlockers: string
   /** [period, label] of ended, unlocked months, newest first. */
   months: readonly (readonly [string, string])[]
   lockPeriod: (period: string) => Promise<LockPeriodResult>
@@ -89,8 +92,8 @@ export function LockPeriodForm({
             <DialogTitle>Lock {label}?</DialogTitle>
             <DialogDescription>
               Nothing can be posted, approved or imported into {label} after
-              this. Corrections go into an open month as reversals. Only an
-              owner can unlock it.
+              this. Corrections go into an open month as reversals. Only{" "}
+              {unlockers} can unlock it.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
