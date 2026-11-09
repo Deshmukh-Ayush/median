@@ -63,7 +63,9 @@ export default async function ConsentPage({
           </li>
         ))}
       </ul>
-      <p className="text-xs text-fg-secondary">Version {status.currentVersion}</p>
+      <p className="text-xs text-fg-secondary">
+        Version {status.currentVersion}
+      </p>
 
       {status.accepted ? (
         <div className="flex flex-col gap-3">
@@ -71,9 +73,15 @@ export default async function ConsentPage({
             <ShieldCheckIcon aria-hidden className="size-4 text-success" />
             Accepted
             {status.acceptedBy ? ` by ${status.acceptedBy.name}` : ""}
-            {status.acceptedAt ? ` on ${formatDateTime(status.acceptedAt)}` : ""}.
+            {status.acceptedAt
+              ? ` on ${formatDateTime(status.acceptedAt)}`
+              : ""}
+            .
           </p>
-          <Link href={next} className="text-sm font-medium underline underline-offset-2">
+          <Link
+            href={next}
+            className="text-sm font-medium underline underline-offset-2"
+          >
             Continue
           </Link>
         </div>
@@ -91,7 +99,8 @@ export default async function ConsentPage({
         </form>
       ) : (
         <p className="text-sm text-fg-secondary">
-          Ask an owner or your finance lead to accept this for your organisation.
+          Ask an owner or your finance lead to accept this for your
+          organisation.
         </p>
       )}
     </div>
