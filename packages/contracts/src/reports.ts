@@ -4,7 +4,13 @@
 import type { LineItem, StatementSection } from "@workspace/ledger"
 import { z } from "zod"
 
-import type { AccountType, IsoDate, Money } from "./common"
+import type {
+  AccountType,
+  IsoDate,
+  IsoTimestamp,
+  Money,
+  PartyRef,
+} from "./common"
 import { idSchema, isoDateSchema } from "./common"
 
 export type { LineItem, StatementSection }
@@ -112,3 +118,69 @@ export const listEntriesFiltersSchema = z
   })
   .refine((f) => !f.from || !f.to || f.from <= f.to, "'from' is after 'to'")
 export type ListEntriesFilters = z.input<typeof listEntriesFiltersSchema>
+
+// ---------------------------------------------------------------------------
+// Revenue breakdown and cash position
+
+export interface RevenueByCustomer {
+  readonly party: PartyRef
+  /** Invoices dated in the range (credit notes are netted, not counted). */
+  readonly invoiceCount: number
+  /** Taxable value invoiced minus credited in the range (excludes GST). */
+  readonly revenue: Money
+}
+
+export interface RevenueByStream {
+  /** An income account under revenue from operations. */
+  readonly accountId: string
+  readonly code: string
+  readonly name: string
+  readonly revenue: Money
+}
+
+export interface RevenueBreakdown {
+  readonly from: IsoDate
+  readonly to: IsoDate
+  /** Revenue from operations in the books for the range (as in the P&L). */
+  readonly total: Money
+  /** Customers by revenue, highest first; paged with `nextCursor`. */
+  readonly byCustomer: readonly RevenueByCustomer[]
+  readonly nextCursor: string | null
+  /**
+   * Revenue with no customer: payments without an invoice (rule 8) and
+   * manual entries. total = all customers + this.
+   */
+  readonly withoutCustomer: Money
+  readonly byStream: readonly RevenueByStream[]
+}
+
+export interface CashLineStats {
+  readonly count: number
+  /** Net of the lines: money in positive, money out negative. */
+  readonly amount: Money
+}
+
+export interface CashAccountPosition {
+  readonly accountId: string
+  readonly code: string
+  readonly name: string
+  readonly kind: "bank" | "razorpay" | "cash"
+  readonly bankName: string | null
+  readonly accountLast4: string | null
+  /** Book balance as of the date; negative for an overdraft. */
+  readonly balance: Money
+  /** Latest bank-statement line (bank) or settlement (Razorpay) imported, IST date. */
+  readonly lastStatementDate: IsoDate | null
+  readonly lastSyncedAt: IsoTimestamp | null
+  /** Statement lines booked by a match or approval. */
+  readonly matched: CashLineStats
+  /** Statement lines waiting in the inbox. */
+  readonly unmatched: CashLineStats
+}
+
+export interface CashPosition {
+  readonly asOf: IsoDate
+  /** Sum of the balances below. */
+  readonly total: Money
+  readonly accounts: readonly CashAccountPosition[]
+}
