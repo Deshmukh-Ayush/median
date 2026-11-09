@@ -96,23 +96,27 @@ describe("invoiceDocument", () => {
     ["export_with_payment", true],
     ["export_lut", true],
     ["sez", true],
-  ] as const)("renders a %s invoice", async (supplyType, endorsed) => {
-    const pdf = await import("@react-pdf/renderer")
-    const buffer = await pdf.renderToBuffer(
-      invoiceDocument({
-        pdf,
-        invoice: {
-          ...invoice,
-          supplyType,
-          placeOfSupply: supplyType.startsWith("export") ? "96" : "27",
-          reverseCharge: supplyType === "interstate",
-        },
-        supplier: { name: "Median Demo", gstin: null, stateCode: "29" },
-      })
-    )
-    expect(buffer.subarray(0, 5).toString()).toBe("%PDF-")
-    expect(exportEndorsement(supplyType) !== null).toBe(endorsed)
-  }, 30_000)
+  ] as const)(
+    "renders a %s invoice",
+    async (supplyType, endorsed) => {
+      const pdf = await import("@react-pdf/renderer")
+      const buffer = await pdf.renderToBuffer(
+        invoiceDocument({
+          pdf,
+          invoice: {
+            ...invoice,
+            supplyType,
+            placeOfSupply: supplyType.startsWith("export") ? "96" : "27",
+            reverseCharge: supplyType === "interstate",
+          },
+          supplier: { name: "Median Demo", gstin: null, stateCode: "29" },
+        })
+      )
+      expect(buffer.subarray(0, 5).toString()).toBe("%PDF-")
+      expect(exportEndorsement(supplyType) !== null).toBe(endorsed)
+    },
+    30_000
+  )
 })
 
 describe("supply labels", () => {

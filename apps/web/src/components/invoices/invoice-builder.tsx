@@ -29,10 +29,10 @@ import type {
 import { FormError } from "@/components/forms/field"
 import {
   SPECIAL_SUPPLIES,
-  SUPPLY_LABELS,
   isExport,
   isIntrastate,
   specialSupplyOf,
+  supplyLabel,
 } from "@/lib/invoices"
 import type { SpecialSupply } from "@/lib/invoices"
 
@@ -267,7 +267,7 @@ export function InvoiceBuilder({
           disabled={exporting}
           hint={
             ready
-              ? SUPPLY_LABELS[ready.supplyType]
+              ? supplyLabel(ready.supplyType)
               : "The supply type shows once the invoice is filled in."
           }
         >
@@ -704,7 +704,7 @@ function PreviewPanel({
             </ul>
           ) : null}
           <p className="text-xs text-fg-secondary">
-            {SUPPLY_LABELS[state.preview.supplyType]}
+            {supplyLabel(state.preview.supplyType)}
             {state.preview.reverseCharge
               ? " · reverse charge: the customer pays the GST"
               : ""}

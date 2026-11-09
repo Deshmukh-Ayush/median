@@ -10,9 +10,10 @@ import { Money } from "@workspace/ui/components/money"
 
 import { CREDIT_NOTE_REASON_LABELS } from "@/lib/credit-notes"
 import { formatDate } from "@/lib/format-date"
-import { SUPPLY_LABELS, isIntrastate } from "@/lib/invoices"
+import { isIntrastate } from "@/lib/invoices"
 import type { PagePropsWith } from "@/lib/page-props"
 import { journalHref } from "@/lib/report-params"
+import { supplyLabel } from "@/server/pdf/invoice-document"
 import { getCreditNote } from "@/server/services"
 
 import { getPageContext } from "../../../org-context"
@@ -50,7 +51,7 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
         <Fact label="Place of supply">
           {pos ? `${pos.name} (${pos.code})` : note.placeOfSupply}
           <span className="block text-xs text-fg-secondary">
-            {SUPPLY_LABELS[note.supplyType]}
+            {supplyLabel(note.supplyType)}
           </span>
         </Fact>
         <Fact label="In the books">
