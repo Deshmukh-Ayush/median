@@ -758,6 +758,8 @@ export const inboxItems = pgTable(
     gst: jsonb(),
     /** TDS deducted (InboxTds, amount as a paise string). */
     tds: jsonb(),
+    /** Review flags on an extracted bill (BillReview), shown to the reviewer. */
+    reviewFlags: jsonb(),
     sourceType: inboxSourceType().notNull(),
     sourceId: uuid().notNull(),
     status: inboxStatus().notNull().default("pending"),
