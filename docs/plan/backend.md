@@ -8,6 +8,8 @@ You are the backend engineer's Claude Code for **Median**, an AI-native revenue 
 
 Goal: a working MVP live with 3–5 design-partner startups by Day 7.
 
+**Schedule change (2026-11-10):** launch moved to Friday. Day 6 (GST, CA tools, consent and data rights) is Wednesday 2026-11-11; Thursday 2026-11-12 is production and real data (Day 7 tasks 1, 3 and 4); Friday 2026-11-13 is launch.
+
 ## How to use this plan
 - Read CLAUDE.md and follow it. Then read this file. When the user says "Today is Day N", do only Day N's tasks, in order.
 - Accounting rules live only in the "Accounting rules" section below. Day tasks refer to them; never restate them differently.
@@ -121,6 +123,15 @@ Every service first ships as a stub returning realistic fake data with final typ
 2. Seed a demo org with a month of realistic fake data.
 3. With written consent recorded, load one friendly startup's real data; fix every bug found.
 4. Production env vars, production Neon branch, migrations applied. Report the region where data is stored and what's still missing for the daily India backup rule.
+
+## Known open items
+Carried until fixed; each fix lands with tests.
+- TDS on vendor bills (TDS payable on purchase entries from extraction).
+- A payment quoting an invoice number is booked as a plain sale when no receipt match fires, so revenue is counted twice (invoice + payment). Match it to the invoice instead.
+- Receivables ageing is as of today only; it needs an `asOf` date.
+- Party-name search has no index for `ILIKE '%…%'` (needs pg_trgm); the same goes for `listEntries` narration search.
+- Data deletion must also delete stored files (document storage), not only rows.
+- The real Razorpay sync, once test payments exist in the test account.
 
 ## Week 2 (plan only, don't build)
 Zoho Books import, GSTR-2B reconciliation, Stripe, Cashfree, Shopify, email forwarding of bills and statements, email and Slack alerts, WhatsApp, collections agent, eve agents, the daily India backup job.

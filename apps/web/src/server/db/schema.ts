@@ -463,6 +463,13 @@ export const journalEntries = pgTable(
       t.sourceType,
       t.sourceId
     ),
+    // listEntries filtered by source type, newest first.
+    index("journal_entries_org_source_date_idx").on(
+      t.organizationId,
+      t.sourceType,
+      t.entryDate,
+      t.id
+    ),
     // An entry can be reversed at most once.
     uniqueIndex("journal_entries_org_reverses_uq")
       .on(t.organizationId, t.reversesEntryId)
@@ -504,14 +511,24 @@ export const journalLines = pgTable(
       t.entryId,
       t.lineNo
     ),
+    // Account and party drill-downs (listEntries), newest first by entry.
     index("journal_lines_org_account_date_idx").on(
       t.organizationId,
       t.accountId,
-      t.entryDate
+      t.entryDate,
+      t.entryId
     ),
     index("journal_lines_org_party_date_idx")
-      .on(t.organizationId, t.partyId, t.entryDate)
+      .on(t.organizationId, t.partyId, t.entryDate, t.entryId)
       .where(sql`${t.partyId} is not null`),
+    // Reports: per-account sums over a date range as an index-only scan.
+    index("journal_lines_org_date_cover_idx").on(
+      t.organizationId,
+      t.entryDate,
+      t.accountId,
+      t.debitPaise,
+      t.creditPaise
+    ),
     foreignKey({
       name: "journal_lines_entry_fk",
       columns: [t.organizationId, t.entryId],

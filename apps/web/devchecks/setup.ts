@@ -60,3 +60,33 @@ export async function devOrg(): Promise<OrgContext> {
   }
   return { orgId: DEV_ORG, userId: DEV_USER, role: "owner" }
 }
+
+/**
+ * A new org for this run only (same user, seeded and consented), for checks
+ * that assert exact totals and mustn't see data left by earlier runs.
+ */
+export async function freshDevOrg(label: string): Promise<OrgContext> {
+  const db = getDb()
+  await devOrg() // makes sure the dev user exists
+  const orgId = `devcheck-${label}-${Date.now()}`
+  await db.insert(organization).values({
+    id: orgId,
+    name: `Dev check ${label}`,
+    slug: orgId,
+    createdAt: new Date(),
+  })
+  await db.insert(member).values({
+    id: `${orgId}-member`,
+    organizationId: orgId,
+    userId: DEV_USER,
+    role: "owner",
+    createdAt: new Date(),
+  })
+  await seedOrganization({ orgId, industry: "saas", actorId: DEV_USER })
+  await db.insert(consents).values({
+    organizationId: orgId,
+    userId: DEV_USER,
+    consentVersion: CURRENT_CONSENT_VERSION,
+  })
+  return { orgId, userId: DEV_USER, role: "owner" }
+}
