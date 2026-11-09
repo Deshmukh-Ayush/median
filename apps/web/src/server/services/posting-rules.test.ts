@@ -63,7 +63,7 @@ const found = (rateBps: number): ResolvedGstRate => ({
 
 /** Debits equal credits, and the summary for assertions. */
 function lines(d: Decision) {
-  if (d.action !== "post" && d.action !== "inbox")
+  if (d.action !== "post" && d.action !== "inbox" && d.action !== "credit_note")
     throw new Error(`expected an entry, got ${d.action}`)
   const debit = d.entry.lines.reduce((s, l) => s + l.debit, 0n)
   const credit = d.entry.lines.reduce((s, l) => s + l.credit, 0n)
@@ -279,7 +279,7 @@ describe("refunds (rule 10)", () => {
     status: "posted",
     entryId: "entry_1",
     lines: paymentLines,
-    invoiced: false,
+    invoiceNumber: null,
   }
   const refund = (amountPaise: bigint, status = "processed") =>
     record({
@@ -320,14 +320,68 @@ describe("refunds (rule 10)", () => {
     })
   })
 
-  it("sends invoiced, unknown, unbooked or over-refunds to the inbox", () => {
+  it("credits the invoice when the payment settled one (rule 10)", () => {
+    const receipt: OriginalPayment = {
+      ...original,
+      invoiceNumber: "INV/2026-27/0042",
+      lines: [
+        {
+          accountId: "clearing",
+          partyId: null,
+          debit: 118_000n,
+          credit: 0n,
+          dimensions: null,
+        },
+        {
+          accountId: "receivables",
+          partyId: "acme",
+          debit: 0n,
+          credit: 118_000n,
+          dimensions: null,
+        },
+      ],
+    }
+    const d = refundRule(refund(59_000n), {
+      accounts,
+      original: receipt,
+      refundedBefore: 0n,
+    })
+    expect(d).toMatchObject({
+      action: "credit_note",
+      invoiceNumber: "INV/2026-27/0042",
+      reference: "rfnd_1",
+    })
+    // The payout goes back through the customer's receivable.
+    expect(lines(d)).toEqual({
+      "Dr receivables": 59_000n,
+      "Cr clearing": 59_000n,
+    })
+    expect(
+      refundRule(refund(59_000n), {
+        accounts,
+        original: receipt,
+        refundedBefore: 60_000n,
+      }).action
+    ).toBe("inbox")
+  })
+
+  it("treats a quoted invoice number as a plain sale when the payment didn't settle it", () => {
+    // Booked as a GST-inclusive sale (no receivable): reverse it like any sale.
+    const d = refundRule(refund(118_000n), {
+      accounts,
+      original: { ...original, invoiceNumber: "INV/2026-27/0042" },
+      refundedBefore: 0n,
+    })
+    expect(d).toMatchObject({ action: "post", reversesEntryId: "entry_1" })
+  })
+
+  it("sends unknown, unbooked or over-refunds to the inbox", () => {
     const run = (o: OriginalPayment | null, before = 0n) =>
       refundRule(refund(59_000n), {
         accounts,
         original: o,
         refundedBefore: before,
       }).action
-    expect(run({ ...original, invoiced: true })).toBe("inbox")
     expect(run(null)).toBe("inbox")
     expect(run({ ...original, status: "inbox", entryId: null })).toBe("inbox")
     expect(run({ ...original, status: "new", entryId: null })).toBe("wait")
