@@ -4,6 +4,7 @@ import { getDb } from "../src/server/db"
 import {
   inboxItems,
   ledgerAccounts,
+  organizationSettings,
   sourceRecords,
 } from "../src/server/db/schema"
 import { connect, importFile } from "../src/server/services/connectors"
@@ -12,11 +13,33 @@ import {
   listInboxItems,
   rejectInboxItem,
 } from "../src/server/services/inbox"
-import { devOrg } from "./setup"
+import { freshDevOrg } from "./setup"
 
 it("bank statement import, matching and inbox on the dev DB", async () => {
-  const ctx = await devOrg()
+  // A fresh org per run with its own Razorpay settlement, so leftovers from
+  // earlier runs (an already-matched settlement) can't break it.
+  const ctx = await freshDevOrg("bank")
   const db = getDb()
+  await db
+    .update(organizationSettings)
+    .set({
+      gstRegistered: true,
+      gstin: "29ABCDE1234F1Z5",
+      stateCode: "29",
+      defaultGstRateBps: 1800,
+    })
+    .where(eq(organizationSettings.organizationId, ctx.orgId))
+  const tag = `b${Date.now()}`
+  const report = await importFile(ctx, "razorpay-settlement-report", {
+    kind: "text",
+    fileName: "settlements.csv",
+    mimeType: "text/csv",
+    text: [
+      "entity_id,type,debit,credit,amount,currency,fee,tax,settlement_id,settlement_utr,created_at,settled_at,payment_id",
+      `pay_${tag},payment,0,1156.40,1180.00,INR,23.60,3.60,setl_${tag},UTR${tag},2026-11-02 10:00:00,2026-11-04 09:00:00,`,
+    ].join("\n"),
+  })
+  console.log("settlement report", report)
   const [bank] = await db
     .select({ id: ledgerAccounts.id })
     .from(ledgerAccounts)
@@ -30,7 +53,7 @@ it("bank statement import, matching and inbox on the dev DB", async () => {
     label: "HDFC current a/c",
     ledgerAccountId: bank!.id,
   })
-  // The latest posted, unmatched settlement from the mocked Razorpay sync.
+  // The settlement this run just imported.
   const [setl] = await db
     .select({
       ext: sourceRecords.externalId,
@@ -44,7 +67,7 @@ it("bank statement import, matching and inbox on the dev DB", async () => {
         eq(sourceRecords.organizationId, ctx.orgId),
         eq(sourceRecords.kind, "settlement"),
         eq(sourceRecords.status, "posted"),
-        eq(sourceRecords.provider, "razorpay-test-keys")
+        eq(sourceRecords.externalId, `setl_${tag}`)
       )
     )
     .orderBy(desc(sourceRecords.occurredAt))
