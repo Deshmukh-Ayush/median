@@ -14,8 +14,9 @@ import { StatusChip } from "@workspace/ui/components/status-chip"
 import { CREDIT_NOTE_REASON_LABELS } from "@/lib/credit-notes"
 import { formatDate } from "@/lib/format-date"
 import type { PagePropsWith } from "@/lib/page-props"
-import { INVOICE_STATUS, SUPPLY_LABELS, isIntrastate } from "@/lib/invoices"
+import { INVOICE_STATUS, isIntrastate } from "@/lib/invoices"
 import { can } from "@/lib/permissions"
+import { supplyLabel } from "@/server/pdf/invoice-document"
 import { getInvoice, listCreditNotes } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
@@ -83,7 +84,7 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
         <Fact label="Place of supply">
           {pos ? `${pos.name} (${pos.code})` : invoice.placeOfSupply}
           <span className="block text-xs text-fg-secondary">
-            {SUPPLY_LABELS[invoice.supplyType]}
+            {supplyLabel(invoice.supplyType)}
           </span>
           {invoice.reverseCharge ? (
             <span className="block text-xs text-fg-secondary">

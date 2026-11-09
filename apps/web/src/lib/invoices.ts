@@ -10,13 +10,20 @@ export const INVOICE_STATUS: Record<
   cancelled: { label: "Cancelled", tone: "danger" },
 }
 
-/** How each supply type is taxed, in founder language. */
-export const SUPPLY_LABELS: Record<InvoiceSupplyType, string> = {
-  intrastate: "Intra-state: CGST + SGST",
-  interstate: "Inter-state: IGST",
-  export_with_payment: "Export, IGST paid",
-  export_lut: "Export under LUT: no IGST",
-  sez: "Supply to SEZ: IGST",
+const SUPPLY_LABELS: Record<InvoiceSupplyType, string> = {
+  intrastate: "Intra-state (CGST + SGST)",
+  interstate: "Inter-state (IGST)",
+  export_with_payment: "Export with payment of IGST",
+  export_lut: "Export under LUT, without payment of IGST",
+  sez: "Supply to SEZ with payment of IGST",
+}
+
+/**
+ * How a supply is taxed, as printed on the invoice PDF. One wording for the
+ * PDF, the invoice and credit note pages and the builder.
+ */
+export function supplyLabel(supplyType: InvoiceSupplyType): string {
+  return SUPPLY_LABELS[supplyType]
 }
 
 /** Whether tax shows as CGST + SGST (else IGST). */

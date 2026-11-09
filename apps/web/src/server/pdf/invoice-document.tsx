@@ -9,6 +9,7 @@ import { formatMoney } from "@workspace/ui/lib/format-money"
 
 import { amountInWords } from "@/lib/amount-in-words"
 import { formatDate } from "@/lib/format-date"
+import { supplyLabel } from "@/lib/invoices"
 import type { Invoice } from "@/server/services"
 
 /** @react-pdf/renderer, loaded with import() so it stays server-only. */
@@ -47,18 +48,8 @@ const rs = (value: Invoice["total"]) => formatMoney(value, { symbol: false })
 /** Amount with the ₹ sign, for the totals. */
 const inr = (value: Invoice["total"]) => formatMoney(value)
 
-const SUPPLY_LABEL: Record<Invoice["supplyType"], string> = {
-  intrastate: "Intra-state (CGST + SGST)",
-  interstate: "Inter-state (IGST)",
-  export_with_payment: "Export with payment of IGST",
-  export_lut: "Export under LUT, without payment of IGST",
-  sez: "Supply to SEZ with payment of IGST",
-}
-
-/** The supply line printed beside the place of supply. */
-export function supplyLabel(supplyType: Invoice["supplyType"]): string {
-  return SUPPLY_LABEL[supplyType]
-}
+/** The supply line printed beside the place of supply (shared with the app). */
+export { supplyLabel }
 
 /**
  * The endorsement rule 46 requires on export and SEZ invoices, or null for
