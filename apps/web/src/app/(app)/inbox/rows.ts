@@ -38,7 +38,11 @@ export function toInboxRow(item: InboxItem): InboxRowView {
       ? `${line.accountName} · ${line.partyName}`
       : line.accountName
     if (line.debit > 0n) {
-      goesTo.push({ account, amount: line.debit, description: line.description })
+      goesTo.push({
+        account,
+        amount: line.debit,
+        description: line.description,
+      })
       total = addMoney(total, line.debit)
     }
     if (line.credit > 0n) {
@@ -68,7 +72,8 @@ export function toInboxRow(item: InboxItem): InboxRowView {
           cgst: item.gst.cgst,
           sgst: item.gst.sgst,
           igst: item.gst.igst,
-          rateLabel: item.gst.rateBps === null ? null : percent(item.gst.rateBps),
+          rateLabel:
+            item.gst.rateBps === null ? null : percent(item.gst.rateBps),
           interstate: item.gst.supplyType === "interstate",
         }
       : null,
@@ -85,5 +90,12 @@ export function toInboxRow(item: InboxItem): InboxRowView {
       field: f.field,
       reason: f.reason,
     })),
+    refund: item.refund
+      ? {
+          href: `/invoices/${item.refund.invoiceId}/credit-note?refund=${item.refund.amount.toString()}`,
+          invoiceNumber: item.refund.invoiceNumber,
+          amount: item.refund.amount,
+        }
+      : null,
   }
 }

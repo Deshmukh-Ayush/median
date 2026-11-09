@@ -129,4 +129,23 @@ describe("toInboxRow", () => {
   it("only offers tax edits where tax applies", () => {
     expect(toInboxRow({ ...item, kind: "bank_line" }).taxEditable).toBe(false)
   })
+
+  it("links refunds of invoiced sales to a credit note", () => {
+    expect(toInboxRow(item).refund).toBeNull()
+    const invoiceId = "00000000-0000-4000-8000-0000000001a1"
+    const row = toInboxRow({
+      ...item,
+      kind: "razorpay_record",
+      refund: {
+        invoiceId,
+        invoiceNumber: "INV/2026-27/0001",
+        amount: paise(11_800_00n),
+      },
+    })
+    expect(row.refund).toEqual({
+      href: `/invoices/${invoiceId}/credit-note?refund=1180000`,
+      invoiceNumber: "INV/2026-27/0001",
+      amount: paise(11_800_00n),
+    })
+  })
 })

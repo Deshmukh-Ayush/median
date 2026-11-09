@@ -99,7 +99,9 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
               >
                 <td>{line.description}</td>
                 <td className="font-mono text-xs">{line.hsnSac}</td>
-                <td className="text-right tabular-nums">{line.quantity}</td>
+                <td className="text-right tabular-nums">
+                  {line.quantity ?? "—"}
+                </td>
                 <td className="text-right">
                   <Money value={line.taxable} />
                 </td>
