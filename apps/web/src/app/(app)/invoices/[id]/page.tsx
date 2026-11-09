@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { ReactNode } from "react"
-import { DownloadIcon } from "lucide-react"
+import { DownloadIcon, ReceiptTextIcon } from "lucide-react"
 
 import { gstStateByCode, idSchema } from "@workspace/contracts"
 import type { Money as MoneyValue } from "@workspace/contracts"
@@ -10,10 +11,12 @@ import { buttonVariants } from "@workspace/ui/components/button"
 import { Money } from "@workspace/ui/components/money"
 import { StatusChip } from "@workspace/ui/components/status-chip"
 
+import { CREDIT_NOTE_REASON_LABELS } from "@/lib/credit-notes"
 import { formatDate } from "@/lib/format-date"
 import type { PagePropsWith } from "@/lib/page-props"
 import { INVOICE_STATUS, SUPPLY_LABELS, isIntrastate } from "@/lib/invoices"
-import { getInvoice } from "@/server/services"
+import { can } from "@/lib/permissions"
+import { getInvoice, listCreditNotes } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
 
@@ -24,8 +27,14 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
   if (!idSchema.safeParse(id).success) notFound()
   const { ctx, allowed } = await getPageContext("/invoices")
   if (!allowed) notFound()
-  const invoice = await getInvoice(ctx, id)
+  const [invoice, creditNotes] = await Promise.all([
+    getInvoice(ctx, id),
+    listCreditNotes(ctx, null, { invoiceId: id }, { limit: 20 }),
+  ])
   if (!invoice) notFound()
+  const canCredit =
+    invoice.status !== "cancelled" &&
+    can(ctx.role, { resource: "ledger", action: "post" })
 
   const status = INVOICE_STATUS[invoice.status]
   const pos = gstStateByCode(invoice.placeOfSupply)
@@ -37,13 +46,24 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
         title={invoice.number}
         description={`${invoice.party.name} · ${formatDate(invoice.invoiceDate)}`}
         actions={
-          <a
-            href={`/invoices/${invoice.id}/pdf`}
-            className={buttonVariants({ variant: "secondary", size: "sm" })}
-          >
-            <DownloadIcon aria-hidden />
-            Download PDF
-          </a>
+          <div className="flex gap-2">
+            {canCredit ? (
+              <Link
+                href={`/invoices/${invoice.id}/credit-note`}
+                className={buttonVariants({ variant: "secondary", size: "sm" })}
+              >
+                <ReceiptTextIcon aria-hidden />
+                Create credit note
+              </Link>
+            ) : null}
+            <a
+              href={`/invoices/${invoice.id}/pdf`}
+              className={buttonVariants({ variant: "secondary", size: "sm" })}
+            >
+              <DownloadIcon aria-hidden />
+              Download PDF
+            </a>
+          </div>
         }
       />
 
@@ -158,6 +178,31 @@ export default async function Page({ params }: PagePropsWith<{ id: string }>) {
           ) : null}
         </dl>
       </div>
+
+      {creditNotes.items.length > 0 ? (
+        <section aria-labelledby="credit-notes" className="flex flex-col gap-2">
+          <h2 id="credit-notes" className="text-sm font-semibold">
+            Credit notes
+          </h2>
+          <ul className="divide-y divide-default rounded-lg border border-default bg-surface text-sm">
+            {creditNotes.items.map((cn) => (
+              <li key={cn.id} className="flex items-center gap-4 px-4 py-2">
+                <Link
+                  href={`/invoices/credit-notes/${cn.id}`}
+                  className="font-medium tabular hover:underline"
+                >
+                  {cn.number}
+                </Link>
+                <span className="text-fg-secondary">
+                  {formatDate(cn.creditNoteDate)} ·{" "}
+                  {CREDIT_NOTE_REASON_LABELS[cn.reason]}
+                </span>
+                <Money value={cn.total} className="ml-auto" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {invoice.notes ? (
         <p className="text-sm text-fg-secondary">{invoice.notes}</p>
