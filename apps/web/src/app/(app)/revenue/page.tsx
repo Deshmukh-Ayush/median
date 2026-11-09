@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { Suspense } from "react"
-import { TrendingUpIcon, UsersIcon } from "lucide-react"
+import { TrendingUpIcon } from "lucide-react"
 
 import { isServiceError } from "@workspace/contracts"
 import type { IsoDate } from "@workspace/contracts"
@@ -11,15 +12,27 @@ import { Input } from "@workspace/ui/components/input"
 import { Money } from "@workspace/ui/components/money"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { StatCard } from "@workspace/ui/components/stat-card"
-import { StatusChip } from "@workspace/ui/components/status-chip"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@workspace/ui/components/table"
 
-import { StatementTable, isAccountId } from "@/components/reports/statement"
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import { formatDate, todayIso } from "@/lib/format-date"
 import type { SearchParams } from "@/lib/page-props"
 import { bpsToPercentText } from "@/lib/percent"
-import { dateParam, financialYearStart, journalHref } from "@/lib/report-params"
-import { getDashboardSummary, getProfitAndLoss } from "@/server/services"
+import {
+  dateParam,
+  financialYearStart,
+  firstParam,
+  journalHref,
+} from "@/lib/report-params"
+import { getDashboardSummary, getRevenueBreakdown } from "@/server/services"
 import type { OrgContext } from "@/server/services"
 
 import { getPageContext } from "../org-context"
@@ -71,18 +84,30 @@ async function ThisMonth({ ctx }: { ctx: OrgContext }) {
   )
 }
 
-async function ByStream({
+interface Range {
+  readonly from: IsoDate
+  readonly to: IsoDate
+}
+
+const pageHref = (r: Range, customers: string | null) => {
+  const q = new URLSearchParams({ from: r.from, to: r.to })
+  if (customers) q.set("customers", customers)
+  return `/revenue?${q.toString()}`
+}
+
+/** Revenue by stream and by customer, both from getRevenueBreakdown. */
+async function Breakdown({
   ctx,
-  from,
-  to,
+  range,
+  cursor,
 }: {
   ctx: OrgContext
-  from: IsoDate
-  to: IsoDate
+  range: Range
+  cursor: string | null
 }) {
-  let pl
+  let b
   try {
-    pl = await getProfitAndLoss(ctx, from, to)
+    b = await getRevenueBreakdown(ctx, range.from, range.to, cursor)
   } catch (error) {
     if (!isServiceError(error)) throw error
     return (
@@ -95,7 +120,7 @@ async function ByStream({
       </div>
     )
   }
-  if (pl.totalIncome === 0n) {
+  if (b.total === 0n) {
     return (
       <div className="rounded-lg border border-default bg-surface">
         <EmptyState
@@ -106,24 +131,138 @@ async function ByStream({
       </div>
     )
   }
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-4">
       <p className="text-sm text-fg-secondary">
-        <Money value={pl.totalIncome} className="font-medium text-fg" /> from{" "}
-        {formatDate(pl.from)} to {formatDate(pl.to)}. Each stream is an income
-        account; click one for its entries.
+        <Money value={b.total} className="font-medium text-fg" /> revenue from
+        operations, {formatDate(b.from)} to {formatDate(b.to)}. GST isn&apos;t
+        included.
       </p>
-      <StatementTable
-        title="Stream"
-        sections={pl.income}
-        total={pl.totalIncome}
-        totalLabel="Total income"
-        rowHref={(accountId) =>
-          isAccountId(accountId)
-            ? journalHref({ accountId, from: pl.from, to: pl.to })
-            : null
-        }
-      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section aria-labelledby="streams" className="flex flex-col gap-2">
+          <h2 id="streams" className="text-sm font-semibold">
+            By stream
+          </h2>
+          <div className="rounded-lg border border-default bg-surface">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Stream</TableHead>
+                  <TableHead numeric className="w-40">
+                    Revenue
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {b.byStream.map((s) => {
+                  const href = journalHref({
+                    accountId: s.accountId,
+                    from: b.from,
+                    to: b.to,
+                  })
+                  return (
+                    <TableRow key={s.accountId}>
+                      <TableCell>
+                        <Link href={href} className="hover:underline">
+                          <span className="text-fg-secondary tabular">
+                            {s.code}
+                          </span>{" "}
+                          {s.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell numeric>
+                        <Link href={href} className="hover:underline">
+                          <Money value={s.revenue} />
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+              <TableFooter>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell>Total</TableCell>
+                  <TableCell numeric>
+                    <Money value={b.total} />
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </div>
+        </section>
+
+        <section aria-labelledby="customers" className="flex flex-col gap-2">
+          <h2 id="customers" className="text-sm font-semibold">
+            By customer
+          </h2>
+          <div className="rounded-lg border border-default bg-surface">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Customer</TableHead>
+                  <TableHead numeric className="w-20">
+                    Invoices
+                  </TableHead>
+                  <TableHead numeric className="w-40">
+                    Revenue
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {b.byCustomer.map((c) => (
+                  <TableRow key={c.party.id}>
+                    <TableCell>
+                      <Link
+                        href={`/invoices?customer=${c.party.id}`}
+                        className="hover:underline"
+                      >
+                        {c.party.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell numeric className="text-fg-secondary">
+                      {c.invoiceCount}
+                    </TableCell>
+                    <TableCell numeric>
+                      <Money value={c.revenue} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {b.withoutCustomer !== 0n && !b.nextCursor ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-fg-secondary">
+                      No customer (payments without an invoice, manual entries)
+                    </TableCell>
+                    <TableCell numeric>
+                      <Money value={b.withoutCustomer} />
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </div>
+          {cursor || b.nextCursor ? (
+            <nav aria-label="Customer pages" className="flex justify-end gap-2">
+              {cursor ? (
+                <Link
+                  href={pageHref(range, null)}
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  Top customers
+                </Link>
+              ) : null}
+              {b.nextCursor ? (
+                <Link
+                  href={pageHref(range, b.nextCursor)}
+                  className={buttonVariants({ size: "sm" })}
+                >
+                  More customers
+                </Link>
+              ) : null}
+            </nav>
+          ) : null}
+        </section>
+      </div>
     </div>
   )
 }
@@ -154,19 +293,14 @@ export default async function Page({
   const to = dateParam(params.to) ?? todayIso()
   const fromParam = dateParam(params.from)
   const from = fromParam && fromParam <= to ? fromParam : financialYearStart(to)
+  const cursor = firstParam(params.customers) ?? null
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <PageHeader title={TITLE} description={DESCRIPTION} />
-      <Suspense fallback={<MonthSkeleton />}>
-        <ThisMonth ctx={ctx} />
-      </Suspense>
-
-      <section aria-labelledby="streams" className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 id="streams" className="text-sm font-semibold">
-            By stream
-          </h2>
+      <PageHeader
+        title={TITLE}
+        description={DESCRIPTION}
+        actions={
           <form action="/revenue" className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-xs text-fg-secondary">
               From
@@ -185,30 +319,17 @@ export default async function Page({
               Show
             </button>
           </form>
-        </div>
-        <Suspense
-          key={`${from}:${to}`}
-          fallback={<Skeleton className="h-64 rounded-lg" />}
-        >
-          <ByStream ctx={ctx} from={from} to={to} />
-        </Suspense>
-      </section>
-
-      <section aria-labelledby="customers" className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <h2 id="customers" className="text-sm font-semibold">
-            By customer
-          </h2>
-          <StatusChip>Coming soon</StatusChip>
-        </div>
-        <div className="rounded-lg border border-default bg-surface">
-          <EmptyState
-            icon={<UsersIcon />}
-            title="Revenue by customer is on its way"
-            description="Until then, Invoices shows what each customer owes you."
-          />
-        </div>
-      </section>
+        }
+      />
+      <Suspense fallback={<MonthSkeleton />}>
+        <ThisMonth ctx={ctx} />
+      </Suspense>
+      <Suspense
+        key={`${from}:${to}:${cursor}`}
+        fallback={<Skeleton className="h-64 rounded-lg" />}
+      >
+        <Breakdown ctx={ctx} range={{ from, to }} cursor={cursor} />
+      </Suspense>
     </div>
   )
 }
