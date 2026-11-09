@@ -1,9 +1,9 @@
 import { expect, it } from "vitest"
 import { listLedgerAccounts } from "../src/server/services/accounts"
-import { devOrg } from "./setup"
+import { freshDevOrg } from "./setup"
 
 it("listLedgerAccounts on the dev DB", async () => {
-  const ctx = await devOrg()
+  const ctx = await freshDevOrg("accounts")
   const banks = await listLedgerAccounts(ctx, null, { bankOnly: true })
   expect(banks.items.map((a) => [a.code, a.name, a.isBank])).toEqual([
     ["1110", "Bank current account", true],
