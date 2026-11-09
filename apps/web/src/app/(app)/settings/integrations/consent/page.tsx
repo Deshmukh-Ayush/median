@@ -30,8 +30,12 @@ const POINTS: readonly { title: string; body: string }[] = [
     body: "Members of this organisation, according to the role you give them. You can remove a member at any time.",
   },
   {
-    title: "Export or delete",
-    body: "You can export everything, or ask us to delete your organisation's data. Ledger, invoices and the audit log are kept read-only for 8 years after the financial year ends, as tax law requires, then purged.",
+    title: "Export",
+    body: "An owner can export all of your organisation's data at any time.",
+  },
+  {
+    title: "Delete",
+    body: "An owner can delete your organisation's data. We remove straight away: connection credentials, uploaded documents (bills, statements), the raw data we pulled from Razorpay and your bank, the AI inbox, members and invitations, and personal contact details. Your ledger, invoices, credit notes, customer and vendor names and GSTINs, and the audit log are kept read-only, because tax law requires books to be kept for 8 years after the end of the financial year. After that they are purged.",
   },
 ]
 
