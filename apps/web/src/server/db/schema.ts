@@ -112,6 +112,8 @@ export const sourceRecordKind = pgEnum("source_record_kind", [
   "invoice",
   "party",
   "opening_balance",
+  "account",
+  "voucher",
 ])
 
 export const flowDirection = pgEnum("flow_direction", ["inflow", "outflow"])

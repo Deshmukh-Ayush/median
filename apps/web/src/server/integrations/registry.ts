@@ -9,6 +9,7 @@ import {
   razorpayOAuthConnector,
   razorpayTestKeysConnector,
 } from "./razorpay/connector"
+import { tallyImportConnector } from "./tally-import/connector"
 
 // Every connector Median knows. Adding one = a folder under integrations/
 // and a line here.
@@ -18,21 +19,11 @@ export const CONNECTORS: readonly Connector[] = [
   razorpayTestKeysConnector,
   razorpaySettlementReportConnector,
   bankStatementConnector,
+  tallyImportConnector,
 ]
 
 /** Listed in the gallery as coming soon; no implementation yet. */
 export const LISTED_ONLY: readonly ConnectorInfo[] = [
-  {
-    provider: "tally-import",
-    displayName: "Import from Tally",
-    category: "accounting",
-    authType: "file",
-    description:
-      "Masters, opening balances and vouchers from a Tally XML export.",
-    availability: "coming_soon",
-    accepts: ["application/xml", "text/xml"],
-    testModeOnly: false,
-  },
   {
     provider: "zoho-books-import",
     displayName: "Import from Zoho Books",

@@ -34,6 +34,7 @@ import {
 } from "../integrations/connector"
 import { Secret, encryptCredentials } from "../integrations/credentials"
 import { connectorInfos, getConnector } from "../integrations/registry"
+import { TALLY_PROVIDER } from "../integrations/tally-import/connector"
 import { hasConsent, requireConsent } from "./consent"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
@@ -43,6 +44,7 @@ import {
   runSync,
   storeRecords,
 } from "./sync-runner"
+import { postTallyImport } from "./tally-import"
 
 /** Data rows in CSV text: non-blank lines after the header. */
 export function countCsvRows(text: string): number {
@@ -459,9 +461,21 @@ async function fileConnection(
   return created.id
 }
 
+async function markImported(orgId: string, connectionId: string) {
+  await getDb()
+    .update(connections)
+    .set({ lastSyncedAt: new Date(), status: "connected", lastError: null })
+    .where(
+      and(
+        eq(connections.organizationId, orgId),
+        eq(connections.id, connectionId)
+      )
+    )
+}
+
 /**
  * Imports a file through a file connector (bank statement, Razorpay
- * settlement report, later Tally XML). Unreadable rows are reported in
+ * settlement report, Tally XML). Unreadable rows are reported in
  * `errors`, not thrown; re-importing the same file creates no duplicates.
  * Throws CONSENT_REQUIRED, NOT_FOUND, VALIDATION (e.g. a bank statement
  * without connectionId). Bank statements return per-row `matched` and
@@ -504,16 +518,25 @@ export async function importFile(
   const stored = await storeRecords(ctx.orgId, connectionId, parsed.records)
   if (parsed.settlementLinks?.length)
     await applySettlementLinks(ctx.orgId, parsed.settlementLinks)
+  if (provider === TALLY_PROVIDER) {
+    const tally = await postTallyImport(ctx, connectionId)
+    await markImported(ctx.orgId, connectionId)
+    return {
+      connectionId,
+      imported: stored.inserted,
+      duplicates: stored.skippedExisting,
+      posted: tally.posted,
+      sentToInbox: 0,
+      errors: [...parsed.errors, ...stored.errors],
+      tally: {
+        trialBalanceMatches: tally.trialBalanceMatches,
+        differences: tally.differences,
+        warnings: tally.warnings,
+      },
+    }
+  }
   const posting = await postNewRecords(ctx.orgId, connectionId, "file_import")
-  await getDb()
-    .update(connections)
-    .set({ lastSyncedAt: new Date(), status: "connected", lastError: null })
-    .where(
-      and(
-        eq(connections.organizationId, ctx.orgId),
-        eq(connections.id, connectionId)
-      )
-    )
+  await markImported(ctx.orgId, connectionId)
   // Per-row results for bank statements (new rows only).
   const matched: BankLineMatched[] = []
   const unmatched: BankLineUnmatched[] = []

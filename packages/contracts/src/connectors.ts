@@ -6,7 +6,7 @@ import { z } from "zod"
 
 import type { BankLineMatched, BankLineUnmatched } from "./bank"
 import { gstStateCodeSchema, idSchema, moneySchema } from "./common"
-import type { IsoTimestamp } from "./common"
+import type { IsoTimestamp, Money } from "./common"
 
 export type ConnectorAuthType = "api_key" | "oauth" | "file"
 
@@ -78,6 +78,10 @@ export const sourceRecordKindSchema = z.enum([
   "invoice",
   "party",
   "opening_balance",
+  /** A chart-of-accounts master from an accounting import (Tally). */
+  "account",
+  /** A posted voucher from an accounting import (Tally). */
+  "voucher",
 ])
 export type SourceRecordKind = z.infer<typeof sourceRecordKindSchema>
 
@@ -220,6 +224,26 @@ export const importFileOptionsSchema = z.object({
 })
 export type ImportFileOptions = z.input<typeof importFileOptionsSchema>
 
+/** Tally import: does what Median booked match the Tally file? */
+export interface TallyImportReport {
+  /**
+   * True when, for every account (and party), the entries posted from this
+   * Tally connection equal the file's opening balances plus vouchers.
+   */
+  readonly trialBalanceMatches: boolean
+  readonly differences: readonly {
+    /** Tally ledger(s) that map to the account. */
+    readonly ledgers: readonly string[]
+    readonly accountId: string
+    /** Net debit the Tally file implies (credit negative). */
+    readonly expectedDebit: Money
+    /** Net debit Median booked from the import. */
+    readonly bookedDebit: Money
+  }[]
+  /** Mapping notes and vouchers that couldn't post (e.g. locked period). */
+  readonly warnings: readonly string[]
+}
+
 export interface ImportResult {
   readonly connectionId: string
   /** New records stored. */
@@ -233,6 +257,8 @@ export interface ImportResult {
     readonly index: number
     readonly message: string
   }[]
+  /** Tally imports only: the trial-balance check. */
+  readonly tally?: TallyImportReport
   /** Bank statements only: new lines booked by a deterministic match. */
   readonly matched?: readonly BankLineMatched[]
   /** Bank statements only: new lines sent to the inbox. */
