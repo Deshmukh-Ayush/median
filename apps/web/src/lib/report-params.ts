@@ -38,6 +38,7 @@ export const SOURCE_LABELS: Record<JournalSourceType, string> = {
   inbox: "AI inbox",
   reversal: "Reversal",
   opening_balance: "Opening balance",
+  credit_note: "Credit note",
 }
 
 export const JOURNAL_SOURCES = [
@@ -49,6 +50,7 @@ export const JOURNAL_SOURCES = [
   "inbox",
   "reversal",
   "opening_balance",
+  "credit_note",
 ] as const satisfies readonly JournalSourceType[]
 
 export function sourceParam(value: ParamValue): JournalSourceType | undefined {
