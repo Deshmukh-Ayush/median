@@ -1,7 +1,7 @@
 import "server-only"
 
 import { ServiceError } from "@workspace/contracts"
-import { del, get, put } from "@vercel/blob"
+import { del, get, list, put } from "@vercel/blob"
 
 // Where uploaded documents (bills, statements) live: a PRIVATE Vercel Blob
 // store. Private blobs can't be fetched by URL without the store's token, so
@@ -22,6 +22,8 @@ export interface DocumentStore {
   ): Promise<{ readonly pathname: string }>
   get(pathname: string): Promise<StoredFile | null>
   delete(pathname: string): Promise<void>
+  /** Deletes every file whose path starts with `prefix`; returns how many. */
+  deletePrefix(prefix: string): Promise<number>
 }
 
 function token(): string {
@@ -60,6 +62,27 @@ const vercelBlobStore: DocumentStore = {
   },
   async delete(pathname) {
     await del(pathname, { token: token() })
+  },
+  async deletePrefix(prefix) {
+    let deleted = 0
+    let cursor: string | undefined
+    do {
+      const page = await list({
+        prefix,
+        limit: 1000,
+        token: token(),
+        ...(cursor ? { cursor } : {}),
+      })
+      if (page.blobs.length > 0) {
+        await del(
+          page.blobs.map((b) => b.url),
+          { token: token() }
+        )
+        deleted += page.blobs.length
+      }
+      cursor = page.hasMore ? page.cursor : undefined
+    } while (cursor)
+    return deleted
   },
 }
 
