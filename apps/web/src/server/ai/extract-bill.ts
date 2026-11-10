@@ -11,7 +11,7 @@ import {
   BILL_EXTRACTION_PROMPT,
 } from "./bill-extraction"
 import { type ReviewFlag, reviewBill } from "./bill-review"
-import { fastModel } from "./models"
+import { fastModel, requireRealDataAllowed } from "./models"
 
 export const BILL_MEDIA_TYPES = [
   "application/pdf",
@@ -46,6 +46,7 @@ export interface BillExtractionResult {
 export async function extractBill(
   document: BillDocument
 ): Promise<BillExtractionResult> {
+  requireRealDataAllowed()
   let raw: unknown
   try {
     const result = await generateText({
