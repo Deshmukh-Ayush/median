@@ -130,7 +130,7 @@ Carried until fixed; each fix lands with tests.
 - A payment quoting an invoice number is booked as a plain sale when no receipt match fires, so revenue is counted twice (invoice + payment). Match it to the invoice instead.
 - Receivables ageing is as of today only; it needs an `asOf` date.
 - Party-name search has no index for `ILIKE '%…%'` (needs pg_trgm); the same goes for `listEntries` narration search.
-- Data deletion must also delete stored files (document storage), not only rows.
+- The purge after the retention date (deleteOrgData leaves the books read-only with a tombstone; a scheduled job must delete them once `retention_until` passes, past the append-only triggers).
 - The real Razorpay sync, once test payments exist in the test account.
 
 ## Week 2 (plan only, don't build)
