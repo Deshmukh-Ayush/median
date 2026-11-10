@@ -62,7 +62,6 @@ describe("consent gate", () => {
         importFile(ctx, "bank-statement", csv, { connectionId: bankConnection })
       )
     ).toBe("CONSENT_REQUIRED")
-    expect(await codeOf(startRazorpayOAuth(ctx))).toBe("CONSENT_REQUIRED")
     expect(
       await codeOf(importBankRows(ctx, [], { bankAccountId: bankConnection }))
     ).toBe("CONSENT_REQUIRED")
@@ -77,7 +76,7 @@ describe("connectors", () => {
     )
     expect(connectors.find((c) => c.provider === "razorpay")).toMatchObject({
       authType: "oauth",
-      availability: "available",
+      availability: "coming_soon",
     })
     expect(
       connectors.find((c) => c.provider === "razorpay-settlement-report")
@@ -142,7 +141,20 @@ describe("connectors", () => {
 })
 
 describe("Razorpay OAuth", () => {
-  it("asks for read-only scope and returns to the app path it started from", async () => {
+  it("is coming soon: start and complete both refuse, settlement reports stay available", async () => {
+    expect(await codeOf(startRazorpayOAuth(ctx))).toBe("VALIDATION")
+    expect(
+      await codeOf(completeRazorpayOAuth(ctx, { code: "abc", state: "x" }))
+    ).toBe("VALIDATION")
+    const connectors = await listConnectors()
+    expect(
+      connectors.find((c) => c.provider === "razorpay-settlement-report")
+    ).toMatchObject({ availability: "available" })
+  })
+
+  // Re-enable when Razorpay approves the partner app and "razorpay" is
+  // available again.
+  it.skip("asks for read-only scope and returns to the app path it started from", async () => {
     const { authorizeUrl } = await startRazorpayOAuth(ctx, {
       returnTo: "/onboarding/connect",
     })
@@ -155,7 +167,7 @@ describe("Razorpay OAuth", () => {
     expect(done.connection.status).toBe("connected")
   })
 
-  it("refuses external return paths, other orgs' state and declined access", async () => {
+  it.skip("refuses external return paths, other orgs' state and declined access", async () => {
     expect(
       await codeOf(
         startRazorpayOAuth(ctx, { returnTo: "https://evil.example" })

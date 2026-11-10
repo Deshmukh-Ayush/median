@@ -16,7 +16,12 @@ import type {
 } from "@workspace/contracts"
 import { z } from "zod"
 
-import { connect, listConnections, syncConnection } from "./connectors"
+import {
+  connect,
+  findConnector,
+  listConnections,
+  syncConnection,
+} from "./connectors"
 import { requireConsent } from "./consent"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
@@ -27,9 +32,20 @@ export const RAZORPAY_OAUTH_CALLBACK_PATH =
 
 const stubStateSchema = z.object({ returnTo: z.string(), orgId: z.string() })
 
+/** Refuses OAuth while the Razorpay connector is listed as coming soon. */
+function requireOAuthAvailable(): void {
+  if (findConnector("razorpay").availability !== "available") {
+    throw new ServiceError(
+      "VALIDATION",
+      "Connecting Razorpay directly is coming soon. Upload a settlement report instead."
+    )
+  }
+}
+
 /**
  * Starts Razorpay partner OAuth (read-only scope): returns the approval-screen
- * URL to redirect to. Throws CONSENT_REQUIRED. STUB: the real version signs
+ * URL to redirect to. Throws VALIDATION while the connector is coming soon,
+ * CONSENT_REQUIRED. STUB: the real version signs
  * `state` (org, user, nonce, expiry) and stores the nonce for single use.
  */
 export async function startRazorpayOAuth(
@@ -37,6 +53,7 @@ export async function startRazorpayOAuth(
   input: StartRazorpayOAuthInput = {}
 ): Promise<StartRazorpayOAuthResult> {
   assertCan(ctx, "settings", "update")
+  requireOAuthAvailable()
   const { returnTo } = parseInput(startRazorpayOAuthInputSchema, input)
   await requireConsent(ctx)
   const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000"
@@ -63,13 +80,14 @@ export async function startRazorpayOAuth(
  * `state`, exchanges the code for tokens (stored encrypted) and creates or
  * reconnects the connection. Throws VALIDATION (bad or expired state, or for
  * another organisation), INTEGRATION (user declined, or Razorpay refused the
- * code), CONSENT_REQUIRED. STUB.
+ * code), CONSENT_REQUIRED. VALIDATION while the connector is coming soon. STUB.
  */
 export async function completeRazorpayOAuth(
   ctx: OrgContext,
   input: CompleteRazorpayOAuthInput
 ): Promise<CompleteRazorpayOAuthResult> {
   assertCan(ctx, "settings", "update")
+  requireOAuthAvailable()
   const params = parseInput(completeRazorpayOAuthInputSchema, input)
   let state: z.infer<typeof stubStateSchema>
   try {
