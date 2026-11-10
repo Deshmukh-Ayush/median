@@ -35,6 +35,11 @@ function memoryStore(): DocumentStore & { files: Map<string, Blob> } {
       files.delete(pathname)
       return Promise.resolve()
     },
+    deletePrefix(prefix) {
+      const gone = [...files.keys()].filter((k) => k.startsWith(prefix))
+      for (const k of gone) files.delete(k)
+      return Promise.resolve(gone.length)
+    },
   }
 }
 
