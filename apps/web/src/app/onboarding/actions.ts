@@ -123,21 +123,19 @@ const gstProfileFormSchema = z
       })
     }
   })
-  .transform(
-    (form): UpdateGstProfileInput => {
-      const registered = form.gstRegistered === "yes"
-      return {
-        legalName: form.legalName,
-        gstRegistered: registered,
-        // Unregistered businesses have no GSTIN or composition scheme.
-        gstin: registered ? form.gstin : null,
-        compositionScheme: registered && form.compositionScheme === "on",
-        stateCode: form.stateCode || null,
-        defaultGstRateBps:
-          form.defaultGstRate === "" ? null : form.defaultGstRate,
-      }
+  .transform((form): UpdateGstProfileInput => {
+    const registered = form.gstRegistered === "yes"
+    return {
+      legalName: form.legalName,
+      gstRegistered: registered,
+      // Unregistered businesses have no GSTIN or composition scheme.
+      gstin: registered ? form.gstin : null,
+      compositionScheme: registered && form.compositionScheme === "on",
+      stateCode: form.stateCode || null,
+      defaultGstRateBps:
+        form.defaultGstRate === "" ? null : form.defaultGstRate,
     }
-  )
+  })
 
 /** Field errors from a VALIDATION ServiceError's flattened Zod details. */
 function serviceFieldErrors(details: unknown): Record<string, string> {
@@ -184,5 +182,6 @@ export async function saveGstProfile(
     }
     throw error
   }
-  redirect("/")
+  // Step 3: consent, then step 4: bring data in.
+  redirect("/onboarding/consent")
 }
