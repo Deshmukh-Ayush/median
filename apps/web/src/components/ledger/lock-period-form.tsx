@@ -23,20 +23,26 @@ export function LockPeriodForm({
   months,
   lockPeriod,
 }: {
-  /** [period, label], newest first. */
+  /** [period, label] of ended, unlocked months, newest first. */
   months: readonly (readonly [string, string])[]
   lockPeriod: (period: string) => Promise<LockPeriodResult>
 }) {
-  const [period, setPeriod] = useState(months[1]?.[0] ?? months[0]?.[0] ?? "")
+  const [chosen, setChosen] = useState(months[0]?.[0] ?? "")
   const [confirming, setConfirming] = useState(false)
-  const [message, setMessage] = useState<LockPeriodResult | null>(null)
+  const [message, setMessage] = useState<
+    (LockPeriodResult & { readonly label: string }) | null
+  >(null)
   const [pending, startTransition] = useTransition()
+  // A locked month drops out of `months` after the page refreshes.
+  const period = months.some(([p]) => p === chosen)
+    ? chosen
+    : (months[0]?.[0] ?? "")
   const label = months.find(([p]) => p === period)?.[1] ?? period
 
   function lock() {
     startTransition(async () => {
       const result = await lockPeriod(period)
-      setMessage(result)
+      setMessage({ ...result, label })
       setConfirming(false)
     })
   }
@@ -49,7 +55,7 @@ export function LockPeriodForm({
           <select
             value={period}
             onChange={(e) => {
-              setPeriod(e.target.value)
+              setChosen(e.target.value)
               setMessage(null)
             }}
             className="h-8 rounded-sm border border-input bg-surface px-2 text-sm text-fg"
@@ -73,7 +79,7 @@ export function LockPeriodForm({
             message.ok ? "text-sm text-success" : "text-sm text-danger"
           }
         >
-          {message.ok ? `${label} is locked.` : message.error}
+          {message.ok ? `${message.label} is locked.` : message.error}
         </p>
       ) : null}
 
