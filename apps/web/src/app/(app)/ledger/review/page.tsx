@@ -14,7 +14,7 @@ import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import { formatDateTime, formatPeriod, todayIso } from "@/lib/format-date"
 import { addMonths, periodOfDate } from "@/lib/gst-deadlines"
 import type { SearchParams } from "@/lib/page-props"
-import { can } from "@/lib/permissions"
+import { can, whoCan } from "@/lib/permissions"
 import { dateParam, financialYearStart, firstParam } from "@/lib/report-params"
 
 import { listPeriodLocks } from "@/server/services"
@@ -57,10 +57,14 @@ async function LockMonths({
     <div className="flex flex-col gap-3">
       {!canLock ? (
         <p className="text-sm text-fg-secondary">
-          Only owners and finance can lock months.
+          Only {whoCan({ resource: "period", action: "lock" })} can lock months.
         </p>
       ) : months.length > 0 ? (
-        <LockPeriodForm months={months} lockPeriod={lockPeriodAction} />
+        <LockPeriodForm
+          months={months}
+          lockPeriod={lockPeriodAction}
+          unlockers={whoCan({ resource: "period", action: "unlock" })}
+        />
       ) : (
         <p className="text-sm text-fg-secondary">
           Every month in the last year is locked.
