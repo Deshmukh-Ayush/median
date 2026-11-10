@@ -121,7 +121,7 @@ async function Position({ ctx, asOf }: { ctx: OrgContext; asOf: IsoDate }) {
     <div className="flex flex-col gap-4">
       <div className="max-w-sm">
         <StatCard
-          label="Cash in bank and Razorpay"
+          label="Cash in bank"
           value={p.total}
           compact
           tone={p.total < 0n ? "danger" : "default"}

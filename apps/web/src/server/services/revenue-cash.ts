@@ -132,7 +132,8 @@ const istDate = (at: Date) =>
  * Cash as of a date: every bank account, Razorpay clearing and cash in
  * hand with its book balance, the last statement line (or settlement)
  * imported, and how many statement lines are matched vs waiting in the
- * inbox. One batch; the list is the org's cash accounts, so it's short.
+ * inbox. `total` is bank and cash only; Razorpay clearing is
+ * `heldByRazorpay`. One batch; the list is the org's cash accounts, so it's short.
  */
 export async function getCashPosition(
   ctx: OrgContext,
@@ -263,9 +264,12 @@ export async function getCashPosition(
         ...toStats(s),
       }
     })
+  const sum = (pick: (a: CashAccountPosition) => boolean) =>
+    paise(out.filter(pick).reduce((s, a) => s + a.balance, 0n))
   return {
     asOf: date,
-    total: paise(out.reduce((s, a) => s + a.balance, 0n)),
+    total: sum((a) => a.kind !== "razorpay"),
+    heldByRazorpay: sum((a) => a.kind === "razorpay"),
     accounts: out,
   }
 }

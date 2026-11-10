@@ -180,7 +180,12 @@ export interface CashAccountPosition {
 
 export interface CashPosition {
   readonly asOf: IsoDate
-  /** Sum of the balances below. */
+  /**
+   * Cash in bank and in hand: the sum of the "bank" and "cash" balances
+   * below. The "razorpay" row is in `heldByRazorpay`, not here.
+   */
   readonly total: Money
+  /** The Razorpay clearing balance: collected by Razorpay, not yet settled. */
+  readonly heldByRazorpay: Money
   readonly accounts: readonly CashAccountPosition[]
 }

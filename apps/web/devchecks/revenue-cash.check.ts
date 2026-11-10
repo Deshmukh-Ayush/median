@@ -128,4 +128,5 @@ it("revenue by customer and stream, and the cash position", async () => {
   expect(cash.accounts.find((a) => a.code === "1120")?.kind).toBe("razorpay")
   expect(cash.accounts.find((a) => a.code === "1100")?.kind).toBe("cash")
   expect(cash.total).toBe(3_000_00n)
+  expect(cash.heldByRazorpay).toBe(0n)
 })

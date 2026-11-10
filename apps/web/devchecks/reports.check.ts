@@ -128,6 +128,7 @@ it("trial balance, P&L, balance sheet, drill-down and dashboard", async () => {
 
   const dash = await getDashboardSummary(ctx)
   expect(dash.cash).toBe(10_19_000_00n)
+  expect(dash.heldByRazorpay).toBe(0n)
   expect(dash.revenueThisMonth).toBe(50_000_00n)
   expect(dash.gstPayable.amount).toBe(9_000_00n)
   expect(dash.inboxPendingCount).toBe(0)

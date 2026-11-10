@@ -25,6 +25,23 @@ const total = (
   pick: (r: AccountTotalsRow) => boolean
 ) => paise(rows.filter(pick).reduce((s, r) => s + naturalBalance(r), 0n))
 
+const isRazorpayClearing = (r: AccountTotalsRow) =>
+  r.systemKey === "razorpay_clearing"
+
+/** Bank and cash in hand. Razorpay clearing is reported on its own. */
+const isCashInBank = (r: AccountTotalsRow) =>
+  !isRazorpayClearing(r) &&
+  (r.isBank ||
+    classifyAccount(r.code, r.type).lineItem === "cash_and_cash_equivalents")
+
+/** Cash in bank and the Razorpay clearing balance from asset totals. Pure. */
+export function splitCash(assets: readonly AccountTotalsRow[]) {
+  return {
+    cash: total(assets, isCashInBank),
+    heldByRazorpay: total(assets, isRazorpayClearing),
+  }
+}
+
 const isRevenue = (r: AccountTotalsRow) =>
   r.type === "income" &&
   classifyAccount(r.code, r.type).section === "revenue_from_operations"
@@ -48,7 +65,7 @@ export function dashboardMonths(today: string) {
 
 /**
  * Headline numbers for the home screen, as of today (IST), in one batch:
- * cash from ledger balances, revenue from operations for this month and
+ * cash in bank and held by Razorpay from ledger balances, revenue from operations for this month and
  * last, receivables from open invoices, GST payable from this month's tax
  * account movements, and the pending inbox count.
  */
@@ -100,12 +117,7 @@ export async function getDashboardSummary(
   const r = receivables[0]
   return {
     asOf: now.toISOString(),
-    cash: total(
-      assets,
-      (a) =>
-        a.isBank ||
-        classifyAccount(a.code, a.type).lineItem === "cash_and_cash_equivalents"
-    ),
+    ...splitCash(assets),
     revenueThisMonth,
     revenueLastMonth,
     revenueChange: {
