@@ -23,7 +23,7 @@ const POINTS: readonly { title: string; body: string }[] = [
   },
   {
     title: "Where it's stored",
-    body: "In our database in the Singapore region (AWS ap-southeast-1), encrypted at rest and in transit.",
+    body: "Your books and the data we pull in are in our database in the Singapore region (AWS ap-southeast-1). Documents you upload (bills, statements) are stored in the Mumbai region (Vercel Blob, bom1). Both are encrypted at rest and in transit.",
   },
   {
     title: "Who can see it",
