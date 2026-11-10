@@ -25,6 +25,7 @@ import type {
 import { and, asc, eq, inArray, ne } from "drizzle-orm"
 import { z } from "zod"
 
+import { aiProviderStatusFrom, requireRealDataAllowed } from "../ai/models"
 import { getDb, withTransaction } from "../db"
 import { auditLog, connections, ledgerAccounts } from "../db/schema"
 import {
@@ -400,7 +401,7 @@ export async function disconnect(
 
 /**
  * Pulls new records since the saved cursor and runs the posting rules on
- * them. Safe to re-run. Throws CONSENT_REQUIRED, NOT_FOUND, CONFLICT (already
+ * them. Safe to re-run. Throws CONSENT_REQUIRED, PAID_AI_REQUIRED, NOT_FOUND, CONFLICT (already
  * syncing), INTEGRATION (and marks the connection reconnect_required/revoked
  * when the provider rejects our token).
  */
@@ -411,6 +412,7 @@ export async function syncConnection(
   assertCan(ctx, "ledger", "post")
   const id = parseInput(idSchema, connectionId)
   await requireConsent(ctx)
+  requireRealDataAllowed()
   const r = await runSync(ctx.orgId, id, "razorpay_rule")
   return {
     connectionId: id,
@@ -477,7 +479,7 @@ async function markImported(orgId: string, connectionId: string) {
  * Imports a file through a file connector (bank statement, Razorpay
  * settlement report, Tally XML). Unreadable rows are reported in
  * `errors`, not thrown; re-importing the same file creates no duplicates.
- * Throws CONSENT_REQUIRED, NOT_FOUND, VALIDATION (e.g. a bank statement
+ * Throws CONSENT_REQUIRED, PAID_AI_REQUIRED, NOT_FOUND, VALIDATION (e.g. a bank statement
  * without connectionId). Bank statements return per-row `matched` and
  * `unmatched` for the rows imported this time.
  */
@@ -504,6 +506,7 @@ export async function importFile(
     )
   }
   await requireConsent(ctx)
+  requireRealDataAllowed()
 
   const connector = getConnector(provider)
   if (!connector || !isFileConnector(connector)) {
@@ -600,6 +603,9 @@ export async function runScheduledSyncs(): Promise<ScheduledSyncReport> {
     )
     .orderBy(asc(connections.lastSyncedAt))
     .limit(500)
+  // Same hard check as user imports: nothing syncs on a free-tier AI key.
+  if (aiProviderStatusFrom(process.env).freeTierInProduction)
+    return { synced: 0, failed: [], skipped: rows.length }
   let synced = 0
   let skipped = 0
   const failed: { connectionId: string; message: string }[] = []

@@ -27,7 +27,19 @@ const ACTION_LABELS: Partial<Record<string, string>> = {
   "period.unlock": "Unlocked a month",
   "consent.accept": "Accepted the data consent",
   "invoice.create": "Raised an invoice",
+  "invoice.receipt": "Recorded an invoice payment",
   "credit_note.create": "Issued a credit note",
+  "account.create": "Added a bank account",
+  "ledger_account.create": "Added a ledger account",
+  "chart_of_accounts.seed": "Set up the chart of accounts",
+  "party.create": "Added a customer or vendor",
+  "gst_profile.update": "Updated the GST details",
+  "default_gst_rate.set": "Set the default GST rate",
+  "gst_rate_mapping.upsert": "Set a GST rate for a product",
+  "connection.disconnect": "Disconnected an integration",
+  "connection.settings": "Changed integration settings",
+  "document.upload": "Uploaded a document",
+  "organization.delete_data": "Deleted the organisation's data",
 }
 
 /** Snapshots are untyped JSON; pull out a narration if there is one. */

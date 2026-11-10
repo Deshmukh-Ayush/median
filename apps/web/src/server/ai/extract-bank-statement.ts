@@ -11,7 +11,7 @@ import {
   aiBankStatementSchema,
   BANK_STATEMENT_PROMPT,
 } from "./bank-statement-extraction"
-import { fastModel } from "./models"
+import { fastModel, requireRealDataAllowed } from "./models"
 
 export interface StatementDocument {
   data: Uint8Array
@@ -52,6 +52,7 @@ export function toBankRow(row: AiStatementRow): BankRow {
 export async function extractBankStatement(
   document: StatementDocument
 ): Promise<BankRow[]> {
+  requireRealDataAllowed()
   let raw: unknown
   try {
     const result = await generateText({
