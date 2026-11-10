@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
+import { ServiceError } from "@workspace/contracts"
 import type { LanguageModel } from "ai"
 import { z } from "zod"
 
@@ -73,4 +74,22 @@ export function aiProviderStatusFrom(
 
 export function getAiProviderStatus(): AiProviderStatus {
   return aiProviderStatusFrom(process.env)
+}
+
+/**
+ * Hard check for anything that brings real customer data in (import, sync,
+ * document upload) or sends it to the AI (extraction). In production it
+ * throws PAID_AI_REQUIRED unless AI_PROVIDER_TIER=paid, because a free-tier
+ * key may let the provider use what it's sent. Outside production it passes:
+ * dev and preview use test data only.
+ */
+export function requireRealDataAllowed(
+  env: Readonly<Record<string, string | undefined>> = process.env
+): void {
+  if (aiProviderStatusFrom(env).freeTierInProduction) {
+    throw new ServiceError(
+      "PAID_AI_REQUIRED",
+      "Imports and AI reading are off: production is on the AI provider's free tier. An owner must enable billing and set AI_PROVIDER_TIER=paid."
+    )
+  }
 }

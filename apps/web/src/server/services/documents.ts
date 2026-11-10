@@ -15,6 +15,7 @@ import type {
 } from "@workspace/contracts"
 import { and, eq } from "drizzle-orm"
 
+import { requireRealDataAllowed } from "../ai/models"
 import { getDb, withTransaction } from "../db"
 import { auditLog, documents } from "../db/schema"
 import { documentStore } from "../integrations/document-store"
@@ -70,6 +71,7 @@ function cleanFileName(name: string): string {
  * The type is detected from the bytes (PDF, PNG, JPEG, WebP for bills; CSV
  * or PDF for statements), at most DOCUMENT_MAX_BYTES. Writes an audit row.
  * Throws VALIDATION (empty, too big, wrong type), CONSENT_REQUIRED,
+ * PAID_AI_REQUIRED,
  * INTEGRATION (storage not configured or unavailable).
  */
 export async function registerDocument(
@@ -79,6 +81,7 @@ export async function registerDocument(
   assertCan(ctx, "ledger", "propose")
   const i = parseInput(registerDocumentInputSchema, input)
   await requireConsent(ctx)
+  requireRealDataAllowed()
   const file = i.file
   if (file.size === 0)
     throw new ServiceError("VALIDATION", "That file is empty.")
