@@ -1,5 +1,5 @@
 import { ServiceError } from "@workspace/contracts"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { OrgContext } from "./context"
 
@@ -43,6 +43,10 @@ beforeEach(() => {
   consent.accepted = true
 })
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe("consent gate", () => {
   it("blocks connect, sync, import and Razorpay OAuth until consent is recorded", async () => {
     consent.accepted = false
@@ -66,6 +70,24 @@ describe("consent gate", () => {
     expect(
       await codeOf(importBankRows(ctx, [], { bankAccountId: bankConnection }))
     ).toBe("CONSENT_REQUIRED")
+  })
+})
+
+describe("paid-AI gate", () => {
+  it("blocks sync and imports in production on a free-tier AI key", async () => {
+    vi.stubEnv("VERCEL_ENV", "production")
+    vi.stubEnv("AI_PROVIDER_TIER", "free")
+    expect(await codeOf(syncConnection(ctx, razorpayConnection))).toBe(
+      "PAID_AI_REQUIRED"
+    )
+    expect(
+      await codeOf(
+        importFile(ctx, "bank-statement", csv, { connectionId: bankConnection })
+      )
+    ).toBe("PAID_AI_REQUIRED")
+    expect(
+      await codeOf(importBankRows(ctx, [], { bankAccountId: bankConnection }))
+    ).toBe("PAID_AI_REQUIRED")
   })
 })
 

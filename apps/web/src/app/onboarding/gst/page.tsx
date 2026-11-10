@@ -14,6 +14,8 @@ import { can } from "@/lib/permissions"
 import { bpsToPercentText } from "@/lib/percent"
 import { getGstProfile } from "@/server/services"
 
+import { ONBOARDING_STEPS } from "../steps"
+
 export const metadata: Metadata = { title: "GST details · Median" }
 
 // Only codes valid on a new document; retired ones (25, 28) are left out.
@@ -47,7 +49,9 @@ export default async function OnboardingGstPage() {
         className="flex w-full max-w-md flex-col gap-5 rounded-lg border border-default bg-surface p-6"
       >
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-fg-secondary">Step 2 of 2</p>
+          <p className="text-xs font-medium text-fg-secondary">
+            Step 2 of {ONBOARDING_STEPS}
+          </p>
           <h1 id="gst-profile" className="font-display text-lg font-semibold">
             Your GST details
           </h1>
