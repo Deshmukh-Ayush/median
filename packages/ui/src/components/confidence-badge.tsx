@@ -53,7 +53,8 @@ function ConfidenceBadge({
       {...props}
     >
       {label}
-      {percent ? <span className="tabular opacity-80">· {percent}</span> : null}
+      {/* Full tone colour: at 80% opacity it failed WCAG AA contrast. */}
+      {percent ? <span className="tabular">· {percent}</span> : null}
     </StatusChip>
   )
 }
