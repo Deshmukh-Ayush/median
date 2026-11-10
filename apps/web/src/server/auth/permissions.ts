@@ -38,10 +38,13 @@ export const finance = ac.newRole({
   settings: ["read", "update"],
 })
 
-/** External chartered accountant: works on the books, can't manage people. */
+/**
+ * External chartered accountant: works on the books and closes months, can't
+ * manage people or unlock.
+ */
 export const ca = ac.newRole({
   ledger: ["read", "propose", "post", "reverse"],
-  period: ["read"],
+  period: ["read", "lock"],
   report: ["read", "export"],
   settings: ["read"],
 })
