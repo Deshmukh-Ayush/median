@@ -184,7 +184,7 @@ export function GstProfileForm({
           Save and continue
         </Button>
         <Link
-          href="/"
+          href="/onboarding/consent"
           className={buttonVariants({ variant: "ghost", size: "sm" })}
         >
           Skip for now

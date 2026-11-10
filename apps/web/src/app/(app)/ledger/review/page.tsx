@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
-import { BookOpenIcon, DownloadIcon } from "lucide-react"
+import { BookOpenIcon, DownloadIcon, LockIcon } from "lucide-react"
 
 import { PageHeader } from "@workspace/ui/components/app-shell"
 import { buttonVariants } from "@workspace/ui/components/button"
@@ -11,11 +11,14 @@ import { AuditLog } from "@/components/ledger/audit-log"
 import { LedgerTabs } from "@/components/ledger/ledger-tabs"
 import { LockPeriodForm } from "@/components/ledger/lock-period-form"
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
-import { formatPeriod, todayIso } from "@/lib/format-date"
+import { formatDateTime, formatPeriod, todayIso } from "@/lib/format-date"
 import { addMonths, periodOfDate } from "@/lib/gst-deadlines"
 import type { SearchParams } from "@/lib/page-props"
-import { can } from "@/lib/permissions"
+import { can, whoCan } from "@/lib/permissions"
 import { dateParam, financialYearStart, firstParam } from "@/lib/report-params"
+
+import { listPeriodLocks } from "@/server/services"
+import type { OrgContext } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
 import { lockPeriodAction } from "./actions"
@@ -24,6 +27,68 @@ export const metadata: Metadata = { title: "CA review · Ledger · Median" }
 
 const TITLE = "Ledger"
 const DESCRIPTION = "Lock months, export to Tally and see every change."
+
+/** Months offered for locking: the last 12 that have ended (IST). */
+const LOCKABLE_MONTHS = 12
+
+/**
+ * Locked months, and the picker for the next one. Only ended months that
+ * aren't locked yet are offered; lockPeriod rejects the rest anyway.
+ */
+async function LockMonths({
+  ctx,
+  today,
+  canLock,
+}: {
+  ctx: OrgContext
+  today: string
+  canLock: boolean
+}) {
+  const locks = await listPeriodLocks(ctx, null, { limit: 24 })
+  const locked = new Set(locks.items.map((l) => l.period))
+  const thisMonth = periodOfDate(today)
+  const months = Array.from({ length: LOCKABLE_MONTHS }, (_, i) =>
+    addMonths(thisMonth, -(i + 1))
+  )
+    .filter((p) => !locked.has(p))
+    .map((p) => [p, formatPeriod(p)] as const)
+
+  return (
+    <div className="flex flex-col gap-3">
+      {!canLock ? (
+        <p className="text-sm text-fg-secondary">
+          Only {whoCan({ resource: "period", action: "lock" })} can lock months.
+        </p>
+      ) : months.length > 0 ? (
+        <LockPeriodForm
+          months={months}
+          lockPeriod={lockPeriodAction}
+          unlockers={whoCan({ resource: "period", action: "unlock" })}
+        />
+      ) : (
+        <p className="text-sm text-fg-secondary">
+          Every month in the last year is locked.
+        </p>
+      )}
+      {locks.items.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-xs font-medium text-fg-secondary">Locked</h3>
+          <ul className="flex flex-col gap-1 text-sm">
+            {locks.items.map((l) => (
+              <li key={l.period} className="flex items-center gap-2">
+                <LockIcon aria-hidden className="size-3.5 text-fg-secondary" />
+                <span className="font-medium">{formatPeriod(l.period)}</span>
+                <span className="text-fg-secondary">
+                  by {l.lockedBy.name}, {formatDateTime(l.lockedAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 function Section({
   id,
@@ -83,11 +148,6 @@ export default async function Page({
   const fromParam = dateParam(params.from)
   const from = fromParam && fromParam <= to ? fromParam : financialYearStart(to)
   const auditCursor = firstParam(params.audit) ?? null
-  const thisMonth = periodOfDate(today)
-  const months = Array.from({ length: 13 }, (_, i) => {
-    const p = addMonths(thisMonth, -i)
-    return [p, formatPeriod(p)] as const
-  })
   const canLock = can(ctx.role, { resource: "period", action: "lock" })
   const canExport = can(ctx.role, { resource: "report", action: "export" })
 
@@ -102,13 +162,9 @@ export default async function Page({
           title="Lock a month"
           description="Once your CA has reviewed a month, lock it so the numbers can't change."
         >
-          {canLock ? (
-            <LockPeriodForm months={months} lockPeriod={lockPeriodAction} />
-          ) : (
-            <p className="text-sm text-fg-secondary">
-              Only owners and finance can lock months.
-            </p>
-          )}
+          <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+            <LockMonths ctx={ctx} today={today} canLock={canLock} />
+          </Suspense>
         </Section>
 
         <Section

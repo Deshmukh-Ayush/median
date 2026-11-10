@@ -21,6 +21,7 @@ import {
   sql,
 } from "drizzle-orm"
 
+import { requireRealDataAllowed } from "../ai/models"
 import { withTransaction } from "../db"
 import type { Tx } from "../db"
 import {
@@ -193,7 +194,8 @@ async function usualExpenseAccount(
  * vendor's state and the place of supply. `review` carries the AI module's
  * flags; Median adds its own. The document is marked extracted.
  * Throws VALIDATION (schema, non-INR, unreadable amount, not a bill),
- * NOT_FOUND (document), CONFLICT (already in the inbox), CONSENT_REQUIRED.
+ * NOT_FOUND (document), CONFLICT (already in the inbox), CONSENT_REQUIRED,
+ * PAID_AI_REQUIRED.
  */
 export async function createInboxItemFromExtraction(
   ctx: OrgContext,
@@ -206,6 +208,7 @@ export async function createInboxItemFromExtraction(
   const bill = parseInput(billExtractionSchema, extraction)
   const ai = parseInput(billReviewSchema, review)
   await requireConsent(ctx)
+  requireRealDataAllowed()
 
   // HSN/SAC master rates for lines that don't print one (outside the tx).
   const masterRates = new Map<number, number>()
