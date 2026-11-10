@@ -1,5 +1,5 @@
 import { ServiceError } from "@workspace/contracts"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { OrgContext } from "./context"
 
@@ -43,6 +43,10 @@ beforeEach(() => {
   consent.accepted = true
 })
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe("consent gate", () => {
   it("blocks connect, sync, import and Razorpay OAuth until consent is recorded", async () => {
     consent.accepted = false
@@ -62,10 +66,27 @@ describe("consent gate", () => {
         importFile(ctx, "bank-statement", csv, { connectionId: bankConnection })
       )
     ).toBe("CONSENT_REQUIRED")
-    expect(await codeOf(startRazorpayOAuth(ctx))).toBe("CONSENT_REQUIRED")
     expect(
       await codeOf(importBankRows(ctx, [], { bankAccountId: bankConnection }))
     ).toBe("CONSENT_REQUIRED")
+  })
+})
+
+describe("paid-AI gate", () => {
+  it("blocks sync and imports in production on a free-tier AI key", async () => {
+    vi.stubEnv("VERCEL_ENV", "production")
+    vi.stubEnv("AI_PROVIDER_TIER", "free")
+    expect(await codeOf(syncConnection(ctx, razorpayConnection))).toBe(
+      "PAID_AI_REQUIRED"
+    )
+    expect(
+      await codeOf(
+        importFile(ctx, "bank-statement", csv, { connectionId: bankConnection })
+      )
+    ).toBe("PAID_AI_REQUIRED")
+    expect(
+      await codeOf(importBankRows(ctx, [], { bankAccountId: bankConnection }))
+    ).toBe("PAID_AI_REQUIRED")
   })
 })
 
@@ -77,7 +98,7 @@ describe("connectors", () => {
     )
     expect(connectors.find((c) => c.provider === "razorpay")).toMatchObject({
       authType: "oauth",
-      availability: "available",
+      availability: "coming_soon",
     })
     expect(
       connectors.find((c) => c.provider === "razorpay-settlement-report")
@@ -142,7 +163,20 @@ describe("connectors", () => {
 })
 
 describe("Razorpay OAuth", () => {
-  it("asks for read-only scope and returns to the app path it started from", async () => {
+  it("is coming soon: start and complete both refuse, settlement reports stay available", async () => {
+    expect(await codeOf(startRazorpayOAuth(ctx))).toBe("VALIDATION")
+    expect(
+      await codeOf(completeRazorpayOAuth(ctx, { code: "abc", state: "x" }))
+    ).toBe("VALIDATION")
+    const connectors = await listConnectors()
+    expect(
+      connectors.find((c) => c.provider === "razorpay-settlement-report")
+    ).toMatchObject({ availability: "available" })
+  })
+
+  // Re-enable when Razorpay approves the partner app and "razorpay" is
+  // available again.
+  it.skip("asks for read-only scope and returns to the app path it started from", async () => {
     const { authorizeUrl } = await startRazorpayOAuth(ctx, {
       returnTo: "/onboarding/connect",
     })
@@ -155,7 +189,7 @@ describe("Razorpay OAuth", () => {
     expect(done.connection.status).toBe("connected")
   })
 
-  it("refuses external return paths, other orgs' state and declined access", async () => {
+  it.skip("refuses external return paths, other orgs' state and declined access", async () => {
     expect(
       await codeOf(
         startRazorpayOAuth(ctx, { returnTo: "https://evil.example" })

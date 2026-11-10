@@ -194,7 +194,9 @@ export const razorpayOAuthConnector: ApiConnector<OAuthCredentials> = {
     category: "payments",
     authType: "oauth",
     description: "Payments, refunds, fees and settlements, read-only.",
-    availability: "available",
+    // Coming soon until Razorpay approves our partner app: there's no real
+    // OAuth client id yet. Settlement-report upload covers live accounts.
+    availability: "coming_soon",
     accepts: [],
     testModeOnly: false,
   },

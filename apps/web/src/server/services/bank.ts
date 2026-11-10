@@ -15,6 +15,7 @@ import type {
 import { and, eq, or } from "drizzle-orm"
 import { z } from "zod"
 
+import { requireRealDataAllowed } from "../ai/models"
 import { getDb } from "../db"
 import { connections } from "../db/schema"
 import { importFile } from "./connectors"
@@ -56,6 +57,7 @@ export async function importBankRows(
   assertCan(ctx, "ledger", "post")
   const { bankAccountId } = parseInput(importBankRowsOptionsSchema, options)
   await requireConsent(ctx)
+  requireRealDataAllowed()
   const [connection] = await getDb()
     .select({ id: connections.id })
     .from(connections)

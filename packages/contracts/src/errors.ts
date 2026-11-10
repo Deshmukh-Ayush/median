@@ -10,6 +10,11 @@ export type ServiceErrorCode =
   | "INTEGRATION"
   /** Connect, sync, import and AI extraction need recorded consent first. */
   | "CONSENT_REQUIRED"
+  /**
+   * Production is on the AI provider's free tier: imports, syncs, document
+   * uploads and AI extraction refuse to run until AI_PROVIDER_TIER=paid.
+   */
+  | "PAID_AI_REQUIRED"
 
 /**
  * The only error type services throw on purpose. Pages map `code` to UI;

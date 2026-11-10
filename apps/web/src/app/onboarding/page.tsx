@@ -14,6 +14,7 @@ import type { BusinessTypeOption } from "@/components/auth/create-organization-f
 import { getAuth } from "@/server/auth"
 
 import { openOrganization } from "./actions"
+import { ONBOARDING_STEPS } from "./steps"
 
 export const metadata: Metadata = { title: "Set up your organisation · Median" }
 
@@ -95,6 +96,9 @@ export default async function OnboardingPage() {
           className="flex flex-col gap-5 rounded-lg border border-default bg-surface p-6"
         >
           <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-fg-secondary">
+              Step 1 of {ONBOARDING_STEPS}
+            </p>
             <h1 id="create-org" className="font-display text-lg font-semibold">
               {organizations.length > 0
                 ? "Or set up another organisation"

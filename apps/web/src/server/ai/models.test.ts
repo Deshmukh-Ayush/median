@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { aiProviderStatusFrom } from "./models"
+import { aiProviderStatusFrom, requireRealDataAllowed } from "./models"
 
 describe("aiProviderStatusFrom", () => {
   it("treats an undeclared tier as free", () => {
@@ -44,5 +44,32 @@ describe("aiProviderStatusFrom", () => {
     expect(s.tier).toBe("free")
     expect(s.tierDeclared).toBe(false)
     expect(s.keyConfigured).toBe(true)
+  })
+})
+
+describe("requireRealDataAllowed", () => {
+  it("blocks real data in production unless the tier is paid", () => {
+    expect(() => requireRealDataAllowed({ VERCEL_ENV: "production" })).toThrow(
+      expect.objectContaining({ code: "PAID_AI_REQUIRED" })
+    )
+    expect(() =>
+      requireRealDataAllowed({
+        VERCEL_ENV: "production",
+        AI_PROVIDER_TIER: "free",
+      })
+    ).toThrow(expect.objectContaining({ code: "PAID_AI_REQUIRED" }))
+    expect(() =>
+      requireRealDataAllowed({
+        VERCEL_ENV: "production",
+        AI_PROVIDER_TIER: "paid",
+      })
+    ).not.toThrow()
+  })
+
+  it("passes outside production", () => {
+    expect(() => requireRealDataAllowed({})).not.toThrow()
+    expect(() =>
+      requireRealDataAllowed({ VERCEL_ENV: "preview" })
+    ).not.toThrow()
   })
 })
