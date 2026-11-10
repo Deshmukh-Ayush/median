@@ -53,6 +53,7 @@ it("bills: document → inbox proposal → approval", async () => {
       )
     },
     delete: (p) => (files.delete(p), Promise.resolve()),
+    deletePrefix: () => Promise.resolve(0),
   })
   const run = Date.now()
   const vendorGstin = gstin("27")
