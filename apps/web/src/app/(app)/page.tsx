@@ -147,7 +147,7 @@ async function Summary({ ctx }: { ctx: OrgContext }) {
           value={summary.cash}
           compact
           tone={summary.cash < 0n ? "danger" : "default"}
-          caption="Bank and Razorpay"
+          caption="Bank and cash in hand"
         />
       </Grid>
 
