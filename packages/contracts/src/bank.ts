@@ -39,7 +39,11 @@ export const bankRowSchema = z
 export type BankRow = z.input<typeof bankRowSchema>
 
 export type BankMatchKind =
-  "razorpay_settlement" | "invoice_payment" | "known_vendor"
+  | "razorpay_settlement"
+  | "invoice_payment"
+  | "known_vendor"
+  /** A vendor bill paid, or a bill payment already recorded by hand. */
+  | "bill_payment"
 
 /** A bank line booked by a deterministic match. */
 export interface BankLineMatched {

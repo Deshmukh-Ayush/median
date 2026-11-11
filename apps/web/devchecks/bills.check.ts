@@ -1,8 +1,5 @@
-import { and, eq } from "drizzle-orm"
 import { afterEach, expect, it } from "vitest"
 
-import { getDb } from "../src/server/db"
-import { ledgerAccounts, organizationSettings } from "../src/server/db/schema"
 import { setDocumentStoreForTests } from "../src/server/integrations/document-store"
 import {
   adjustVendorAdvance,
@@ -12,84 +9,15 @@ import {
   recordBillPayment,
   recordVendorAdvance,
 } from "../src/server/services/bills"
-import { registerDocument } from "../src/server/services/documents"
-import { createInboxItemFromExtraction } from "../src/server/services/extraction"
-import { approveInboxItem } from "../src/server/services/inbox"
-import { createParty } from "../src/server/services/parties"
+import { approvedLotusBill, billsOrgSetup } from "./bill-fixture"
 import { freshDevOrg } from "./setup"
 
 afterEach(() => setDocumentStoreForTests(null))
 
 it("bills: approval → bill, payment, advance adjusted, ageing, statement", async () => {
   const ctx = await freshDevOrg("bills")
-  const db = getDb()
-  await db
-    .update(organizationSettings)
-    .set({
-      gstRegistered: true,
-      gstin: "29ABCDE1234F1ZW",
-      stateCode: "29",
-      compositionScheme: false,
-    })
-    .where(eq(organizationSettings.organizationId, ctx.orgId))
-  const files = new Map<string, Blob>()
-  setDocumentStoreForTests({
-    put: (p, b) => (files.set(p, b), Promise.resolve({ pathname: p })),
-    get: () => Promise.resolve(null),
-    delete: (p) => (files.delete(p), Promise.resolve()),
-    deletePrefix: () => Promise.resolve(0),
-  })
-  const [bank] = await db
-    .select({ id: ledgerAccounts.id })
-    .from(ledgerAccounts)
-    .where(
-      and(
-        eq(ledgerAccounts.organizationId, ctx.orgId),
-        eq(ledgerAccounts.code, "1110")
-      )
-    )
-  const bankAccountId = bank!.id
-
-  // An MSME vendor; their bill is approved from the inbox.
-  const vendor = await createParty(ctx, {
-    kind: "vendor",
-    name: "Lotus Peak Cloud",
-    gstin: "27AAPCA1234F1ZV",
-    msmeCategory: "micro",
-  })
-  const doc = await registerDocument(ctx, {
-    kind: "bill",
-    file: new File([`%PDF-1.7\n% bills ${Date.now()}\n`], "bill.pdf"),
-  })
-  const item = await createInboxItemFromExtraction(ctx, doc.id, {
-    vendor: {
-      name: "Lotus Peak Cloud",
-      gstin: "27AAPCA1234F1ZV",
-      stateCode: "27",
-    },
-    billNumber: "LPC/118",
-    billDate: "2026-09-01",
-    dueDate: "2026-09-30",
-    placeOfSupplyStateCode: "29",
-    currency: "INR",
-    lines: [
-      {
-        description: "Hosting",
-        hsnSac: "998315",
-        quantity: "1",
-        taxableAmount: "10,000.00",
-        gstRatePercent: "18",
-      },
-    ],
-    printedTotals: {
-      taxable: "10,000.00",
-      cgst: null,
-      sgst: null,
-      igst: "1,800.00",
-      total: "11,800.00",
-    },
-  })
-  await approveInboxItem(ctx, item.id)
+  const { bankAccountId } = await billsOrgSetup(ctx)
+  const { vendor } = await approvedLotusBill(ctx)
   const open = await listBills(ctx, null)
   expect(open.items).toHaveLength(1)
   const bill = open.items[0]!

@@ -768,6 +768,10 @@ export const sourceRecords = pgTable(
       t.status,
       t.occurredAt
     ),
+    // "Is this entry already confirmed by a bank line?" (bill payments).
+    index("source_records_org_entry_idx")
+      .on(t.organizationId, t.journalEntryId)
+      .where(sql`${t.journalEntryId} is not null`),
     index("source_records_org_settlement_idx")
       .on(t.organizationId, t.settlementExternalId)
       .where(sql`${t.settlementExternalId} is not null`),
