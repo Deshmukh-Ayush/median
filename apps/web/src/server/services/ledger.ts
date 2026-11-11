@@ -387,6 +387,148 @@ async function postInTransaction(
   }
 }
 
+/** Rows per INSERT when posting in bulk (well under Postgres's 65,535 parameters). */
+const BULK_ROWS = 1_000
+
+/**
+ * Posts many new entries (no reversals) in the caller's transaction with a
+ * fixed number of round trips: one period-lock check, one reference check,
+ * then bulk inserts of entries, lines and audit rows. Every entry passes
+ * the same checks as postEntry (balanced, integer paise, open period); if
+ * any fails, this throws and the caller's transaction rolls back.
+ * Internal: the sync runner posts rule-matched records with it.
+ */
+export async function postEntries(
+  tx: Tx,
+  actor: LedgerActor,
+  inputs: readonly PostEntryInput[]
+): Promise<PostedEntryResult[]> {
+  if (inputs.length === 0) return []
+  const { orgId } = actor
+  const entries = inputs.map((i) => parseInput(postEntryInputSchema, i))
+  if (entries.some((e) => e.reversesEntryId))
+    throw new Error("postEntries doesn't post reversals; use postEntry")
+  const periods = [...new Set(entries.map((e) => periodOf(e.entryDate)))]
+  for (const period of periods)
+    await lockPeriodForPosting(tx, orgId, period, "post")
+
+  const accountIds = [
+    ...new Set(entries.flatMap((e) => e.lines.map((l) => l.accountId))),
+  ]
+  const partyIds = [
+    ...new Set(
+      entries.flatMap((e) =>
+        e.lines.flatMap((l) => (l.partyId ? [l.partyId] : []))
+      )
+    ),
+  ]
+  const [locks] = await Promise.all([
+    tx
+      .select({ period: periodLocks.period })
+      .from(periodLocks)
+      .where(
+        and(
+          eq(periodLocks.organizationId, orgId),
+          inArray(periodLocks.period, periods)
+        )
+      ),
+    assertReferencesExist(tx, orgId, accountIds, partyIds),
+  ])
+  const lockedPeriods = new Set(locks.map((l) => l.period))
+
+  const planned = entries.map((entry) => {
+    const check = checkPosting(
+      {
+        date: entry.entryDate,
+        narration: entry.narration,
+        reversesEntryId: null,
+        lines: entry.lines.map((l) => ({
+          accountId: l.accountId,
+          partyId: l.partyId ?? null,
+          debit: l.debit,
+          credit: l.credit,
+        })),
+      },
+      { lockedPeriods, original: null }
+    )
+    if (!check.ok) throw postingError(check.errors)
+    return { id: crypto.randomUUID(), entry, check }
+  })
+
+  const chunks = <T>(rows: readonly T[]) =>
+    Array.from({ length: Math.ceil(rows.length / BULK_ROWS) }, (_, i) =>
+      rows.slice(i * BULK_ROWS, (i + 1) * BULK_ROWS)
+    )
+  const created = new Map<string, Date>()
+  for (const chunk of chunks(planned)) {
+    const rows = await tx
+      .insert(journalEntries)
+      .values(
+        chunk.map(({ id, entry }) => ({
+          id,
+          organizationId: orgId,
+          entryDate: entry.entryDate,
+          narration: entry.narration,
+          sourceType: entry.sourceType,
+          sourceId: entry.sourceId ?? null,
+          reversesEntryId: null,
+          createdBy: actor.userId,
+        }))
+      )
+      .returning({ id: journalEntries.id, createdAt: journalEntries.createdAt })
+    for (const r of rows) created.set(r.id, r.createdAt)
+  }
+  const lineRows = planned.flatMap(({ id, entry }) =>
+    entry.lines.map((l, lineNo) => ({
+      organizationId: orgId,
+      entryId: id,
+      lineNo,
+      entryDate: entry.entryDate,
+      accountId: l.accountId,
+      partyId: l.partyId ?? null,
+      debitPaise: l.debit,
+      creditPaise: l.credit,
+      description: l.description ?? null,
+      dimensions: l.dimensions ?? null,
+    }))
+  )
+  for (const chunk of chunks(lineRows))
+    await tx.insert(journalLines).values(chunk)
+  for (const chunk of chunks(planned))
+    await tx.insert(auditLog).values(
+      chunk.map(({ id, entry, check }) => ({
+        organizationId: orgId,
+        actorId: actor.userId,
+        action: "journal_entry.post",
+        entity: "journal_entry",
+        entityId: id,
+        before: null,
+        after: {
+          entryDate: entry.entryDate,
+          narration: entry.narration,
+          sourceType: entry.sourceType,
+          sourceId: entry.sourceId ?? null,
+          reversesEntryId: null,
+          total: String(check.totalDebit),
+          lines: entry.lines.map((l) => ({
+            accountId: l.accountId,
+            partyId: l.partyId ?? null,
+            debit: String(l.debit),
+            credit: String(l.credit),
+          })),
+        },
+        source: actor.source,
+        at: created.get(id) ?? new Date(),
+      }))
+    )
+  return planned.map(({ id, entry, check }) => ({
+    id,
+    entryDate: entry.entryDate,
+    period: check.period,
+    total: check.totalDebit,
+  }))
+}
+
 const manualEntryInputSchema = postEntryInputSchema.omit({
   sourceType: true,
   sourceId: true,
