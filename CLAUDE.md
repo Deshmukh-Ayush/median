@@ -38,14 +38,19 @@ Performance is a priority.
 
 ## AI
 
-- The AI never does maths. Tax, totals and amount matching are deterministic
-  code. AI only extracts and suggests, and its output goes to an approval
-  queue, never straight into the ledger.
+- Median's AI keeps the books, but an entry posts only in one of two ways:
+  (a) a person approves it, or (b) it matches a rule a person has approved.
+  Rules are versioned; the deterministic rule engine applies them, and the AI
+  isn't in that loop. Every entry records who or what posted it (user, rule
+  ID and version, or import) and links to its source file and row.
+- The AI never does maths. GST, TDS and totals are calculated in code, never
+  taken from model output, and matching is deterministic code. LLMs read
+  documents, classify, explain and propose rules.
 - All AI calls go through `apps/web/src/server/ai/models.ts` (enforced by
   ESLint). Gemini free tier is for test data only; never send real customer
   data to it.
-- Agents (added later with eve) live in `apps/web/agent/` and only call ledger
-  functions that propose entries.
+- Agents (added later with eve) live in `apps/web/agent/`. They propose
+  entries and rules; they never call `postEntry` directly.
 
 ## Multi-tenancy
 
@@ -55,6 +60,11 @@ Performance is a priority.
 
 - Build in thin vertical slices.
 - Run `npm run typecheck && npm test` before every commit.
+- Track work in `docs/ROADMAP.md`: claim an item (owner, branch) in the PR
+  that starts it, and add the PR link when it opens.
+- Ledger invariants (`apps/web/devchecks/ledger-invariants.check.ts`) run
+  against the dev database before every PR that touches posting:
+  `npm run test:dev-db -- ledger-invariants` in `apps/web`.
 
 ## Formatting for India
 
