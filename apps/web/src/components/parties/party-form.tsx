@@ -69,20 +69,17 @@ function Select({
 
 /**
  * Create or edit a customer or vendor. State and PAN come from the GSTIN on
- * the server. When the party is in use, the fields printed on its documents
- * are locked (disabled inputs aren't submitted, so they stay as they are).
+ * the server. Issued invoices keep the details they were issued with.
  */
 export function PartyForm({
   kind,
   party,
-  locked = false,
   states,
   next,
   today,
 }: {
   kind: PartyKind
   party?: Party
-  locked?: boolean
   states: readonly StateOption[]
   next?: string
   today: string
@@ -111,19 +108,12 @@ export function PartyForm({
 
       <section className="flex flex-col gap-4">
         <h2 className="text-sm font-semibold">Name and GST</h2>
-        {locked ? (
-          <p className="text-xs text-fg-secondary">
-            This {noun} has invoices or entries, so the details printed on them
-            can&apos;t change. Archive it and add a new one if they have.
-          </p>
-        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             name="name"
             label="Name"
             required
             maxLength={200}
-            disabled={locked}
             defaultValue={v("name")}
             error={err("name")}
           />
@@ -132,14 +122,12 @@ export function PartyForm({
             label="Legal name"
             hint="As on their GST certificate or PAN, if different."
             maxLength={200}
-            disabled={locked}
             defaultValue={v("legalName")}
             error={err("legalName")}
           />
           <Select
             name="registrationType"
             label="GST registration"
-            disabled={locked}
             defaultValue={v("registrationType")}
             error={err("registrationType")}
           >
@@ -159,7 +147,6 @@ export function PartyForm({
             maxLength={15}
             autoComplete="off"
             inputClassName="font-mono"
-            disabled={locked}
             defaultValue={v("gstin")}
             error={err("gstin")}
             hint="We check it for typos and fill in the state and PAN."
@@ -167,7 +154,6 @@ export function PartyForm({
           <Select
             name="stateCode"
             label="State"
-            disabled={locked}
             defaultValue={v("stateCode")}
             error={err("stateCode")}
             hint="Decides CGST + SGST or IGST. Taken from the GSTIN when there is one."

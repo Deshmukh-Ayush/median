@@ -22,7 +22,7 @@ it("real Razorpay test-mode sync", async () => {
     .update(organizationSettings)
     .set({
       gstRegistered: true,
-      gstin: "29ABCDE1234F1Z5",
+      gstin: "29ABCDE1234F1ZW",
       stateCode: "29",
       defaultGstRateBps: 1800,
     })

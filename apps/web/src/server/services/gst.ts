@@ -27,7 +27,6 @@ import {
   journalLines,
   ledgerAccounts,
   organizationSettings,
-  parties,
   periodLocks,
 } from "../db/schema"
 import type { OrgContext } from "./context"
@@ -233,7 +232,7 @@ async function loadMonth(orgId: string, period: Period) {
         docId: inv.id,
         number: inv.number,
         date: inv.invoiceDate,
-        partyGstin: parties.gstin,
+        partyGstin: inv.partyGstin,
         placeOfSupply: inv.placeOfSupply,
         supplyType: inv.supplyType,
         reverseCharge: inv.reverseCharge,
@@ -249,13 +248,6 @@ async function loadMonth(orgId: string, period: Period) {
         igst: invoiceLines.igstPaise,
       })
       .from(inv)
-      .innerJoin(
-        parties,
-        and(
-          eq(parties.organizationId, inv.organizationId),
-          eq(parties.id, inv.partyId)
-        )
-      )
       .innerJoin(
         invoiceLines,
         and(
@@ -276,7 +268,7 @@ async function loadMonth(orgId: string, period: Period) {
         docId: cn.id,
         number: cn.number,
         date: cn.creditNoteDate,
-        partyGstin: parties.gstin,
+        partyGstin: cn.partyGstin,
         placeOfSupply: cn.placeOfSupply,
         supplyType: cn.supplyType,
         reverseCharge: cn.reverseCharge,
@@ -292,13 +284,6 @@ async function loadMonth(orgId: string, period: Period) {
         igst: creditNoteLines.igstPaise,
       })
       .from(cn)
-      .innerJoin(
-        parties,
-        and(
-          eq(parties.organizationId, cn.organizationId),
-          eq(parties.id, cn.partyId)
-        )
-      )
       .innerJoin(
         credited,
         and(
