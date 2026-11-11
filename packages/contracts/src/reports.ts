@@ -8,6 +8,7 @@ import type {
   AccountType,
   IsoDate,
   IsoTimestamp,
+  JournalEntryView,
   Money,
   PartyRef,
 } from "./common"
@@ -154,6 +155,8 @@ export const listEntriesFiltersSchema = z
     sourceType: journalSourceTypeSchema.optional(),
     /** Narration contains this text (case-insensitive). */
     search: z.string().trim().min(1).max(100).optional(),
+    /** Newest first (the default) or oldest first (the day book). */
+    order: z.enum(["newest", "oldest"]).optional(),
   })
   .refine((f) => !f.from || !f.to || f.from <= f.to, "'from' is after 'to'")
 export type ListEntriesFilters = z.input<typeof listEntriesFiltersSchema>
@@ -227,4 +230,72 @@ export interface CashPosition {
   /** The Razorpay clearing balance: collected by Razorpay, not yet settled. */
   readonly heldByRazorpay: Money
   readonly accounts: readonly CashAccountPosition[]
+}
+
+// ---------------------------------------------------------------------------
+// Day book and ledgers
+
+export const dateRangeSchema = z
+  .object({ from: isoDateSchema, to: isoDateSchema })
+  .refine((r) => r.from <= r.to, {
+    message: "'from' is after 'to'.",
+    path: ["from"],
+  })
+export type DateRange = z.input<typeof dateRangeSchema>
+
+/** Every entry in a date range, oldest first, with the range's totals. */
+export interface DayBook {
+  readonly from: IsoDate
+  readonly to: IsoDate
+  /** Across the whole range, not just this page. Equal for a balanced ledger. */
+  readonly totalDebit: Money
+  readonly totalCredit: Money
+  readonly entries: {
+    readonly items: readonly JournalEntryView[]
+    readonly nextCursor: string | null
+  }
+}
+
+/** A ledger for one account, one party, or one party on one account. */
+export const ledgerScopeSchema = z
+  .object({ accountId: idSchema.optional(), partyId: idSchema.optional() })
+  .refine((s) => s.accountId || s.partyId, {
+    message: "Choose an account or a customer or vendor.",
+  })
+export type LedgerScope = z.input<typeof ledgerScopeSchema>
+
+export interface LedgerLine {
+  readonly date: IsoDate
+  readonly entryId: string
+  readonly narration: string
+  readonly account: {
+    readonly id: string
+    readonly code: string
+    readonly name: string
+  }
+  readonly party: PartyRef | null
+  readonly debit: Money
+  readonly credit: Money
+  /** Running balance after this line: debit − credit (negative = credit). */
+  readonly balance: Money
+}
+
+/**
+ * Ledger lines in date order with opening, running and closing balances
+ * (debit − credit). Keyset-paged: each page opens where the last closed.
+ */
+export interface Ledger {
+  readonly account: {
+    readonly id: string
+    readonly code: string
+    readonly name: string
+    readonly type: AccountType
+  } | null
+  readonly party: PartyRef | null
+  readonly from: IsoDate
+  readonly to: IsoDate
+  readonly opening: Money
+  readonly lines: readonly LedgerLine[]
+  readonly closing: Money
+  readonly nextCursor: string | null
 }
