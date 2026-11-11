@@ -23,13 +23,15 @@ LLMs read, classify, explain and propose rules, and do no arithmetic.
 
 ## Phase 1: unblock onboarding
 
-| #   | Item                                                                                                                                                                      | Owner | Branch | PR  | Status |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ | --- | ------ |
-| 1.1 | Customer and vendor screens (list, create, edit, archive; GSTIN checksum, PAN, registration type, TDS/MSME fields, opening balance); "new customer" from the invoice form |       |        |     | todo   |
-| 1.2 | Due date follows invoice date and payment terms                                                                                                                           |       |        |     | todo   |
-| 1.3 | Credit note PDF with Rule 53 particulars                                                                                                                                  |       |        |     | todo   |
-| 1.4 | Database resilience: retries, readable errors, real error logging, batched settlement import                                                                              |       |        |     | todo   |
-| 1.5 | Readable audit-log labels                                                                                                                                                 |       |        |     | todo   |
+| #    | Item                                                                                         | Owner  | Branch                        | PR                                                      | Status    |
+| ---- | -------------------------------------------------------------------------------------------- | ------ | ----------------------------- | ------------------------------------------------------- | --------- |
+| 1.1a | Parties: schema, GST checks (GSTIN check digit, PAN, registration type), TDS/MSME fields     | Vedant | `feat/parties-schema-service` | [#96](https://github.com/Deshmukh-Ayush/median/pull/96) | in review |
+| 1.1b | Parties: edit with field locks, archive, opening balance (stacked on #96)                    | Vedant | `feat/parties-edit-archive`   | [#97](https://github.com/Deshmukh-Ayush/median/pull/97) | in review |
+| 1.1c | Parties: list/create/edit screens; "new customer" from the invoice form                      | Vedant |                               |                                                         | todo      |
+| 1.2  | Due date follows invoice date and payment terms                                              |        |                               |                                                         | todo      |
+| 1.3  | Credit note PDF with Rule 53 particulars                                                     |        |                               |                                                         | todo      |
+| 1.4  | Database resilience: retries, readable errors, real error logging, batched settlement import |        |                               |                                                         | todo      |
+| 1.5  | Readable audit-log labels                                                                    |        |                               |                                                         | todo      |
 
 ## Phase 2: CA P0
 
