@@ -134,6 +134,41 @@
       "when": 1794403826859,
       "tag": "0018_party_details",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794424960407,
+      "tag": "0019_document_party_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794426049395,
+      "tag": "0020_default_payment_terms",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794434956090,
+      "tag": "0021_chat_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794436860541,
+      "tag": "0022_bills_payables",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794437879546,
+      "tag": "0023_source_records_entry_index",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,8 @@ import { z } from "zod"
 
 import { getDb, withTransaction } from "../db"
 import {
+  billAllocations,
+  bills,
   connections,
   gstRateMappings,
   inboxItems,
@@ -38,6 +40,7 @@ import { decryptCredentials } from "../integrations/credentials"
 import { getConnector } from "../integrations/registry"
 import { outstandingOf } from "./invoice-build"
 import { creditInvoiceForRefund } from "./credit-notes"
+import { applyBillPayment } from "./bills"
 import { applyInvoiceReceipt } from "./invoices"
 import { postEntry } from "./ledger"
 import {
@@ -515,6 +518,14 @@ async function applyDecision(
           decision.invoiceId,
           { id: posted.id, lines: decision.entry.lines }
         )
+      if (decision.billId)
+        await applyBillPayment(
+          tx,
+          orgId,
+          decision.billId,
+          posted.id,
+          paise(decision.entry.lines.reduce((s, l) => s + l.debit, 0n))
+        )
       await mark("posted", posted.id)
       return { status: "posted", entryId: posted.id, inboxItemId: null }
     }
@@ -939,65 +950,117 @@ export async function postNewRecords(
     from.setUTCDate(from.getUTCDate() - 6)
     const to = new Date(`${dates.at(-1) ?? "2999-01-01"}T23:59:59+05:30`)
     to.setUTCDate(to.getUTCDate() + 2)
-    const [settlementRows, matchedSettlements, invoiceRows, vendorRows] =
-      await db.batch([
-        db
-          .select({
-            externalId: sourceRecords.externalId,
-            status: sourceRecords.status,
-            entryId: sourceRecords.journalEntryId,
-            amountPaise: sourceRecords.amountPaise,
-            occurredAt: sourceRecords.occurredAt,
-            utr: sourceRecords.reference,
-          })
-          .from(sourceRecords)
-          .where(
-            and(
-              eq(sourceRecords.organizationId, orgId),
-              eq(sourceRecords.kind, "settlement"),
-              sql`${sourceRecords.occurredAt} between ${from} and ${to}`
-            )
-          ),
-        // Settlements already matched to a bank line.
-        db
-          .select({ settlementId: sourceRecords.settlementExternalId })
-          .from(sourceRecords)
-          .where(
-            and(
-              eq(sourceRecords.organizationId, orgId),
-              eq(sourceRecords.kind, "bank_line"),
-              sql`${sourceRecords.settlementExternalId} is not null`,
-              sql`${sourceRecords.occurredAt} between ${from} and ${to}`
-            )
-          ),
-        db
-          .select({
-            id: invoices.id,
-            number: invoices.number,
-            partyId: invoices.partyId,
-            total: invoices.totalPaise,
-            taxable: invoices.taxablePaise,
-            paid: invoices.paidPaise,
-            credited: invoices.creditedPaise,
-            date: invoices.invoiceDate,
-          })
-          .from(invoices)
-          .where(
-            and(
-              eq(invoices.organizationId, orgId),
-              inArray(invoices.status, ["issued", "partially_paid"])
-            )
+    const fromDate = istDateOf(from)
+    const toDate = istDateOf(to)
+    const [
+      settlementRows,
+      matchedSettlements,
+      invoiceRows,
+      vendorRows,
+      billRows,
+      recordedRows,
+    ] = await db.batch([
+      db
+        .select({
+          externalId: sourceRecords.externalId,
+          status: sourceRecords.status,
+          entryId: sourceRecords.journalEntryId,
+          amountPaise: sourceRecords.amountPaise,
+          occurredAt: sourceRecords.occurredAt,
+          utr: sourceRecords.reference,
+        })
+        .from(sourceRecords)
+        .where(
+          and(
+            eq(sourceRecords.organizationId, orgId),
+            eq(sourceRecords.kind, "settlement"),
+            sql`${sourceRecords.occurredAt} between ${from} and ${to}`
           )
-          .orderBy(sql`${invoices.invoiceDate} desc`)
-          .limit(2_000),
-        db
-          .select({ partyId: parties.id, name: parties.name })
-          .from(parties)
-          .where(
-            and(eq(parties.organizationId, orgId), eq(parties.kind, "vendor"))
+        ),
+      // Settlements already matched to a bank line.
+      db
+        .select({ settlementId: sourceRecords.settlementExternalId })
+        .from(sourceRecords)
+        .where(
+          and(
+            eq(sourceRecords.organizationId, orgId),
+            eq(sourceRecords.kind, "bank_line"),
+            sql`${sourceRecords.settlementExternalId} is not null`,
+            sql`${sourceRecords.occurredAt} between ${from} and ${to}`
           )
-          .limit(5_000),
-      ])
+        ),
+      db
+        .select({
+          id: invoices.id,
+          number: invoices.number,
+          partyId: invoices.partyId,
+          total: invoices.totalPaise,
+          taxable: invoices.taxablePaise,
+          paid: invoices.paidPaise,
+          credited: invoices.creditedPaise,
+          date: invoices.invoiceDate,
+        })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.organizationId, orgId),
+            inArray(invoices.status, ["issued", "partially_paid"])
+          )
+        )
+        .orderBy(sql`${invoices.invoiceDate} desc`)
+        .limit(2_000),
+      db
+        .select({ partyId: parties.id, name: parties.name })
+        .from(parties)
+        .where(
+          and(eq(parties.organizationId, orgId), eq(parties.kind, "vendor"))
+        )
+        .limit(5_000),
+      db
+        .select({
+          id: bills.id,
+          number: bills.number,
+          partyId: bills.partyId,
+          date: bills.billDate,
+          total: bills.totalPaise,
+          settled: bills.settledPaise,
+        })
+        .from(bills)
+        .where(
+          and(
+            eq(bills.organizationId, orgId),
+            sql`${bills.settledPaise} < ${bills.totalPaise}`
+          )
+        )
+        .orderBy(sql`${bills.billDate} desc`)
+        .limit(2_000),
+      // Bill payments recorded by hand from this bank that no bank line
+      // has confirmed yet.
+      db
+        .select({
+          entryId: billAllocations.journalEntryId,
+          amountPaise: billAllocations.amountPaise,
+          date: journalLines.entryDate,
+        })
+        .from(billAllocations)
+        .innerJoin(
+          journalLines,
+          and(
+            eq(journalLines.organizationId, billAllocations.organizationId),
+            eq(journalLines.entryId, billAllocations.journalEntryId),
+            eq(journalLines.accountId, bankAccountId),
+            sql`${journalLines.creditPaise} > 0`
+          )
+        )
+        .where(
+          and(
+            eq(billAllocations.organizationId, orgId),
+            eq(billAllocations.kind, "payment"),
+            sql`${journalLines.entryDate} between ${fromDate} and ${toDate}`,
+            sql`not exists (select 1 from ${sourceRecords} where ${sourceRecords.organizationId} = ${orgId} and ${sourceRecords.journalEntryId} = ${billAllocations.journalEntryId})`
+          )
+        ),
+    ])
     const taken = new Set(matchedSettlements.map((s) => s.settlementId))
     // Which bank each posted settlement went to (its entry's debit line).
     const settlementEntryIds = settlementRows.flatMap((s) =>
@@ -1043,6 +1106,19 @@ export async function postNewRecords(
       }))
       .filter((i) => i.outstanding > 0n)
     const usedInvoices = new Set<string>()
+    const openBills = new Map(
+      billRows.map((b) => [
+        b.id,
+        {
+          id: b.id,
+          number: b.number,
+          partyId: b.partyId,
+          date: b.date,
+          outstanding: paise(b.total - b.settled),
+        },
+      ])
+    )
+    const usedPayments = new Set<string>()
     for (const line of bankLines) {
       const p = bankLinePayloadSchema.safeParse(line.payload).data
       const match = findBankMatch(
@@ -1058,6 +1134,10 @@ export async function postNewRecords(
           ),
           invoices: openInvoices.filter((i) => !usedInvoices.has(i.id)),
           vendors: vendorRows,
+          bills: [...openBills.values()],
+          recordedPayments: recordedRows.filter(
+            (r) => !usedPayments.has(r.entryId)
+          ),
         }
       )
       const decision = bankLineRule(line, {
@@ -1074,7 +1154,9 @@ export async function postNewRecords(
             ? "invoice_payment"
             : match.kind === "vendor"
               ? "known_vendor"
-              : null
+              : match.kind === "bill" || match.kind === "recorded_payment"
+                ? "bill_payment"
+                : null
       await decideAndApply(orgId, line, decision, source, tally, matchKind)
       if (match.kind === "settlement") {
         taken.add(match.settlement.externalId)
@@ -1089,6 +1171,16 @@ export async function postNewRecords(
           )
       }
       if (match.kind === "invoice") usedInvoices.add(match.invoice.id)
+      if (match.kind === "recorded_payment") usedPayments.add(match.entryId)
+      if (match.kind === "bill") {
+        const left = match.bill.outstanding - line.amountPaise
+        if (left > 0n)
+          openBills.set(match.bill.id, {
+            ...match.bill,
+            outstanding: paise(left),
+          })
+        else openBills.delete(match.bill.id)
+      }
     }
   }
 

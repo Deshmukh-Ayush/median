@@ -1,0 +1,1 @@
+CREATE INDEX "source_records_org_entry_idx" ON "source_records" USING btree ("organization_id","journal_entry_id") WHERE "source_records"."journal_entry_id" is not null;

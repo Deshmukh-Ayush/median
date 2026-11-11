@@ -368,6 +368,24 @@ export function buildBalanceSheet(
 }
 
 /** First day of the financial year (April–March) containing a date. */
+/**
+ * The same calendar day a year earlier, for comparative figures
+ * (29 Feb → 28 Feb).
+ */
+export function sameDayLastYear(isoDate: string): string {
+  const year = Number(isoDate.slice(0, 4)) - 1
+  const monthDay = isoDate.slice(5)
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
+  return `${year}-${monthDay === "02-29" && !leap ? "02-28" : monthDay}`
+}
+
+/** The day before an ISO date (opening balances for a period). */
+export function dayBefore(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export function financialYearStart(isoDate: string): string {
   const year = Number(isoDate.slice(0, 4))
   const month = Number(isoDate.slice(5, 7))

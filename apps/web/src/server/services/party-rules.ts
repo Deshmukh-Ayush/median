@@ -2,7 +2,6 @@
 // with these before writing, so the same checks hold for create and edit.
 
 import {
-  PARTY_LOCKED_FIELDS,
   REGISTRATION_TYPES_WITH_GSTIN,
   ServiceError,
   panFromGstin,
@@ -125,21 +124,4 @@ export function resolvePartyFields(
     msmeCategory: pick("msmeCategory"),
     udyamNumber: pick("udyamNumber"),
   }
-}
-
-/**
- * Throws if an edit changes a field printed on issued documents of a party
- * that's in use.
- */
-export function assertLockedFieldsUnchanged(
-  before: PartyFields,
-  after: PartyFields
-): void {
-  const changed = PARTY_LOCKED_FIELDS.filter((f) => before[f] !== after[f])
-  if (changed.length > 0)
-    throw new ServiceError(
-      "CONFLICT",
-      "This party already has invoices or entries, so its name, GSTIN, registration and state can't change. Archive it and add a new one.",
-      { fields: changed }
-    )
 }

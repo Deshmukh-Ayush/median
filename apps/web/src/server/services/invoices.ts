@@ -139,8 +139,10 @@ async function customer(db: Db | Tx, orgId: string, partyId: string) {
       id: parties.id,
       kind: parties.kind,
       name: parties.name,
+      legalName: parties.legalName,
       gstin: parties.gstin,
       stateCode: parties.stateCode,
+      billingAddress: parties.billingAddress,
       archivedAt: parties.archivedAt,
     })
     .from(parties)
@@ -347,6 +349,11 @@ export async function createInvoice(
       number,
       financialYear: fy,
       partyId: party.id,
+      // The customer as printed on this invoice; later edits don't change it.
+      partyName: party.legalName ?? party.name,
+      partyGstin: party.gstin,
+      partyAddress: party.billingAddress,
+      partyStateCode: party.stateCode,
       invoiceDate: i.invoiceDate,
       dueDate: i.dueDate,
       placeOfSupply: built.placeOfSupply,
@@ -406,9 +413,11 @@ const headerColumns = {
   id: invoices.id,
   number: invoices.number,
   financialYear: invoices.financialYear,
-  partyId: parties.id,
-  partyName: parties.name,
-  partyGstin: parties.gstin,
+  partyId: invoices.partyId,
+  partyName: invoices.partyName,
+  partyGstin: invoices.partyGstin,
+  partyAddress: invoices.partyAddress,
+  partyStateCode: invoices.partyStateCode,
   invoiceDate: invoices.invoiceDate,
   dueDate: invoices.dueDate,
   placeOfSupply: invoices.placeOfSupply,
@@ -435,6 +444,8 @@ interface HeaderRow {
   readonly partyId: string
   readonly partyName: string
   readonly partyGstin: string | null
+  readonly partyAddress: string | null
+  readonly partyStateCode: string | null
   readonly invoiceDate: string
   readonly dueDate: string
   readonly placeOfSupply: string
@@ -459,7 +470,13 @@ function toListItem(r: HeaderRow): InvoiceListItem {
     id: r.id,
     number: r.number,
     financialYear: r.financialYear,
-    party: { id: r.partyId, name: r.partyName, gstin: r.partyGstin },
+    party: {
+      id: r.partyId,
+      name: r.partyName,
+      gstin: r.partyGstin,
+      address: r.partyAddress,
+      stateCode: r.partyStateCode,
+    },
     invoiceDate: r.invoiceDate,
     dueDate: r.dueDate,
     placeOfSupply: r.placeOfSupply,
