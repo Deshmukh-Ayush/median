@@ -29,8 +29,8 @@ const PROVIDER = "Google Gemini"
 const FAST_MODEL_ID = "gemini-flash-lite-latest"
 const SMART_MODEL_ID = "gemini-flash-latest"
 
-/** Ask Median on OpenRouter: tool calling required. */
-const OPENROUTER_ASK_MODEL_ID = "nvidia/nemotron-3.5-super-vl:free"
+/** Ask Median on OpenRouter (paid, credits): tool calling required. */
+const OPENROUTER_ASK_MODEL_ID = "nvidia/nemotron-3.5-super-vl"
 /** Tried by OpenRouter when the first model is busy; also tool-capable. */
 const OPENROUTER_ASK_FALLBACK_IDS = ["google/gemma-4-31b-it:free"] as const
 
@@ -156,6 +156,15 @@ export function getAskModel(
           apiKey: env.OPENROUTER_API_KEY ?? "",
         }).chat(OPENROUTER_ASK_MODEL_ID, {
           models: [...OPENROUTER_ASK_FALLBACK_IDS],
+          provider: {
+            // Only providers that support every parameter we send (tools)…
+            require_parameters: true,
+            // …and that don't keep or train on our prompts.
+            data_collection: "deny",
+            allow_fallbacks: true,
+          },
+          // Report tokens and cost (providerMetadata.openrouter.usage).
+          usage: { include: true },
         })
       : google(SMART_MODEL_ID)
   const gapMs = gapSchema.parse(env.AI_MIN_REQUEST_GAP_MS ?? 0)

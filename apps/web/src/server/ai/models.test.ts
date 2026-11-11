@@ -99,11 +99,11 @@ describe("Ask Median provider switch", () => {
     const s = aiProviderStatusFrom(env)
     expect(s).toMatchObject({
       askProvider: "openrouter",
-      askModel: "nvidia/nemotron-3.5-super-vl:free",
+      askModel: "nvidia/nemotron-3.5-super-vl",
       askFallbackModels: ["google/gemma-4-31b-it:free"],
       askKeyConfigured: true,
     })
-    expect(idOf(getAskModel(env))).toBe("nvidia/nemotron-3.5-super-vl:free")
+    expect(idOf(getAskModel(env))).toBe("nvidia/nemotron-3.5-super-vl")
     expect(
       aiProviderStatusFrom({ AI_PROVIDER: "openrouter" }).askKeyConfigured
     ).toBe(false)
@@ -115,7 +115,7 @@ describe("Ask Median provider switch", () => {
     )
   })
 
-  it("counts a :free model as the free tier even when paid is declared", () => {
+  it("counts a :free fallback as the free tier even when paid is declared", () => {
     const env = {
       AI_PROVIDER: "openrouter",
       AI_PROVIDER_TIER: "paid",
