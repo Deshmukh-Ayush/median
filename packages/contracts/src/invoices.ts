@@ -179,3 +179,19 @@ export interface ReceivablesAgeing {
     readonly nextCursor: string | null
   }
 }
+
+/** Terms when neither the customer nor the organisation sets any. */
+export const DEFAULT_PAYMENT_TERMS_DAYS = 30
+
+export const paymentTermsDaysSchema = z.int().min(0).max(365)
+
+/**
+ * Due date for an invoice: `termsDays` calendar days after the invoice date
+ * (1 Oct + 30 days → 31 Oct). Pure date arithmetic, no time zone.
+ */
+export function dueDateFor(invoiceDate: IsoDate, termsDays: number): IsoDate {
+  const d = new Date(`${invoiceDate}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return invoiceDate
+  d.setUTCDate(d.getUTCDate() + termsDays)
+  return d.toISOString().slice(0, 10)
+}

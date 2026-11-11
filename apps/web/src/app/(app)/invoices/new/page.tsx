@@ -13,7 +13,12 @@ import { todayIso } from "@/lib/format-date"
 import type { SearchParams } from "@/lib/page-props"
 import { can } from "@/lib/permissions"
 import { idParam } from "@/lib/report-params"
-import { GST_RATES_BPS, getGstProfile, listParties } from "@/server/services"
+import {
+  GST_RATES_BPS,
+  getDefaultPaymentTerms,
+  getGstProfile,
+  listParties,
+} from "@/server/services"
 
 import { getPageContext } from "../../org-context"
 
@@ -59,9 +64,10 @@ export default async function Page({
     )
   }
 
-  const [customers, profile] = await Promise.all([
+  const [customers, profile, defaultTermsDays] = await Promise.all([
     listParties(ctx, null, { kind: "customer" }, { limit: 100 }),
     getGstProfile(ctx),
+    getDefaultPaymentTerms(ctx),
   ])
 
   return (
@@ -97,9 +103,11 @@ export default async function Page({
             name: p.name,
             gstin: p.gstin,
             stateCode: p.stateCode,
+            paymentTermsDays: p.paymentTermsDays,
           }))}
           states={STATES}
           orgStateCode={profile.stateCode}
+          defaultTermsDays={defaultTermsDays}
           slabPeriods={SLAB_PERIODS}
           today={todayIso()}
           initialCustomerId={idParam(params.customer)}
