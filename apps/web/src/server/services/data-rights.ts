@@ -27,6 +27,7 @@ import {
   deletionTombstones,
   documents,
   gstRateMappings,
+  conversations,
   inboxItems,
   invitation,
   member,
@@ -79,6 +80,8 @@ const ORG_TABLES: readonly {
   { name: "source_records", id: true },
   { name: "documents", id: true },
   { name: "inbox_items", id: true },
+  { name: "conversations", id: true },
+  { name: "messages", id: true },
   { name: "consents", id: true },
   { name: "audit_log", id: true },
 ]
@@ -277,6 +280,7 @@ async function summary(orgId: string, today: string): Promise<DeletionSummary> {
       "connections",
       "documents",
       "inbox_items",
+      "conversations",
       "gst_rate_mappings",
       "organization_default_gst_rates",
     ]),
@@ -293,6 +297,7 @@ async function summary(orgId: string, today: string): Promise<DeletionSummary> {
     connection_credentials: removedTables["connections"] ?? 0,
     documents: removedTables["documents"] ?? 0,
     inbox_items: removedTables["inbox_items"] ?? 0,
+    chat_conversations: removedTables["conversations"] ?? 0,
     gst_rate_mappings:
       (removedTables["gst_rate_mappings"] ?? 0) +
       (removedTables["organization_default_gst_rates"] ?? 0),
@@ -310,6 +315,7 @@ async function summary(orgId: string, today: string): Promise<DeletionSummary> {
  *   confirm → with the token and the organisation's name typed exactly.
  * Confirming deletes every stored file under orgs/<org>/, then in one
  * transaction removes credentials, raw payloads, documents, inbox items,
+ * Ask Median chats,
  * GST settings, members, invitations and party contact details; keeps the
  * ledger, invoices, credit notes, parties' names and GSTINs, consents and
  * the audit log read-only until `retentionUntil`; and writes a deletion
@@ -373,6 +379,8 @@ export async function deleteOrgData(
       .set({ payload: {} })
       .where(eq(sourceRecords.organizationId, org_))
     await tx.delete(inboxItems).where(eq(inboxItems.organizationId, org_))
+    // Ask Median chats are personal data; messages go with them (cascade).
+    await tx.delete(conversations).where(eq(conversations.organizationId, org_))
     await tx.delete(documents).where(eq(documents.organizationId, org_))
     await tx
       .delete(gstRateMappings)

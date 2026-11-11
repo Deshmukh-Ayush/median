@@ -18,7 +18,6 @@ import type {
   Page,
   PageOptions,
   Party,
-  PartyDetail,
   PartyKind,
   TdsDefaultSection,
   UpdatePartyInput,
@@ -30,19 +29,13 @@ import type { z } from "zod"
 
 import { getDb, withTransaction } from "../db"
 import type { Tx } from "../db"
-import {
-  auditLog,
-  invoices,
-  journalLines,
-  ledgerAccounts,
-  parties,
-} from "../db/schema"
+import { auditLog, ledgerAccounts, parties } from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { isUniqueViolation } from "./db-errors"
 import { postEntry } from "./ledger"
 import { decodeCursor, encodeCursor } from "./pagination"
-import { assertLockedFieldsUnchanged, resolvePartyFields } from "./party-rules"
+import { resolvePartyFields } from "./party-rules"
 import type { PartyFields } from "./party-rules"
 
 const partyColumns = {
@@ -241,51 +234,16 @@ async function loadParty(
   return toParty(row)
 }
 
-/** True when the party has invoices or ledger lines (credit notes hang off invoices). */
-async function partyInUse(
-  db: Tx | ReturnType<typeof getDb>,
-  orgId: string,
-  id: string
-): Promise<boolean> {
-  const [invoice, line] = await Promise.all([
-    db
-      .select({ id: invoices.id })
-      .from(invoices)
-      .where(and(eq(invoices.organizationId, orgId), eq(invoices.partyId, id)))
-      .limit(1),
-    db
-      .select({ id: journalLines.id })
-      .from(journalLines)
-      .where(
-        and(
-          eq(journalLines.organizationId, orgId),
-          eq(journalLines.partyId, id)
-        )
-      )
-      .limit(1),
-  ])
-  return invoice.length > 0 || line.length > 0
-}
-
-/** One party, with whether it's in use (which fields can still change). */
-export async function getParty(
-  ctx: OrgContext,
-  id: string
-): Promise<PartyDetail> {
+/** One party. Throws NOT_FOUND. */
+export async function getParty(ctx: OrgContext, id: string): Promise<Party> {
   assertCan(ctx, "ledger", "read")
-  const partyId = parseInput(idSchema, id)
-  const db = getDb()
-  const [party, inUse] = await Promise.all([
-    loadParty(db, ctx.orgId, partyId),
-    partyInUse(db, ctx.orgId, partyId),
-  ])
-  return { ...party, inUse }
+  return loadParty(getDb(), ctx.orgId, parseInput(idSchema, id))
 }
 
 /**
- * Edits a party. Once it has invoices or entries, its name, legal name,
- * GSTIN, registration and state are locked (CONFLICT), so issued documents
- * stay as issued. Throws VALIDATION, NOT_FOUND, CONFLICT.
+ * Edits a party. Issued invoices and credit notes keep the details they
+ * were issued with, so any field can change; the audit row records before
+ * and after. Throws VALIDATION, NOT_FOUND, CONFLICT (GSTIN already used).
  */
 export async function updateParty(
   ctx: OrgContext,
@@ -300,8 +258,6 @@ export async function updateParty(
       const before = await loadParty(tx, ctx.orgId, partyId)
       const old = fieldsOf(before)
       const next = resolvePartyFields(before.kind, patch, old)
-      if (await partyInUse(tx, ctx.orgId, partyId))
-        assertLockedFieldsUnchanged(old, next)
       const [row] = await tx
         .update(parties)
         .set(next)

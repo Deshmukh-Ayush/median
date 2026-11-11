@@ -217,6 +217,8 @@ export const organizationSettings = pgTable(
     compositionScheme: boolean().notNull().default(false),
     /** Rate for sales with no invoice or mapping, in basis points. Null → inbox. */
     defaultGstRateBps: integer(),
+    /** Invoices fall due this many days after issue unless the customer has terms. */
+    defaultPaymentTermsDays: integer().notNull().default(30),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -228,6 +230,10 @@ export const organizationSettings = pgTable(
     check(
       "organization_settings_default_rate_check",
       sql`${t.defaultGstRateBps} is null or ${t.defaultGstRateBps} between 0 and 10000`
+    ),
+    check(
+      "organization_settings_payment_terms_check",
+      sql`${t.defaultPaymentTermsDays} between 0 and 365`
     ),
     check(
       "organization_settings_gstin_when_registered_check",
@@ -913,6 +919,14 @@ export const invoices = pgTable(
     number: text().notNull(),
     financialYear: text().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     invoiceDate: isoDate().notNull(),
     dueDate: isoDate().notNull(),
     /** Two-digit GST state code of the place of supply. */
@@ -1072,6 +1086,14 @@ export const creditNotes = pgTable(
     financialYear: text().notNull(),
     invoiceId: uuid().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     creditNoteDate: isoDate().notNull(),
     reason: creditNoteReason().notNull(),
     /** Copied from the invoice: a credit note follows its invoice's GST treatment. */
@@ -1335,6 +1357,76 @@ export const billAllocations = pgTable(
     }),
     index("bill_allocations_org_bill_idx").on(t.organizationId, t.billId),
     check("bill_allocations_amount_check", sql`${t.amountPaise} > 0`),
+  ]
+)
+
+// ---------------------------------------------------------------------------
+// Ask Median (chat). Private to the member who started the conversation.
+
+export const chatRole = pgEnum("chat_role", [
+  "user",
+  "assistant",
+  "tool",
+  "system",
+])
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Null until set, or until the first question names it. */
+    title: text(),
+    /** The page the chat was opened from: { path, label?, entity? }. */
+    pageContext: jsonb(),
+    createdAt: createdAt(),
+    /** Bumped on every message, so lists show the latest first. */
+    lastMessageAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("conversations_org_id_uq").on(t.organizationId, t.id),
+    index("conversations_org_user_recent_idx").on(
+      t.organizationId,
+      t.userId,
+      t.lastMessageAt,
+      t.id
+    ),
+  ]
+)
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    conversationId: uuid().notNull(),
+    role: chatRole().notNull(),
+    content: text().notNull(),
+    /** Assistant messages: the tools it called, [{ id, name, args }]. */
+    toolCalls: jsonb(),
+    /** Tool messages: which call this is the result of. */
+    toolCallId: text(),
+    // clock_timestamp, not now(): each message gets its own instant, so
+    // order is stable even for messages saved in quick succession.
+    createdAt: timestamp({ withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    foreignKey({
+      name: "messages_conversation_fk",
+      columns: [t.organizationId, t.conversationId],
+      foreignColumns: [conversations.organizationId, conversations.id],
+    }).onDelete("cascade"),
+    index("messages_org_conversation_created_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.id
+    ),
   ]
 )
 

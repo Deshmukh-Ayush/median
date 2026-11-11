@@ -2,8 +2,9 @@
 
 Median is an AI-native revenue and ledger platform for Indian businesses. It
 keeps a double-entry, append-only ledger in integer paise, issues GST-ready
-invoices and reconciles payments. AI reads documents and suggests entries, and
-every suggestion goes to an approval queue before it reaches the books.
+invoices and reconciles payments. AI reads documents and suggests entries and
+rules. An entry posts only when a person approves it or it matches a rule a
+person has approved; see [docs/ROADMAP.md](./docs/ROADMAP.md).
 
 ## Structure
 

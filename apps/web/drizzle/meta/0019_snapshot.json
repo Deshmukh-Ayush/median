@@ -1,5 +1,5 @@
 {
-  "id": "60e5ee42-bd67-4050-b233-f51ad200393e",
+  "id": "c1b02097-d9c0-4d2b-9b1c-8b2d6e122bb0",
   "prevId": "18290caa-8c50-4f79-b983-eb7fc153bbd9",
   "version": "7",
   "dialect": "postgresql",
@@ -166,350 +166,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.bill_allocations": {
-      "name": "bill_allocations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "bill_id": {
-          "name": "bill_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "bill_allocation_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "journal_entry_id": {
-          "name": "journal_entry_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount_paise": {
-          "name": "amount_paise",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bill_allocations_org_bill_idx": {
-          "name": "bill_allocations_org_bill_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "bill_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bill_allocations_organization_id_organization_id_fk": {
-          "name": "bill_allocations_organization_id_organization_id_fk",
-          "tableFrom": "bill_allocations",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "bill_allocations_bill_fk": {
-          "name": "bill_allocations_bill_fk",
-          "tableFrom": "bill_allocations",
-          "tableTo": "bills",
-          "columnsFrom": [
-            "organization_id",
-            "bill_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "bill_allocations_entry_fk": {
-          "name": "bill_allocations_entry_fk",
-          "tableFrom": "bill_allocations",
-          "tableTo": "journal_entries",
-          "columnsFrom": [
-            "organization_id",
-            "journal_entry_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "bill_allocations_amount_check": {
-          "name": "bill_allocations_amount_check",
-          "value": "\"bill_allocations\".\"amount_paise\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.bills": {
-      "name": "bills",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "party_id": {
-          "name": "party_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "number": {
-          "name": "number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "bill_date": {
-          "name": "bill_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "due_date": {
-          "name": "due_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "total_paise": {
-          "name": "total_paise",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "settled_paise": {
-          "name": "settled_paise",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "0"
-        },
-        "journal_entry_id": {
-          "name": "journal_entry_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "inbox_item_id": {
-          "name": "inbox_item_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "document_id": {
-          "name": "document_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "bills_org_party_date_idx": {
-          "name": "bills_org_party_date_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "party_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "bill_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "bills_org_date_idx": {
-          "name": "bills_org_date_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "bill_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "bills_organization_id_organization_id_fk": {
-          "name": "bills_organization_id_organization_id_fk",
-          "tableFrom": "bills",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "bills_party_fk": {
-          "name": "bills_party_fk",
-          "tableFrom": "bills",
-          "tableTo": "parties",
-          "columnsFrom": [
-            "organization_id",
-            "party_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "bills_entry_fk": {
-          "name": "bills_entry_fk",
-          "tableFrom": "bills",
-          "tableTo": "journal_entries",
-          "columnsFrom": [
-            "organization_id",
-            "journal_entry_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "bills_org_id_uq": {
-          "name": "bills_org_id_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
-        },
-        "bills_org_entry_uq": {
-          "name": "bills_org_entry_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "journal_entry_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "bills_amounts_check": {
-          "name": "bills_amounts_check",
-          "value": "\"bills\".\"total_paise\" > 0 and \"bills\".\"settled_paise\" between 0 and \"bills\".\"total_paise\""
-        }
-      },
       "isRLSEnabled": false
     },
     "public.connections": {
@@ -1132,6 +788,30 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "party_name": {
+          "name": "party_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "party_gstin": {
+          "name": "party_gstin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_address": {
+          "name": "party_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_state_code": {
+          "name": "party_state_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "credit_note_date": {
           "name": "credit_note_date",
@@ -2577,6 +2257,30 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "party_name": {
+          "name": "party_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "party_gstin": {
+          "name": "party_gstin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_address": {
+          "name": "party_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_state_code": {
+          "name": "party_state_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "invoice_date": {
           "name": "invoice_date",
@@ -5202,14 +4906,6 @@
         "equity",
         "income",
         "expense"
-      ]
-    },
-    "public.bill_allocation_kind": {
-      "name": "bill_allocation_kind",
-      "schema": "public",
-      "values": [
-        "payment",
-        "advance"
       ]
     },
     "public.business_type": {

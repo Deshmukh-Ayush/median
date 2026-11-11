@@ -30,7 +30,7 @@ it("parties, invoices, receipts and ageing", async () => {
     .update(organizationSettings)
     .set({
       gstRegistered: true,
-      gstin: "29ABCDE1234F1Z5",
+      gstin: "29ABCDE1234F1ZW",
       stateCode: "29",
       compositionScheme: false,
     })
@@ -66,7 +66,7 @@ it("parties, invoices, receipts and ageing", async () => {
   }
   const found = await listParties(ctx, null, { search: run })
   expect(found.items.map((p) => p.id)).toEqual([acme.id])
-  expect(await findPartyByGstin(ctx, "07AAICA3918J1ZA")).toBeNull()
+  expect(await findPartyByGstin(ctx, "07AAICA3918J1ZK")).toBeNull()
 
   // Preview: interstate (customer in 27), nothing saved
   const today = new Date(Date.now() + 19_800_000).toISOString().slice(0, 10)

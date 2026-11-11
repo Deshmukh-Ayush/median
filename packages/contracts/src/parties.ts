@@ -154,18 +154,6 @@ export const updatePartyInputSchema = z
   .extend({ name: partyDetailsShape.name.optional() })
 export type UpdatePartyInput = z.input<typeof updatePartyInputSchema>
 
-/**
- * Fields printed on invoices and credit notes. They can't change once the
- * party has documents or ledger lines, so issued documents stay as issued.
- */
-export const PARTY_LOCKED_FIELDS = [
-  "name",
-  "legalName",
-  "gstin",
-  "registrationType",
-  "stateCode",
-] as const satisfies readonly (keyof UpdatePartyInput)[]
-
 export const listPartiesFiltersSchema = z.object({
   kind: z.enum(["customer", "vendor"]).optional(),
   search: z.string().trim().max(100).optional(),
@@ -177,10 +165,4 @@ export type ListPartiesFilters = z.input<typeof listPartiesFiltersSchema>
 export interface CreatedParty extends Party {
   /** The opening-balance journal entry, when one was given. */
   readonly openingBalanceEntryId: string | null
-}
-
-/** A party with what the edit screen needs to know. */
-export interface PartyDetail extends Party {
-  /** True when it has invoices, credit notes or ledger lines. */
-  readonly inUse: boolean
 }
