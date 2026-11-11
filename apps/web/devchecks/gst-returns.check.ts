@@ -18,7 +18,7 @@ it("GST summary and GSTR-1 draft from real invoices and a credit note", async ()
   ).rejects.toMatchObject({ code: "VALIDATION" })
   await db
     .update(organizationSettings)
-    .set({ gstRegistered: true, gstin: "29ABCDE1234F1Z5", stateCode: "29" })
+    .set({ gstRegistered: true, gstin: "29ABCDE1234F1ZW", stateCode: "29" })
     .where(eq(organizationSettings.organizationId, ctx.orgId))
 
   const today = istDateOf(new Date())
@@ -26,7 +26,7 @@ it("GST summary and GSTR-1 draft from real invoices and a credit note", async ()
   const registered = await createParty(ctx, {
     kind: "customer",
     name: "Registered Co",
-    gstin: "29AAPFU0939F1ZV",
+    gstin: "29AAPFU0939F1ZR",
   })
   const consumer = await createParty(ctx, {
     kind: "customer",
@@ -76,7 +76,7 @@ it("GST summary and GSTR-1 draft from real invoices and a credit note", async ()
   const g = await exportGstr1(ctx, period)
   console.log("gstr1", JSON.stringify(g.payload), g.warnings)
   expect(gstr1PayloadSchema.safeParse(g.payload).success).toBe(true)
-  expect(g.payload.b2b[0]?.ctin).toBe("29AAPFU0939F1ZV")
+  expect(g.payload.b2b[0]?.ctin).toBe("29AAPFU0939F1ZR")
   expect(g.payload.b2cs[0]).toMatchObject({ sply_ty: "INTER", pos: "27" })
   expect(g.payload.cdnr[0]?.nt[0]?.val).toBe(1180)
 })

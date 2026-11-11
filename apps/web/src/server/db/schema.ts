@@ -217,6 +217,8 @@ export const organizationSettings = pgTable(
     compositionScheme: boolean().notNull().default(false),
     /** Rate for sales with no invoice or mapping, in basis points. Null → inbox. */
     defaultGstRateBps: integer(),
+    /** Invoices fall due this many days after issue unless the customer has terms. */
+    defaultPaymentTermsDays: integer().notNull().default(30),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -228,6 +230,10 @@ export const organizationSettings = pgTable(
     check(
       "organization_settings_default_rate_check",
       sql`${t.defaultGstRateBps} is null or ${t.defaultGstRateBps} between 0 and 10000`
+    ),
+    check(
+      "organization_settings_payment_terms_check",
+      sql`${t.defaultPaymentTermsDays} between 0 and 365`
     ),
     check(
       "organization_settings_gstin_when_registered_check",
@@ -913,6 +919,14 @@ export const invoices = pgTable(
     number: text().notNull(),
     financialYear: text().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     invoiceDate: isoDate().notNull(),
     dueDate: isoDate().notNull(),
     /** Two-digit GST state code of the place of supply. */
@@ -1072,6 +1086,14 @@ export const creditNotes = pgTable(
     financialYear: text().notNull(),
     invoiceId: uuid().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     creditNoteDate: isoDate().notNull(),
     reason: creditNoteReason().notNull(),
     /** Copied from the invoice: a credit note follows its invoice's GST treatment. */

@@ -106,6 +106,15 @@ export interface PartyRef {
   readonly gstin: string | null
 }
 
+/**
+ * The customer on an issued invoice or credit note, as it was when issued:
+ * `name` is their legal name (or name). Later party edits don't change it.
+ */
+export interface DocumentParty extends PartyRef {
+  readonly address: string | null
+  readonly stateCode: string | null
+}
+
 export type JournalSourceType =
   | "manual"
   | "razorpay"

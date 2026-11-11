@@ -88,7 +88,6 @@ export default async function Page({
         <PartyForm
           kind={party.kind}
           party={party}
-          locked={party.inUse}
           states={PARTY_STATES}
           today={todayIso()}
         />

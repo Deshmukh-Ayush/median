@@ -1,5 +1,5 @@
 {
-  "id": "d3afd890-1115-4826-adfc-a616994cec42",
+  "id": "c1b02097-d9c0-4d2b-9b1c-8b2d6e122bb0",
   "prevId": "18290caa-8c50-4f79-b983-eb7fc153bbd9",
   "version": "7",
   "dialect": "postgresql",
@@ -492,134 +492,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.conversations": {
-      "name": "conversations",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "page_context": {
-          "name": "page_context",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_message_at": {
-          "name": "last_message_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "conversations_org_user_recent_idx": {
-          "name": "conversations_org_user_recent_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "last_message_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "conversations_organization_id_organization_id_fk": {
-          "name": "conversations_organization_id_organization_id_fk",
-          "tableFrom": "conversations",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "conversations_user_id_user_id_fk": {
-          "name": "conversations_user_id_user_id_fk",
-          "tableFrom": "conversations",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "conversations_org_id_uq": {
-          "name": "conversations_org_id_uq",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.credit_note_lines": {
       "name": "credit_note_lines",
       "schema": "",
@@ -916,6 +788,30 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "party_name": {
+          "name": "party_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "party_gstin": {
+          "name": "party_gstin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_address": {
+          "name": "party_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_state_code": {
+          "name": "party_state_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "credit_note_date": {
           "name": "credit_note_date",
@@ -2362,6 +2258,30 @@
           "primaryKey": false,
           "notNull": true
         },
+        "party_name": {
+          "name": "party_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "party_gstin": {
+          "name": "party_gstin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_address": {
+          "name": "party_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_state_code": {
+          "name": "party_state_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "invoice_date": {
           "name": "invoice_date",
           "type": "date",
@@ -3413,133 +3333,6 @@
           "value": "\"ledger_accounts\".\"account_last4\" is null or \"ledger_accounts\".\"account_last4\" ~ '^[0-9]{4}$'"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.messages": {
-      "name": "messages",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "chat_role",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tool_calls": {
-          "name": "tool_calls",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tool_call_id": {
-          "name": "tool_call_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "clock_timestamp()"
-        }
-      },
-      "indexes": {
-        "messages_org_conversation_created_idx": {
-          "name": "messages_org_conversation_created_idx",
-          "columns": [
-            {
-              "expression": "organization_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "conversation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "messages_organization_id_organization_id_fk": {
-          "name": "messages_organization_id_organization_id_fk",
-          "tableFrom": "messages",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "messages_conversation_fk": {
-          "name": "messages_conversation_fk",
-          "tableFrom": "messages",
-          "tableTo": "conversations",
-          "columnsFrom": [
-            "organization_id",
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.organization_default_gst_rates": {
@@ -5122,16 +4915,6 @@
         "saas",
         "d2c",
         "agency"
-      ]
-    },
-    "public.chat_role": {
-      "name": "chat_role",
-      "schema": "public",
-      "values": [
-        "user",
-        "assistant",
-        "tool",
-        "system"
       ]
     },
     "public.connection_status": {

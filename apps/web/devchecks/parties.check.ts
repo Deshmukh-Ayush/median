@@ -7,7 +7,6 @@ import { createInvoice } from "../src/server/services/invoices"
 import { reverseEntry } from "../src/server/services/ledger"
 import {
   createParty,
-  getParty,
   listParties,
   setPartyArchived,
   updateParty,
@@ -76,16 +75,12 @@ it("customers and vendors: details, opening balance, locks, archive", async () =
   // Corrected by reversal, like any entry.
   await reverseEntry(ctx, acme.openingBalanceEntryId!, { date: today })
 
-  // In use (it has ledger lines): contact details change, the GSTIN can't.
-  expect((await getParty(ctx, acme.id)).inUse).toBe(true)
+  // Any field can change, even once the party has entries; issued documents
+  // keep their own copy (see document-snapshot.check.ts).
   expect(
     await updateParty(ctx, acme.id, { email: "ap@acme.example" })
   ).toMatchObject({ email: "ap@acme.example", gstin: "27AAPCA1234F1ZV" })
-  await expect(
-    updateParty(ctx, acme.id, { gstin: "29AABCN5678K1ZT" })
-  ).rejects.toMatchObject({ code: "CONFLICT" })
 
-  // A vendor with no documents yet can change anything.
   const vendor = await createParty(ctx, {
     kind: "vendor",
     name: "Shree Estates",

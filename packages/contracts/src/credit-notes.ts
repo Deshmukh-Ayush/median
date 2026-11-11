@@ -6,7 +6,7 @@ import type { Money } from "@workspace/ledger"
 import { z } from "zod"
 
 import { idSchema, isoDateSchema, moneySchema } from "./common"
-import type { IsoDate, IsoTimestamp, PartyRef } from "./common"
+import type { DocumentParty, IsoDate, IsoTimestamp } from "./common"
 import type { InvoiceSupplyType } from "./invoices"
 
 export const CREDIT_NOTE_REASONS = [
@@ -42,7 +42,7 @@ export interface CreditNote {
   readonly number: string
   readonly financialYear: string
   readonly invoice: { readonly id: string; readonly number: string }
-  readonly party: PartyRef
+  readonly party: DocumentParty
   readonly creditNoteDate: IsoDate
   readonly reason: CreditNoteReason
   /** Copied from the invoice. */
