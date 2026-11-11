@@ -1254,6 +1254,76 @@ export const deletionTombstones = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// Ask Median (chat). Private to the member who started the conversation.
+
+export const chatRole = pgEnum("chat_role", [
+  "user",
+  "assistant",
+  "tool",
+  "system",
+])
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Null until set, or until the first question names it. */
+    title: text(),
+    /** The page the chat was opened from: { path, label?, entity? }. */
+    pageContext: jsonb(),
+    createdAt: createdAt(),
+    /** Bumped on every message, so lists show the latest first. */
+    lastMessageAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("conversations_org_id_uq").on(t.organizationId, t.id),
+    index("conversations_org_user_recent_idx").on(
+      t.organizationId,
+      t.userId,
+      t.lastMessageAt,
+      t.id
+    ),
+  ]
+)
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    conversationId: uuid().notNull(),
+    role: chatRole().notNull(),
+    content: text().notNull(),
+    /** Assistant messages: the tools it called, [{ id, name, args }]. */
+    toolCalls: jsonb(),
+    /** Tool messages: which call this is the result of. */
+    toolCallId: text(),
+    // clock_timestamp, not now(): each message gets its own instant, so
+    // order is stable even for messages saved in quick succession.
+    createdAt: timestamp({ withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    foreignKey({
+      name: "messages_conversation_fk",
+      columns: [t.organizationId, t.conversationId],
+      foreignColumns: [conversations.organizationId, conversations.id],
+    }).onDelete("cascade"),
+    index("messages_org_conversation_created_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.id
+    ),
+  ]
+)
+
+// ---------------------------------------------------------------------------
 // Relations (for the relational query API)
 
 export const journalEntriesRelations = relations(
