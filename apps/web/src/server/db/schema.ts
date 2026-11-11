@@ -913,6 +913,14 @@ export const invoices = pgTable(
     number: text().notNull(),
     financialYear: text().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     invoiceDate: isoDate().notNull(),
     dueDate: isoDate().notNull(),
     /** Two-digit GST state code of the place of supply. */
@@ -1072,6 +1080,14 @@ export const creditNotes = pgTable(
     financialYear: text().notNull(),
     invoiceId: uuid().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     creditNoteDate: isoDate().notNull(),
     reason: creditNoteReason().notNull(),
     /** Copied from the invoice: a credit note follows its invoice's GST treatment. */

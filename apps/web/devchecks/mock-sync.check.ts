@@ -159,7 +159,7 @@ it("sync runner + posting rules on the dev DB (mocked Razorpay API)", async () =
     .update(organizationSettings)
     .set({
       gstRegistered: true,
-      gstin: "29ABCDE1234F1Z5",
+      gstin: "29ABCDE1234F1ZW",
       stateCode: "29",
       defaultGstRateBps: 1800,
     })

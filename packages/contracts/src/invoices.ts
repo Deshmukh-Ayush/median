@@ -10,7 +10,7 @@ import {
   isoDateSchema,
   moneySchema,
 } from "./common"
-import type { IsoDate, IsoTimestamp, PartyRef } from "./common"
+import type { DocumentParty, IsoDate, IsoTimestamp, PartyRef } from "./common"
 
 export type InvoiceStatus = "issued" | "partially_paid" | "paid" | "cancelled"
 
@@ -45,7 +45,7 @@ export interface Invoice {
   readonly number: string
   /** e.g. "2026-27" */
   readonly financialYear: string
-  readonly party: PartyRef
+  readonly party: DocumentParty
   readonly invoiceDate: IsoDate
   readonly dueDate: IsoDate
   /** Two-digit GST state code; "96" for exports. */

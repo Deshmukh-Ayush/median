@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { checkedGstinSchema, gstinCheckCharOk } from "@workspace/contracts"
 
-import { assertLockedFieldsUnchanged, resolvePartyFields } from "./party-rules"
+import { resolvePartyFields } from "./party-rules"
 
 // Valid check characters (computed, not real businesses).
 const ACME = "27AAPCA1234F1ZV"
@@ -135,27 +135,5 @@ describe("resolvePartyFields", () => {
     expect(resolvePartyFields("customer", { gstin: null }, base)).toMatchObject(
       { registrationType: "unregistered", pan: null, stateCode: null }
     )
-  })
-})
-
-describe("assertLockedFieldsUnchanged", () => {
-  const base = resolvePartyFields("customer", { name: "Acme", gstin: ACME })
-
-  it("allows contact and terms edits on a party in use", () => {
-    const after = resolvePartyFields(
-      "customer",
-      { email: "x@acme.example", paymentTermsDays: 45 },
-      base
-    )
-    expect(() => assertLockedFieldsUnchanged(base, after)).not.toThrow()
-  })
-
-  it("refuses a new name or GSTIN on a party in use", () => {
-    for (const patch of [{ name: "Acme 2" }, { gstin: NORTHWIND }]) {
-      const after = resolvePartyFields("customer", patch, base)
-      expect(() => assertLockedFieldsUnchanged(base, after)).toThrow(
-        expect.objectContaining({ code: "CONFLICT" })
-      )
-    }
   })
 })

@@ -36,7 +36,6 @@ import {
   creditNotes,
   invoiceLines,
   invoices,
-  parties,
   periodLocks,
 } from "../db/schema"
 import type { OrgContext } from "./context"
@@ -91,6 +90,10 @@ async function planCreditNote(
       id: invoices.id,
       number: invoices.number,
       partyId: invoices.partyId,
+      partyName: invoices.partyName,
+      partyGstin: invoices.partyGstin,
+      partyAddress: invoices.partyAddress,
+      partyStateCode: invoices.partyStateCode,
       invoiceDate: invoices.invoiceDate,
       placeOfSupply: invoices.placeOfSupply,
       supplyType: invoices.supplyType,
@@ -277,6 +280,11 @@ async function insertCreditNote(
     financialYear: fy,
     invoiceId: invoice.id,
     partyId: invoice.partyId,
+    // The recipient as printed on the invoice it corrects.
+    partyName: invoice.partyName,
+    partyGstin: invoice.partyGstin,
+    partyAddress: invoice.partyAddress,
+    partyStateCode: invoice.partyStateCode,
     creditNoteDate: c.creditNoteDate,
     reason: c.reason,
     placeOfSupply: invoice.placeOfSupply,
@@ -542,9 +550,11 @@ const noteColumns = {
   financialYear: creditNotes.financialYear,
   invoiceId: creditNotes.invoiceId,
   invoiceNumber: invoices.number,
-  partyId: parties.id,
-  partyName: parties.name,
-  partyGstin: parties.gstin,
+  partyId: creditNotes.partyId,
+  partyName: creditNotes.partyName,
+  partyGstin: creditNotes.partyGstin,
+  partyAddress: creditNotes.partyAddress,
+  partyStateCode: creditNotes.partyStateCode,
   creditNoteDate: creditNotes.creditNoteDate,
   reason: creditNotes.reason,
   placeOfSupply: creditNotes.placeOfSupply,
@@ -573,13 +583,6 @@ function baseQuery() {
         eq(invoices.id, creditNotes.invoiceId)
       )
     )
-    .innerJoin(
-      parties,
-      and(
-        eq(parties.organizationId, creditNotes.organizationId),
-        eq(parties.id, creditNotes.partyId)
-      )
-    )
     .$dynamic()
 }
 
@@ -592,7 +595,13 @@ function toListItem(r: NoteRow): CreditNoteListItem {
     number: r.number,
     financialYear: r.financialYear,
     invoice: { id: r.invoiceId, number: r.invoiceNumber },
-    party: { id: r.partyId, name: r.partyName, gstin: r.partyGstin },
+    party: {
+      id: r.partyId,
+      name: r.partyName,
+      gstin: r.partyGstin,
+      address: r.partyAddress,
+      stateCode: r.partyStateCode,
+    },
     creditNoteDate: r.creditNoteDate,
     reason: r.reason,
     placeOfSupply: r.placeOfSupply,
