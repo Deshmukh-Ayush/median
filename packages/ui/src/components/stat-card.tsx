@@ -136,7 +136,7 @@ function StatCard({
         href={href}
         className={cn(
           shared,
-          "transition-colors hover:border-input active:bg-app"
+          "transition-colors hover:border-input active:bg-subtle"
         )}
       >
         {body}
@@ -150,7 +150,7 @@ function StatCard({
         href={href}
         className={cn(
           shared,
-          "transition-colors hover:border-input active:bg-app"
+          "transition-colors hover:border-input active:bg-subtle"
         )}
         {...(props as React.ComponentProps<"a">)}
       >

@@ -28,7 +28,7 @@ const POINTS: readonly { title: string; body: string }[] = [
 
 export function DataHandlingPoints() {
   return (
-    <ul className="flex flex-col divide-y divide-subtle rounded-lg border border-default bg-surface">
+    <ul className="flex flex-col divide-y divide-faint rounded-lg border border-default bg-surface">
       {POINTS.map((point) => (
         <li key={point.title} className="flex flex-col gap-1 px-4 py-3">
           <h2 className="text-sm font-semibold">{point.title}</h2>

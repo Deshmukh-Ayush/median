@@ -31,7 +31,7 @@ function AppShell({
       >
         Skip to content
       </a>
-      <aside className="min-h-0 border-r border-subtle bg-sidebar">
+      <aside className="min-h-0 border-r border-faint bg-sidebar">
         {sidebar}
       </aside>
       <div className="flex min-h-0 min-w-0 flex-col">
@@ -59,7 +59,7 @@ function TopBar({
     <header
       data-slot="top-bar"
       className={cn(
-        "flex h-(--topbar-height) shrink-0 items-center gap-3 border-b border-subtle px-4",
+        "flex h-(--topbar-height) shrink-0 items-center gap-3 border-b border-faint px-4",
         className
       )}
       {...props}

@@ -170,7 +170,7 @@ export async function GstSummaryView({
       {s.warnings.length > 0 || unexplained ? (
         <ul className="flex flex-col gap-1.5">
           {unexplained ? (
-            <li className="flex items-start gap-2 rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning">
+            <li className="flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning">
               <TriangleAlertIcon
                 aria-hidden
                 className="mt-0.5 size-4 shrink-0"
@@ -189,7 +189,7 @@ export async function GstSummaryView({
           {s.warnings.map((w) => (
             <li
               key={w}
-              className="flex items-start gap-2 rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning"
+              className="flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning"
             >
               <TriangleAlertIcon
                 aria-hidden

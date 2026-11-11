@@ -159,7 +159,7 @@ function ConnectionRow({
   const status = STATUS[connection.status]
   const live = connection.status !== "disconnected"
   return (
-    <li className="flex flex-col gap-2 border-t border-subtle pt-3 first:border-t-0 first:pt-0">
+    <li className="flex flex-col gap-2 border-t border-faint pt-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium">{connection.label}</span>
         {connection.mode === "test" ? (
@@ -454,8 +454,8 @@ export default async function IntegrationsPage({
           role={notice.tone === "danger" ? "alert" : "status"}
           className={
             notice.tone === "danger"
-              ? "rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger"
-              : "rounded-md bg-success-subtle px-3 py-2 text-sm text-success"
+              ? "rounded-md bg-danger-soft px-3 py-2 text-sm text-danger"
+              : "rounded-md bg-success-soft px-3 py-2 text-sm text-success"
           }
         >
           {notice.text}

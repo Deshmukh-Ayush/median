@@ -47,7 +47,7 @@ export function CreateOrganizationForm({
         {businessTypes.map((type) => (
           <label
             key={type.value}
-            className="flex cursor-default items-start gap-3 rounded-md border border-default bg-surface p-3 transition-colors hover:bg-app has-checked:border-fg has-checked:bg-app has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus"
+            className="flex cursor-default items-start gap-3 rounded-md border border-default bg-surface p-3 transition-colors hover:bg-subtle has-checked:border-fg has-checked:bg-subtle has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus"
           >
             <input
               type="radio"

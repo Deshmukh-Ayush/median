@@ -140,7 +140,7 @@ export function CreditNoteForm({
     >
       <input type="hidden" name="invoiceId" value={invoiceId} />
       {refund ? (
-        <p className="rounded-md bg-info-subtle px-3 py-2 text-sm text-info">
+        <p className="rounded-md bg-info-soft px-3 py-2 text-sm text-info">
           For a Razorpay refund of <Money value={refund.amount} />. Credit
           enough that the credit note&apos;s total matches it.
         </p>
@@ -363,7 +363,7 @@ function PreviewPanel({
           {state.preview.warnings.map((w) => (
             <p
               key={w}
-              className="flex items-start gap-2 rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning"
+              className="flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning"
             >
               <TriangleAlertIcon
                 aria-hidden

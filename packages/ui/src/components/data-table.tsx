@@ -204,7 +204,7 @@ function DataTablePagination({
         aria-disabled
         className={cn(
           buttonVariants({ variant: "secondary", size: "sm" }),
-          "border-subtle text-fg-disabled"
+          "border-faint text-fg-disabled"
         )}
       >
         {iconEnd ? null : icon}
@@ -216,7 +216,7 @@ function DataTablePagination({
     <nav
       aria-label="Pagination"
       className={cn(
-        "flex h-11 items-center justify-between gap-3 border-t border-subtle px-3",
+        "flex h-11 items-center justify-between gap-3 border-t border-faint px-3",
         className
       )}
     >
