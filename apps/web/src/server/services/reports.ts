@@ -2,13 +2,19 @@ import "server-only"
 
 import {
   ServiceError,
+  dateRangeSchema,
   isoDateSchema,
+  ledgerScopeSchema,
   listEntriesFiltersSchema,
   pageOptionsSchema,
   parseInput,
 } from "@workspace/contracts"
 import type {
   BalanceSheet,
+  DateRange,
+  DayBook,
+  Ledger,
+  LedgerScope,
   IsoDate,
   JournalEntryView,
   ListEntriesFilters,
@@ -195,7 +201,8 @@ export async function getBalanceSheet(
 }
 
 /**
- * Journal entries, newest first (entry date, then id), with their lines.
+ * Journal entries, newest first (entry date, then id) unless `order:
+ * "oldest"`, with their lines.
  * With `accountId` or `partyId` the page is found from the lines (the
  * drill-down from a report row); otherwise from journal_entries. Either way
  * one query finds the page and one batch loads its lines and reversals.
@@ -223,11 +230,15 @@ export async function listEntries(
       ? ilike(e.narration, `%${f.search.replace(/[\\%_]/g, "\\$&")}%`)
       : undefined,
   ]
-  // (date, id) < cursor, newest first.
+  // (date, id) past the cursor, in the order asked for.
+  const oldest = f.order === "oldest"
   const keyset = (date: AnyColumn, id: AnyColumn) =>
     after
-      ? sql`(${date}, ${id}) < (${after.k}::date, ${after.id}::uuid)`
+      ? oldest
+        ? sql`(${date}, ${id}) > (${after.k}::date, ${after.id}::uuid)`
+        : sql`(${date}, ${id}) < (${after.k}::date, ${after.id}::uuid)`
       : undefined
+  const by = oldest ? asc : desc
 
   let page: { id: string; entryDate: string }[]
   if (f.accountId || f.partyId) {
@@ -252,7 +263,7 @@ export async function listEntries(
       )
       // An entry can have several lines on the same account.
       .groupBy(l.entryDate, l.entryId)
-      .orderBy(desc(l.entryDate), desc(l.entryId))
+      .orderBy(by(l.entryDate), by(l.entryId))
       .limit(limit + 1)
   } else {
     page = await db
@@ -267,7 +278,7 @@ export async function listEntries(
           ...entryFilters
         )
       )
-      .orderBy(desc(e.entryDate), desc(e.id))
+      .orderBy(by(e.entryDate), by(e.id))
       .limit(limit + 1)
   }
 
@@ -402,4 +413,200 @@ export async function entryViews(
       },
     ]
   })
+}
+
+/**
+ * The day book: every entry dated in the range, oldest first, with the
+ * range's debit and credit totals.
+ */
+export async function getDayBook(
+  ctx: OrgContext,
+  range: DateRange,
+  cursor: string | null = null,
+  options: PageOptions = {}
+): Promise<DayBook> {
+  assertCan(ctx, "ledger", "read")
+  const r = parseInput(dateRangeSchema, range)
+  const db = getDb()
+  const [entries, [totals]] = await Promise.all([
+    listEntries(ctx, { ...r, order: "oldest" }, cursor, options),
+    db
+      .select({
+        debit: sql<string>`coalesce(sum(${journalLines.debitPaise}), 0)::text`,
+        credit: sql<string>`coalesce(sum(${journalLines.creditPaise}), 0)::text`,
+      })
+      .from(journalLines)
+      .where(
+        and(
+          eq(journalLines.organizationId, ctx.orgId),
+          gte(journalLines.entryDate, r.from),
+          lte(journalLines.entryDate, r.to)
+        )
+      ),
+  ])
+  return {
+    ...r,
+    totalDebit: paise(BigInt(totals?.debit ?? "0")),
+    totalCredit: paise(BigInt(totals?.credit ?? "0")),
+    entries,
+  }
+}
+
+/**
+ * A ledger: lines on an account, for a party, or both, in date order, with
+ * opening, running and closing balances (debit − credit). The general
+ * ledger for an account; the party ledger for a customer or vendor.
+ */
+export async function getLedger(
+  ctx: OrgContext,
+  scope: LedgerScope,
+  range: DateRange,
+  cursor: string | null = null,
+  options: PageOptions = {}
+): Promise<Ledger> {
+  assertCan(ctx, "ledger", "read")
+  const s = parseInput(ledgerScopeSchema, scope)
+  const r = parseInput(dateRangeSchema, range)
+  const { limit } = parseInput(pageOptionsSchema, options)
+  const after = decodeCursor(cursor)
+  // The cursor's id is "<entry id>:<line no>"; k is the entry date.
+  const [afterEntry, afterLine] = after ? after.id.split(":") : []
+  if (
+    after &&
+    (!isoDateSchema.safeParse(after.k).success ||
+      !z.uuid().safeParse(afterEntry).success ||
+      !/^\d+$/.test(afterLine ?? ""))
+  )
+    throw new ServiceError("VALIDATION", "Invalid page cursor.")
+  const l = journalLines
+  const position = sql`(${l.entryDate}, ${l.entryId}, ${l.lineNo})`
+  const afterTuple = after
+    ? sql`(${after.k}::date, ${afterEntry}::uuid, ${Number(afterLine)}::int)`
+    : null
+  const mine = and(
+    eq(l.organizationId, ctx.orgId),
+    s.accountId ? eq(l.accountId, s.accountId) : undefined,
+    s.partyId ? eq(l.partyId, s.partyId) : undefined
+  )
+  const db = getDb()
+  const [accountRows, partyRows, openingRows, rows] = await db.batch([
+    db
+      .select({
+        id: ledgerAccounts.id,
+        code: ledgerAccounts.code,
+        name: ledgerAccounts.name,
+        type: ledgerAccounts.type,
+      })
+      .from(ledgerAccounts)
+      .where(
+        and(
+          eq(ledgerAccounts.organizationId, ctx.orgId),
+          s.accountId ? eq(ledgerAccounts.id, s.accountId) : sql`false`
+        )
+      ),
+    db
+      .select({ id: parties.id, name: parties.name, gstin: parties.gstin })
+      .from(parties)
+      .where(
+        and(
+          eq(parties.organizationId, ctx.orgId),
+          s.partyId ? eq(parties.id, s.partyId) : sql`false`
+        )
+      ),
+    db
+      .select({
+        balance: sql<string>`coalesce(sum(${l.debitPaise} - ${l.creditPaise}), 0)::text`,
+      })
+      .from(l)
+      .where(
+        and(
+          mine,
+          afterTuple
+            ? sql`(${l.entryDate} < ${r.from} or (${l.entryDate} >= ${r.from} and ${position} <= ${afterTuple}))`
+            : sql`${l.entryDate} < ${r.from}`
+        )
+      ),
+    db
+      .select({
+        date: l.entryDate,
+        entryId: l.entryId,
+        lineNo: l.lineNo,
+        narration: journalEntries.narration,
+        accountId: ledgerAccounts.id,
+        code: ledgerAccounts.code,
+        accountName: ledgerAccounts.name,
+        partyId: parties.id,
+        partyName: parties.name,
+        partyGstin: parties.gstin,
+        debit: l.debitPaise,
+        credit: l.creditPaise,
+      })
+      .from(l)
+      .innerJoin(
+        journalEntries,
+        and(
+          eq(journalEntries.organizationId, l.organizationId),
+          eq(journalEntries.id, l.entryId)
+        )
+      )
+      .innerJoin(
+        ledgerAccounts,
+        and(
+          eq(ledgerAccounts.organizationId, l.organizationId),
+          eq(ledgerAccounts.id, l.accountId)
+        )
+      )
+      .leftJoin(
+        parties,
+        and(
+          eq(parties.organizationId, l.organizationId),
+          eq(parties.id, l.partyId)
+        )
+      )
+      .where(
+        and(
+          mine,
+          gte(l.entryDate, r.from),
+          lte(l.entryDate, r.to),
+          afterTuple ? sql`${position} > ${afterTuple}` : undefined
+        )
+      )
+      .orderBy(asc(l.entryDate), asc(l.entryId), asc(l.lineNo))
+      .limit(limit + 1),
+  ])
+  const account = accountRows[0] ?? null
+  const party = partyRows[0] ?? null
+  if ((s.accountId && !account) || (s.partyId && !party))
+    throw new ServiceError("NOT_FOUND", "Account or party not found.")
+  const opening = BigInt(openingRows[0]?.balance ?? "0")
+  let balance = opening
+  const page = rows.slice(0, limit)
+  const lines = page.map((x) => {
+    balance += x.debit - x.credit
+    return {
+      date: x.date,
+      entryId: x.entryId,
+      narration: x.narration,
+      account: { id: x.accountId, code: x.code, name: x.accountName },
+      party: x.partyId
+        ? { id: x.partyId, name: x.partyName ?? "", gstin: x.partyGstin }
+        : null,
+      debit: paise(x.debit),
+      credit: paise(x.credit),
+      balance: paise(balance),
+    }
+  })
+  const last = page.at(-1)
+  return {
+    account,
+    party,
+    ...r,
+    opening: paise(opening),
+    lines,
+    closing: paise(balance),
+    nextCursor:
+      rows.length > limit && last
+        ? encodeCursor({ k: last.date, id: `${last.entryId}:${last.lineNo}` })
+        : null,
+  }
 }
