@@ -21,6 +21,13 @@ const MAX_STEPS = 8
 const MAX_QUESTION_LENGTH = 2000
 
 /**
+ * Fail instead of spinning: a provider that stops answering (the free tier
+ * under load) ends the request with an error the user can retry. Under the
+ * route's 60 s maxDuration.
+ */
+const TIMEOUT = { totalMs: 55_000, firstChunkMs: 25_000, toolMs: 15_000 }
+
+/**
  * The body POST /api/ask accepts. The client sends only the new question;
  * history comes from the server's own store, so a client can't put words in
  * the assistant's mouth or forge tool results.
@@ -70,6 +77,7 @@ export async function ask(ctx: OrgContext, input: AskInput) {
     tools,
     stopWhen: isStepCount(MAX_STEPS),
     temperature: 0,
+    timeout: TIMEOUT,
     ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
   })
 }
