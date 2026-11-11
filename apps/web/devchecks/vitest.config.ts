@@ -21,6 +21,8 @@ export default defineConfig({
       ),
     },
   },
+  // tsconfig has jsx: "preserve" for Next; the invoice PDF needs it compiled.
+  oxc: { jsx: { runtime: "automatic" } },
   test: {
     include: ["devchecks/**/*.check.ts"],
     environment: "node",

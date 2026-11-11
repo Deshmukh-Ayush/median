@@ -217,6 +217,8 @@ export const organizationSettings = pgTable(
     compositionScheme: boolean().notNull().default(false),
     /** Rate for sales with no invoice or mapping, in basis points. Null → inbox. */
     defaultGstRateBps: integer(),
+    /** Invoices fall due this many days after issue unless the customer has terms. */
+    defaultPaymentTermsDays: integer().notNull().default(30),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -228,6 +230,10 @@ export const organizationSettings = pgTable(
     check(
       "organization_settings_default_rate_check",
       sql`${t.defaultGstRateBps} is null or ${t.defaultGstRateBps} between 0 and 10000`
+    ),
+    check(
+      "organization_settings_payment_terms_check",
+      sql`${t.defaultPaymentTermsDays} between 0 and 365`
     ),
     check(
       "organization_settings_gstin_when_registered_check",
@@ -762,6 +768,10 @@ export const sourceRecords = pgTable(
       t.status,
       t.occurredAt
     ),
+    // "Is this entry already confirmed by a bank line?" (bill payments).
+    index("source_records_org_entry_idx")
+      .on(t.organizationId, t.journalEntryId)
+      .where(sql`${t.journalEntryId} is not null`),
     index("source_records_org_settlement_idx")
       .on(t.organizationId, t.settlementExternalId)
       .where(sql`${t.settlementExternalId} is not null`),
@@ -913,6 +923,14 @@ export const invoices = pgTable(
     number: text().notNull(),
     financialYear: text().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     invoiceDate: isoDate().notNull(),
     dueDate: isoDate().notNull(),
     /** Two-digit GST state code of the place of supply. */
@@ -1072,6 +1090,14 @@ export const creditNotes = pgTable(
     financialYear: text().notNull(),
     invoiceId: uuid().notNull(),
     partyId: uuid().notNull(),
+    /**
+     * The customer as printed when issued (Rule 46/53): later edits to the
+     * party don't change an issued document, its PDF or GSTR-1.
+     */
+    partyName: text().notNull(),
+    partyGstin: text(),
+    partyAddress: text(),
+    partyStateCode: text(),
     creditNoteDate: isoDate().notNull(),
     reason: creditNoteReason().notNull(),
     /** Copied from the invoice: a credit note follows its invoice's GST treatment. */
@@ -1250,6 +1276,161 @@ export const deletionTombstones = pgTable(
     index("deletion_tombstones_retention_idx")
       .on(t.retentionUntil)
       .where(sql`${t.purgedAt} is null`),
+  ]
+)
+
+// ---------------------------------------------------------------------------
+// Bills (payables). A bill is created when a vendor bill's inbox item is
+// approved; payments and advance adjustments are allocations against it.
+
+export const billAllocationKind = pgEnum("bill_allocation_kind", [
+  "payment",
+  "advance",
+])
+
+export const bills = pgTable(
+  "bills",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    partyId: uuid().notNull(),
+    /** The vendor's own bill number. */
+    number: text().notNull(),
+    billDate: isoDate().notNull(),
+    dueDate: isoDate().notNull(),
+    /** Owed to the vendor: the bill's credit to trade payables. */
+    totalPaise: paise().notNull(),
+    /** Paid or adjusted from advances so far. */
+    settledPaise: paise()
+      .notNull()
+      .default(sql`0`),
+    journalEntryId: uuid().notNull(),
+    inboxItemId: uuid(),
+    documentId: uuid(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("bills_org_id_uq").on(t.organizationId, t.id),
+    unique("bills_org_entry_uq").on(t.organizationId, t.journalEntryId),
+    foreignKey({
+      name: "bills_party_fk",
+      columns: [t.organizationId, t.partyId],
+      foreignColumns: [parties.organizationId, parties.id],
+    }),
+    foreignKey({
+      name: "bills_entry_fk",
+      columns: [t.organizationId, t.journalEntryId],
+      foreignColumns: [journalEntries.organizationId, journalEntries.id],
+    }),
+    index("bills_org_party_date_idx").on(
+      t.organizationId,
+      t.partyId,
+      t.billDate,
+      t.id
+    ),
+    index("bills_org_date_idx").on(t.organizationId, t.billDate, t.id),
+    check(
+      "bills_amounts_check",
+      sql`${t.totalPaise} > 0 and ${t.settledPaise} between 0 and ${t.totalPaise}`
+    ),
+  ]
+)
+
+export const billAllocations = pgTable(
+  "bill_allocations",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    billId: uuid().notNull(),
+    kind: billAllocationKind().notNull(),
+    /** The payment or advance-adjustment entry. */
+    journalEntryId: uuid().notNull(),
+    amountPaise: paise().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "bill_allocations_bill_fk",
+      columns: [t.organizationId, t.billId],
+      foreignColumns: [bills.organizationId, bills.id],
+    }),
+    foreignKey({
+      name: "bill_allocations_entry_fk",
+      columns: [t.organizationId, t.journalEntryId],
+      foreignColumns: [journalEntries.organizationId, journalEntries.id],
+    }),
+    index("bill_allocations_org_bill_idx").on(t.organizationId, t.billId),
+    check("bill_allocations_amount_check", sql`${t.amountPaise} > 0`),
+  ]
+)
+
+// ---------------------------------------------------------------------------
+// Ask Median (chat). Private to the member who started the conversation.
+
+export const chatRole = pgEnum("chat_role", [
+  "user",
+  "assistant",
+  "tool",
+  "system",
+])
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Null until set, or until the first question names it. */
+    title: text(),
+    /** The page the chat was opened from: { path, label?, entity? }. */
+    pageContext: jsonb(),
+    createdAt: createdAt(),
+    /** Bumped on every message, so lists show the latest first. */
+    lastMessageAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("conversations_org_id_uq").on(t.organizationId, t.id),
+    index("conversations_org_user_recent_idx").on(
+      t.organizationId,
+      t.userId,
+      t.lastMessageAt,
+      t.id
+    ),
+  ]
+)
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    conversationId: uuid().notNull(),
+    role: chatRole().notNull(),
+    content: text().notNull(),
+    /** Assistant messages: the tools it called, [{ id, name, args }]. */
+    toolCalls: jsonb(),
+    /** Tool messages: which call this is the result of. */
+    toolCallId: text(),
+    // clock_timestamp, not now(): each message gets its own instant, so
+    // order is stable even for messages saved in quick succession.
+    createdAt: timestamp({ withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    foreignKey({
+      name: "messages_conversation_fk",
+      columns: [t.organizationId, t.conversationId],
+      foreignColumns: [conversations.organizationId, conversations.id],
+    }).onDelete("cascade"),
+    index("messages_org_conversation_created_idx").on(
+      t.organizationId,
+      t.conversationId,
+      t.createdAt,
+      t.id
+    ),
   ]
 )
 

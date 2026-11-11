@@ -39,6 +39,7 @@ export type SystemAccountKey =
   | "bank_default"
   | "razorpay_clearing"
   | "trade_receivables"
+  | "vendor_advances"
   | "tds_receivable"
   | "gst_input_cgst"
   | "gst_input_sgst"
@@ -60,6 +61,7 @@ export const SYSTEM_ACCOUNT_KEYS: readonly SystemAccountKey[] = [
   "bank_default",
   "razorpay_clearing",
   "trade_receivables",
+  "vendor_advances",
   "tds_receivable",
   "gst_input_cgst",
   "gst_input_sgst",
@@ -106,7 +108,7 @@ export const BASE_ACCOUNTS: readonly AccountTemplate[] = [
   }),
   a("1120", "Razorpay clearing", "asset", { systemKey: "razorpay_clearing" }),
   a("1200", "Trade receivables", "asset", { systemKey: "trade_receivables" }),
-  a("1300", "Advances to vendors", "asset"),
+  a("1300", "Advances to vendors", "asset", { systemKey: "vendor_advances" }),
   a("1310", "Security deposits", "asset"),
   a("1320", "Prepaid expenses", "asset"),
   a("1400", "GST input credit", "asset"),
