@@ -148,6 +148,13 @@
       "when": 1794426049395,
       "tag": "0020_default_payment_terms",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794434956090,
+      "tag": "0021_chat_conversations",
+      "breakpoints": true
     }
   ]
 }
