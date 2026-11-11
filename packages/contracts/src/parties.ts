@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-import { gstStateCodeSchema, gstinSchema } from "./common"
+import {
+  gstStateCodeSchema,
+  gstinSchema,
+  isoDateSchema,
+  moneySchema,
+} from "./common"
 import type { IsoTimestamp } from "./common"
 
 export type PartyKind = "customer" | "vendor"
@@ -106,7 +111,7 @@ export const udyamNumberSchema = z
     "Udyam number looks like UDYAM-MH-01-0001234"
   )
 
-/** Details of a party other than its kind. */
+/** Editable details of a party (kind and opening balance are set once). */
 const partyDetailsShape = {
   name: z.string().trim().min(1).max(200),
   legalName: z.string().trim().min(1).max(200).nullish(),
@@ -126,11 +131,40 @@ const partyDetailsShape = {
   udyamNumber: udyamNumberSchema.nullish(),
 }
 
+/** Opening balance on the day the books start. */
+export const partyOpeningBalanceSchema = z.object({
+  date: isoDateSchema,
+  amount: moneySchema.refine((v) => v > 0n, "Amount must be more than zero"),
+  /** Who owes whom: a customer usually owes us, we usually owe a vendor. */
+  direction: z.enum(["owed_to_us", "owed_by_us"]),
+})
+export type PartyOpeningBalanceInput = z.input<typeof partyOpeningBalanceSchema>
+
 export const createPartyInputSchema = z.object({
   kind: z.enum(["customer", "vendor"]),
   ...partyDetailsShape,
+  openingBalance: partyOpeningBalanceSchema.nullish(),
 })
 export type CreatePartyInput = z.input<typeof createPartyInputSchema>
+
+/** Fields left out are unchanged; null clears a field. */
+export const updatePartyInputSchema = z
+  .object(partyDetailsShape)
+  .partial()
+  .extend({ name: partyDetailsShape.name.optional() })
+export type UpdatePartyInput = z.input<typeof updatePartyInputSchema>
+
+/**
+ * Fields printed on invoices and credit notes. They can't change once the
+ * party has documents or ledger lines, so issued documents stay as issued.
+ */
+export const PARTY_LOCKED_FIELDS = [
+  "name",
+  "legalName",
+  "gstin",
+  "registrationType",
+  "stateCode",
+] as const satisfies readonly (keyof UpdatePartyInput)[]
 
 export const listPartiesFiltersSchema = z.object({
   kind: z.enum(["customer", "vendor"]).optional(),
@@ -139,3 +173,14 @@ export const listPartiesFiltersSchema = z.object({
   includeArchived: z.boolean().optional(),
 })
 export type ListPartiesFilters = z.input<typeof listPartiesFiltersSchema>
+
+export interface CreatedParty extends Party {
+  /** The opening-balance journal entry, when one was given. */
+  readonly openingBalanceEntryId: string | null
+}
+
+/** A party with what the edit screen needs to know. */
+export interface PartyDetail extends Party {
+  /** True when it has invoices, credit notes or ledger lines. */
+  readonly inUse: boolean
+}

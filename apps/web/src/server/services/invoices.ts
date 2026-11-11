@@ -141,11 +141,17 @@ async function customer(db: Db | Tx, orgId: string, partyId: string) {
       name: parties.name,
       gstin: parties.gstin,
       stateCode: parties.stateCode,
+      archivedAt: parties.archivedAt,
     })
     .from(parties)
     .where(and(eq(parties.organizationId, orgId), eq(parties.id, partyId)))
     .limit(1)
   if (!party) throw new ServiceError("NOT_FOUND", "Customer not found.")
+  if (party.archivedAt)
+    throw new ServiceError(
+      "VALIDATION",
+      `${party.name} is archived. Restore them to invoice them.`
+    )
   if (party.kind !== "customer")
     throw new ServiceError(
       "VALIDATION",

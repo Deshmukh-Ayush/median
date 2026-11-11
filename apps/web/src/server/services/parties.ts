@@ -5,29 +5,45 @@ import {
   TDS_DEFAULT_SECTIONS,
   createPartyInputSchema,
   gstinSchema,
+  idSchema,
   listPartiesFiltersSchema,
   pageOptionsSchema,
   parseInput,
+  updatePartyInputSchema,
 } from "@workspace/contracts"
 import type {
   CreatePartyInput,
+  CreatedParty,
   ListPartiesFilters,
   Page,
   PageOptions,
   Party,
+  PartyDetail,
   PartyKind,
   TdsDefaultSection,
+  UpdatePartyInput,
 } from "@workspace/contracts"
-import { and, asc, eq, gt, ilike, isNull, or } from "drizzle-orm"
+import { paise } from "@workspace/ledger"
+import type { SystemAccountKey } from "@workspace/ledger"
+import { and, asc, eq, gt, ilike, inArray, isNull, or } from "drizzle-orm"
+import type { z } from "zod"
 
 import { getDb, withTransaction } from "../db"
 import type { Tx } from "../db"
-import { auditLog, parties } from "../db/schema"
+import {
+  auditLog,
+  invoices,
+  journalLines,
+  ledgerAccounts,
+  parties,
+} from "../db/schema"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { isUniqueViolation } from "./db-errors"
+import { postEntry } from "./ledger"
 import { decodeCursor, encodeCursor } from "./pagination"
-import { resolvePartyFields } from "./party-rules"
+import { assertLockedFieldsUnchanged, resolvePartyFields } from "./party-rules"
+import type { PartyFields } from "./party-rules"
 
 const partyColumns = {
   id: parties.id,
@@ -66,6 +82,24 @@ function toParty(r: PartyRow): Party {
   }
 }
 
+function fieldsOf(p: Party): PartyFields {
+  return {
+    name: p.name,
+    legalName: p.legalName,
+    gstin: p.gstin,
+    pan: p.pan,
+    registrationType: p.registrationType,
+    stateCode: p.stateCode,
+    billingAddress: p.billingAddress,
+    email: p.email,
+    phone: p.phone,
+    paymentTermsDays: p.paymentTermsDays,
+    defaultTdsSection: p.defaultTdsSection,
+    msmeCategory: p.msmeCategory,
+    udyamNumber: p.udyamNumber,
+  }
+}
+
 interface PartyActor {
   readonly orgId: string
   readonly userId: string
@@ -74,7 +108,8 @@ interface PartyActor {
 
 /**
  * Inserts a party inside a caller's transaction and writes its audit row.
- * Internal: bill extraction and the Tally import add parties with it.
+ * Internal: bill extraction and the Tally import add parties with it. An
+ * opening balance needs `createParty`, which checks the posting permission.
  */
 export async function insertParty(
   tx: Tx,
@@ -101,23 +136,88 @@ export async function insertParty(
   return toParty(row)
 }
 
+const CONTROL_ACCOUNT: Record<PartyKind, SystemAccountKey> = {
+  customer: "trade_receivables",
+  vendor: "trade_payables",
+}
+
 /**
- * Adds a customer or vendor. State and PAN come from the GSTIN. Throws
- * VALIDATION, CONFLICT (a party of that kind with this GSTIN exists).
+ * Posts a party's opening balance against Opening balance equity:
+ * owed to us → Dr control account (party) / Cr opening balance equity, and
+ * the other way round when we owe them. Corrected by reversing the entry.
+ */
+async function postOpeningBalance(
+  tx: Tx,
+  actor: PartyActor,
+  party: Party,
+  ob: NonNullable<z.output<typeof createPartyInputSchema>["openingBalance"]>
+): Promise<string> {
+  const keys = [CONTROL_ACCOUNT[party.kind], "opening_balance_equity"]
+  const accounts = await tx
+    .select({ id: ledgerAccounts.id, key: ledgerAccounts.systemKey })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.organizationId, actor.orgId),
+        inArray(ledgerAccounts.systemKey, keys)
+      )
+    )
+  const control = accounts.find((a) => a.key === keys[0])?.id
+  const equity = accounts.find((a) => a.key === keys[1])?.id
+  if (!control || !equity)
+    throw new ServiceError(
+      "VALIDATION",
+      "The chart of accounts is missing a system account for opening balances."
+    )
+  const zero = paise(0n)
+  const owedToUs = ob.direction === "owed_to_us"
+  const posted = await postEntry(
+    actor,
+    {
+      entryDate: ob.date,
+      narration: `Opening balance: ${party.name}`,
+      sourceType: "opening_balance",
+      sourceId: party.id,
+      lines: [
+        {
+          accountId: control,
+          partyId: party.id,
+          debit: owedToUs ? ob.amount : zero,
+          credit: owedToUs ? zero : ob.amount,
+        },
+        {
+          accountId: equity,
+          debit: owedToUs ? zero : ob.amount,
+          credit: owedToUs ? ob.amount : zero,
+        },
+      ],
+    },
+    { tx }
+  )
+  return posted.id
+}
+
+/**
+ * Adds a customer or vendor, with its opening balance if given. State and
+ * PAN come from the GSTIN. Throws VALIDATION, PERIOD_LOCKED (opening balance
+ * in a locked month), CONFLICT (a party of that kind with this GSTIN exists).
  */
 export async function createParty(
   ctx: OrgContext,
   input: CreatePartyInput
-): Promise<Party> {
+): Promise<CreatedParty> {
   assertCan(ctx, "ledger", "propose")
+  const p = parseInput(createPartyInputSchema, input)
+  if (p.openingBalance) assertCan(ctx, "ledger", "post")
+  const actor = { orgId: ctx.orgId, userId: ctx.userId, source: "web" }
   try {
-    return await withTransaction((tx) =>
-      insertParty(
-        tx,
-        { orgId: ctx.orgId, userId: ctx.userId, source: "web" },
-        input
-      )
-    )
+    return await withTransaction(async (tx) => {
+      const party = await insertParty(tx, actor, input)
+      const openingBalanceEntryId = p.openingBalance
+        ? await postOpeningBalance(tx, actor, party, p.openingBalance)
+        : null
+      return { ...party, openingBalanceEntryId }
+    })
   } catch (error) {
     if (isUniqueViolation(error))
       throw new ServiceError(
@@ -126,6 +226,148 @@ export async function createParty(
       )
     throw error
   }
+}
+
+async function loadParty(
+  db: Tx | ReturnType<typeof getDb>,
+  orgId: string,
+  id: string
+): Promise<Party> {
+  const [row] = await db
+    .select(partyColumns)
+    .from(parties)
+    .where(and(eq(parties.organizationId, orgId), eq(parties.id, id)))
+  if (!row) throw new ServiceError("NOT_FOUND", "Customer or vendor not found.")
+  return toParty(row)
+}
+
+/** True when the party has invoices or ledger lines (credit notes hang off invoices). */
+async function partyInUse(
+  db: Tx | ReturnType<typeof getDb>,
+  orgId: string,
+  id: string
+): Promise<boolean> {
+  const [invoice, line] = await Promise.all([
+    db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(and(eq(invoices.organizationId, orgId), eq(invoices.partyId, id)))
+      .limit(1),
+    db
+      .select({ id: journalLines.id })
+      .from(journalLines)
+      .where(
+        and(
+          eq(journalLines.organizationId, orgId),
+          eq(journalLines.partyId, id)
+        )
+      )
+      .limit(1),
+  ])
+  return invoice.length > 0 || line.length > 0
+}
+
+/** One party, with whether it's in use (which fields can still change). */
+export async function getParty(
+  ctx: OrgContext,
+  id: string
+): Promise<PartyDetail> {
+  assertCan(ctx, "ledger", "read")
+  const partyId = parseInput(idSchema, id)
+  const db = getDb()
+  const [party, inUse] = await Promise.all([
+    loadParty(db, ctx.orgId, partyId),
+    partyInUse(db, ctx.orgId, partyId),
+  ])
+  return { ...party, inUse }
+}
+
+/**
+ * Edits a party. Once it has invoices or entries, its name, legal name,
+ * GSTIN, registration and state are locked (CONFLICT), so issued documents
+ * stay as issued. Throws VALIDATION, NOT_FOUND, CONFLICT.
+ */
+export async function updateParty(
+  ctx: OrgContext,
+  id: string,
+  input: UpdatePartyInput
+): Promise<Party> {
+  assertCan(ctx, "ledger", "propose")
+  const partyId = parseInput(idSchema, id)
+  const patch = parseInput(updatePartyInputSchema, input)
+  try {
+    return await withTransaction(async (tx) => {
+      const before = await loadParty(tx, ctx.orgId, partyId)
+      const old = fieldsOf(before)
+      const next = resolvePartyFields(before.kind, patch, old)
+      if (await partyInUse(tx, ctx.orgId, partyId))
+        assertLockedFieldsUnchanged(old, next)
+      const [row] = await tx
+        .update(parties)
+        .set(next)
+        .where(
+          and(eq(parties.organizationId, ctx.orgId), eq(parties.id, partyId))
+        )
+        .returning(partyColumns)
+      if (!row)
+        throw new ServiceError("NOT_FOUND", "Customer or vendor not found.")
+      await tx.insert(auditLog).values({
+        organizationId: ctx.orgId,
+        actorId: ctx.userId,
+        action: "party.update",
+        entity: "party",
+        entityId: partyId,
+        before: old,
+        after: next,
+        source: "web",
+      })
+      return toParty(row)
+    })
+  } catch (error) {
+    if (isUniqueViolation(error))
+      throw new ServiceError(
+        "CONFLICT",
+        "A party with this GSTIN already exists."
+      )
+    throw error
+  }
+}
+
+/**
+ * Archives a party (hidden from pickers, history kept) or restores it.
+ * Archiving doesn't touch the books.
+ */
+export async function setPartyArchived(
+  ctx: OrgContext,
+  id: string,
+  archived: boolean
+): Promise<Party> {
+  assertCan(ctx, "ledger", "propose")
+  const partyId = parseInput(idSchema, id)
+  return withTransaction(async (tx) => {
+    const before = await loadParty(tx, ctx.orgId, partyId)
+    if ((before.archivedAt !== null) === archived) return before
+    const [row] = await tx
+      .update(parties)
+      .set({ archivedAt: archived ? new Date() : null })
+      .where(
+        and(eq(parties.organizationId, ctx.orgId), eq(parties.id, partyId))
+      )
+      .returning(partyColumns)
+    if (!row)
+      throw new ServiceError("NOT_FOUND", "Customer or vendor not found.")
+    await tx.insert(auditLog).values({
+      organizationId: ctx.orgId,
+      actorId: ctx.userId,
+      action: archived ? "party.archive" : "party.restore",
+      entity: "party",
+      entityId: partyId,
+      before: { archivedAt: before.archivedAt },
+      after: { archivedAt: row.archivedAt?.toISOString() ?? null },
+      source: "web",
+    })
+    return toParty(row)
+  })
 }
 
 /**
