@@ -23,16 +23,17 @@ LLMs read, classify, explain and propose rules, and do no arithmetic.
 
 ## Phase 1: unblock onboarding
 
-| #    | Item                                                                                         | Owner  | Branch                        | PR                                                      | Status    |
-| ---- | -------------------------------------------------------------------------------------------- | ------ | ----------------------------- | ------------------------------------------------------- | --------- |
-| 1.1a | Parties: schema, GST checks (GSTIN check digit, PAN, registration type), TDS/MSME fields     | Vedant | `feat/parties-schema-service` | [#96](https://github.com/Deshmukh-Ayush/median/pull/96) | in review |
-| 1.1b | Parties: edit with field locks, archive, opening balance (stacked on #96)                    | Vedant | `feat/parties-edit-archive`   | [#97](https://github.com/Deshmukh-Ayush/median/pull/97) | in review |
-| 1.1c | Parties: list in the sidebar (stacked on #97)                                                | Vedant | `feat/parties-screens`        | [#98](https://github.com/Deshmukh-Ayush/median/pull/98) | in review |
-| 1.1d | Parties: create/edit form, archive, "new customer" from the invoice form (stacked on #98)    | Vedant | `feat/parties-form`           | [#99](https://github.com/Deshmukh-Ayush/median/pull/99) | in review |
-| 1.2  | Due date follows invoice date and payment terms                                              |        |                               |                                                         | todo      |
-| 1.3  | Credit note PDF with Rule 53 particulars                                                     |        |                               |                                                         | todo      |
-| 1.4  | Database resilience: retries, readable errors, real error logging, batched settlement import |        |                               |                                                         | todo      |
-| 1.5  | Readable audit-log labels                                                                    |        |                               |                                                         | todo      |
+| #    | Item                                                                                                       | Owner  | Branch                        | PR                                                        | Status      |
+| ---- | ---------------------------------------------------------------------------------------------------------- | ------ | ----------------------------- | --------------------------------------------------------- | ----------- |
+| 1.1a | Parties: schema, GST checks (GSTIN check digit, PAN, registration type), TDS/MSME fields                   | Vedant | `feat/parties-schema-service` | [#96](https://github.com/Deshmukh-Ayush/median/pull/96)   | in review   |
+| 1.1b | Parties: edit with field locks, archive, opening balance (stacked on #96)                                  | Vedant | `feat/parties-edit-archive`   | [#97](https://github.com/Deshmukh-Ayush/median/pull/97)   | in review   |
+| 1.1c | Parties: list in the sidebar (stacked on #97)                                                              | Vedant | `feat/parties-screens`        | [#98](https://github.com/Deshmukh-Ayush/median/pull/98)   | in review   |
+| 1.1d | Parties: create/edit form, archive, "new customer" from the invoice form (stacked on #98)                  | Vedant | `feat/parties-form`           | [#99](https://github.com/Deshmukh-Ayush/median/pull/99)   | in review   |
+| 1.1e | Invoices and credit notes keep the customer as issued (snapshot; replaces the field locks; stacked on #99) | Vedant | `feat/invoice-party-snapshot` | [#101](https://github.com/Deshmukh-Ayush/median/pull/101) | in review   |
+| 1.2  | Due date follows invoice date and the customer's payment terms                                             | Vedant | `feat/invoice-due-date-terms` |                                                           | in progress |
+| 1.3  | Credit note PDF with Rule 53 particulars                                                                   |        |                               |                                                           | todo        |
+| 1.4  | Database resilience: retries, readable errors, real error logging, batched settlement import               |        |                               |                                                           | todo        |
+| 1.5  | Readable audit-log labels                                                                                  |        |                               |                                                           | todo        |
 
 ## Phase 2: CA P0
 
@@ -68,10 +69,17 @@ LLMs read, classify, explain and propose rules, and do no arithmetic.
 | 4.1 | GSTR-2B agent: follow-up drafts, proposed ITC reversals                      |       |        |     | todo   |
 | 4.2 | TDS agent: section proposals, thresholds, challan summary, 26AS/AIS matching |       |        |     | todo   |
 
+## Ask Median (chat)
+
+| #   | Item                                                                                                                 | Owner  | Branch | PR  | Status              |
+| --- | -------------------------------------------------------------------------------------------------------------------- | ------ | ------ | --- | ------------------- |
+| C.1 | Chat schema: `conversations` (org, user, title, page context) and `messages` (role, content, tool calls, created_at) | Vedant |        |     | todo (next session) |
+
 ## Housekeeping and test data
 
-| #   | Item                                                                         | Owner  | Branch     | PR  | Status                               |
-| --- | ---------------------------------------------------------------------------- | ------ | ---------- | --- | ------------------------------------ |
-| H.1 | Delete the CA-review test org from the dev database; remove local test files | Vedant | local only | –   | todo                                 |
-| H.2 | Valid GSTINs in `test-kit/expected.md` (local: `test-kit/` is gitignored)    | Vedant | local only | –   | todo                                 |
-| T.1 | Acme Labs Oct 2026 dataset and end-to-end exception test                     |        |            |     | blocked: waiting for the dataset zip |
+| #   | Item                                                                         | Owner  | Branch                         | PR                                                        | Status                               |
+| --- | ---------------------------------------------------------------------------- | ------ | ------------------------------ | --------------------------------------------------------- | ------------------------------------ |
+| H.1 | Delete the CA-review test org from the dev database; remove local test files | Vedant | local only                     | –                                                         | todo                                 |
+| H.2 | Valid GSTINs in `test-kit/expected.md` (local: `test-kit/` is gitignored)    | Vedant | local only                     | –                                                         | todo                                 |
+| H.3 | `.gitignore`: ignore only `test-kit/.test-account`                           | Vedant | `chore/gitignore-test-account` | [#100](https://github.com/Deshmukh-Ayush/median/pull/100) | in review                            |
+| T.1 | Acme Labs Oct 2026 dataset and end-to-end exception test                     |        |                                |                                                           | blocked: waiting for the dataset zip |
