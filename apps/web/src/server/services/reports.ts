@@ -9,6 +9,7 @@ import {
 } from "@workspace/contracts"
 import type {
   BalanceSheet,
+  CashFlowStatement,
   IsoDate,
   JournalEntryView,
   ListEntriesFilters,
@@ -21,10 +22,13 @@ import type {
 import {
   LINE_ITEM_LABELS,
   buildBalanceSheet,
+  buildCashFlow,
   buildProfitAndLoss,
   buildTrialBalance,
+  dayBefore,
   financialYearStart,
   paise,
+  sameDayLastYear,
 } from "@workspace/ledger"
 import type { AccountTotals, StatementSectionResult } from "@workspace/ledger"
 import { and, asc, desc, eq, gte, ilike, inArray, lte, sql } from "drizzle-orm"
@@ -148,15 +152,16 @@ export async function getTrialBalance(
   return { asOf: date, ...buildTrialBalance(toAccountTotals(rows)) }
 }
 
-/** Profit and loss for a date range (inclusive), Schedule III grouping. */
-export async function getProfitAndLoss(
-  ctx: OrgContext,
-  from: IsoDate,
-  to: IsoDate
-): Promise<ProfitAndLoss> {
-  assertCan(ctx, "report", "read")
-  const r = parseInput(rangeSchema, { from, to })
-  const rows = await accountTotalsQuery(ctx.orgId, r, ["income", "expense"])
+const comparativeOptions = z.object({
+  /** Include the same period a year earlier. Default true. */
+  comparative: z.boolean().default(true),
+})
+type ComparativeOptions = z.input<typeof comparativeOptions>
+
+function plFrom(
+  r: { from: IsoDate; to: IsoDate },
+  rows: Parameters<typeof toAccountTotals>[0]
+): Omit<ProfitAndLoss, "previous"> {
   const pl = buildProfitAndLoss(toAccountTotals(rows))
   return {
     ...r,
@@ -166,32 +171,127 @@ export async function getProfitAndLoss(
   }
 }
 
-/** Balance sheet as of a date, Schedule III grouping. */
-export async function getBalanceSheet(
+/**
+ * Profit and loss for a date range (inclusive), Schedule III grouping, with
+ * the same range a year earlier as `previous` unless `comparative: false`.
+ */
+export async function getProfitAndLoss(
   ctx: OrgContext,
-  asOf: IsoDate
-): Promise<BalanceSheet> {
+  from: IsoDate,
+  to: IsoDate,
+  options: ComparativeOptions = {}
+): Promise<ProfitAndLoss> {
   assertCan(ctx, "report", "read")
-  const date = parseInput(isoDateSchema, asOf)
+  const r = parseInput(rangeSchema, { from, to })
+  const { comparative } = parseInput(comparativeOptions, options)
+  if (!comparative)
+    return plFrom(
+      r,
+      await accountTotalsQuery(ctx.orgId, r, ["income", "expense"])
+    )
+  const prior = { from: sameDayLastYear(r.from), to: sameDayLastYear(r.to) }
   const db = getDb()
-  const [cumulative, currentYear] = await db.batch([
-    accountTotalsQuery(ctx.orgId, { from: null, to: date }),
-    accountTotalsQuery(
-      ctx.orgId,
-      { from: financialYearStart(date), to: date },
-      ["income", "expense"]
-    ),
+  const [current, previous] = await db.batch([
+    accountTotalsQuery(ctx.orgId, r, ["income", "expense"]),
+    accountTotalsQuery(ctx.orgId, prior, ["income", "expense"]),
   ])
+  return { ...plFrom(r, current), previous: plFrom(prior, previous) }
+}
+
+async function balanceSheetQueries(orgId: string, dates: readonly IsoDate[]) {
+  const db = getDb()
+  const queries = dates.flatMap((date) => [
+    accountTotalsQuery(orgId, { from: null, to: date }),
+    accountTotalsQuery(orgId, { from: financialYearStart(date), to: date }, [
+      "income",
+      "expense",
+    ]),
+  ])
+  const [first, ...rest] = queries
+  if (!first) return []
+  return db.batch([first, ...rest])
+}
+
+function bsFrom(
+  asOf: IsoDate,
+  cumulative: Parameters<typeof toAccountTotals>[0],
+  currentYear: Parameters<typeof toAccountTotals>[0]
+): Omit<BalanceSheet, "previous"> {
   const bs = buildBalanceSheet(
     toAccountTotals(cumulative),
     toAccountTotals(currentYear)
   )
   return {
-    asOf: date,
+    asOf,
     ...bs,
     equityAndLiabilities: toSections(bs.equityAndLiabilities),
     assets: toSections(bs.assets),
   }
+}
+
+/**
+ * Balance sheet as of a date, Schedule III grouping, with the same day a
+ * year earlier as `previous` unless `comparative: false`.
+ */
+export async function getBalanceSheet(
+  ctx: OrgContext,
+  asOf: IsoDate,
+  options: ComparativeOptions = {}
+): Promise<BalanceSheet> {
+  assertCan(ctx, "report", "read")
+  const date = parseInput(isoDateSchema, asOf)
+  const { comparative } = parseInput(comparativeOptions, options)
+  const prior = sameDayLastYear(date)
+  const [cumulative, currentYear, priorCumulative, priorYear] =
+    await balanceSheetQueries(ctx.orgId, comparative ? [date, prior] : [date])
+  return {
+    ...bsFrom(date, cumulative ?? [], currentYear ?? []),
+    ...(comparative
+      ? { previous: bsFrom(prior, priorCumulative ?? [], priorYear ?? []) }
+      : {}),
+  }
+}
+
+/** Cash flow over [from, to] from three aggregates over journal_lines. */
+async function cashFlowFor(
+  orgId: string,
+  r: { from: IsoDate; to: IsoDate }
+): Promise<Omit<CashFlowStatement, "previous">> {
+  const db = getDb()
+  const [opening, closing, period] = await db.batch([
+    accountTotalsQuery(orgId, { from: null, to: dayBefore(r.from) }),
+    accountTotalsQuery(orgId, { from: null, to: r.to }),
+    accountTotalsQuery(orgId, r, ["income", "expense"]),
+  ])
+  return {
+    ...r,
+    ...buildCashFlow({
+      opening: toAccountTotals(opening),
+      closing: toAccountTotals(closing),
+      period: toAccountTotals(period),
+    }),
+  }
+}
+
+/**
+ * Cash flow statement for a date range, indirect method (AS 3), with the
+ * same range a year earlier as `previous` unless `comparative: false`.
+ */
+export async function getCashFlowStatement(
+  ctx: OrgContext,
+  from: IsoDate,
+  to: IsoDate,
+  options: ComparativeOptions = {}
+): Promise<CashFlowStatement> {
+  assertCan(ctx, "report", "read")
+  const r = parseInput(rangeSchema, { from, to })
+  const { comparative } = parseInput(comparativeOptions, options)
+  const prior = { from: sameDayLastYear(r.from), to: sameDayLastYear(r.to) }
+  const [current, previous] = await Promise.all([
+    cashFlowFor(ctx.orgId, r),
+    comparative ? cashFlowFor(ctx.orgId, prior) : Promise.resolve(null),
+  ])
+  return { ...current, ...(previous ? { previous } : {}) }
 }
 
 /**

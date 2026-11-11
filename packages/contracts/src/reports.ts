@@ -75,6 +75,11 @@ export interface ProfitAndLoss {
   readonly totalExpenses: Money
   /** Negative for a loss. */
   readonly netProfit: Money
+  /**
+   * The same period a year earlier (Schedule III comparatives), matched to
+   * this one by account id. Absent when not asked for.
+   */
+  readonly previous?: Omit<ProfitAndLoss, "previous">
 }
 
 export interface BalanceSheet {
@@ -90,6 +95,40 @@ export interface BalanceSheet {
    * shareholders' funds as "Surplus (current year)".
    */
   readonly currentYearProfit: Money
+  /** As of the same day a year earlier (Schedule III comparatives). */
+  readonly previous?: Omit<BalanceSheet, "previous">
+}
+
+export interface CashFlowLine {
+  readonly key: string
+  readonly label: string
+  /** Positive: cash came in. Negative: cash went out. */
+  readonly amount: Money
+}
+
+export interface CashFlowSection {
+  readonly lines: readonly CashFlowLine[]
+  readonly total: Money
+}
+
+/**
+ * Cash flow statement, indirect method (AS 3). Cash is cash in hand and at
+ * bank; money held by payment gateways is a current asset.
+ */
+export interface CashFlowStatement {
+  readonly from: IsoDate
+  readonly to: IsoDate
+  readonly netProfit: Money
+  /** Starts from net profit; `total` includes it. */
+  readonly operating: CashFlowSection
+  readonly investing: CashFlowSection
+  readonly financing: CashFlowSection
+  readonly netChange: Money
+  readonly openingCash: Money
+  readonly closingCash: Money
+  /** Zero for a balanced ledger; shown if it ever isn't. */
+  readonly difference: Money
+  readonly previous?: Omit<CashFlowStatement, "previous">
 }
 
 export const journalSourceTypeSchema = z.enum([
