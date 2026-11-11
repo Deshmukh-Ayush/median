@@ -20,7 +20,7 @@ it("previewCreditNote, value credits, and refund items with their invoice", asyn
   const ctx = await freshDevOrg("cn-preview")
   await getDb()
     .update(organizationSettings)
-    .set({ gstRegistered: true, gstin: "29ABCDE1234F1Z5", stateCode: "29" })
+    .set({ gstRegistered: true, gstin: "29ABCDE1234F1ZW", stateCode: "29" })
     .where(eq(organizationSettings.organizationId, ctx.orgId))
   const today = istDateOf(new Date())
   const customer = await createParty(ctx, {

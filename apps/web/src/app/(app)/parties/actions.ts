@@ -37,8 +37,7 @@ const NUMERIC = new Set<string>(["paymentTermsDays"])
 
 /**
  * The details in a form as service input. A blank field is `blank` (left
- * out on create, cleared on edit); a field not in the form at all (a locked,
- * disabled input) is left out, so it stays as it is.
+ * out on create, cleared on edit); a field not in the form is left out.
  */
 function detailsOf(formData: FormData, blank: null | undefined) {
   const out: Record<string, string | number | null | undefined> = {}

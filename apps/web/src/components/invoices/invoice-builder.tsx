@@ -10,7 +10,7 @@ import {
 } from "react"
 import type { ReactNode } from "react"
 
-import { GST_EXPORT_PLACE_OF_SUPPLY } from "@workspace/contracts"
+import { GST_EXPORT_PLACE_OF_SUPPLY, dueDateFor } from "@workspace/contracts"
 
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -47,6 +47,8 @@ interface Customer {
   name: string
   gstin: string | null
   stateCode: string | null
+  /** Null → the organisation's default terms. */
+  paymentTermsDays: number | null
 }
 
 interface LineDraft {
@@ -74,13 +76,6 @@ function slabsOn(periods: readonly SlabPeriod[], date: string) {
 }
 
 /** A calendar date plus whole days, in UTC so time zones can't shift it. */
-function addDays(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`)
-  if (Number.isNaN(d.getTime())) return date
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
-
 const percent = (bps: number) => `${bps / 100}%`
 
 /** Wait this long after the last keystroke before asking for a preview. */
@@ -90,6 +85,7 @@ export function InvoiceBuilder({
   customers,
   states,
   orgStateCode,
+  defaultTermsDays,
   slabPeriods,
   today,
   initialCustomerId,
@@ -97,6 +93,8 @@ export function InvoiceBuilder({
   customers: readonly Customer[]
   states: readonly { code: string; name: string }[]
   orgStateCode: string | null
+  /** The organisation's default payment terms, in days. */
+  defaultTermsDays: number
   slabPeriods: readonly SlabPeriod[]
   today: string
   /** Picked first, e.g. a customer just added from this form. */
@@ -114,8 +112,15 @@ export function InvoiceBuilder({
   const [placeOfSupply, setPlaceOfSupply] = useState(
     first?.stateCode ?? orgStateCode ?? ""
   )
+  const termsOf = (id: string) =>
+    customers.find((c) => c.id === id)?.paymentTermsDays ?? defaultTermsDays
   const [invoiceDate, setInvoiceDate] = useState(today)
-  const [dueDate, setDueDate] = useState(addDays(today, 30))
+  // The due date follows the invoice date and the customer's terms until
+  // someone sets it by hand.
+  const [dueDate, setDueDate] = useState(
+    dueDateFor(today, termsOf(first?.id ?? ""))
+  )
+  const [dueDateByHand, setDueDateByHand] = useState(false)
   const [specialSupply, setSpecialSupply] = useState<SpecialSupply | null>(null)
   const [reverseCharge, setReverseCharge] = useState(false)
   const [nextKey, setNextKey] = useState(1)
@@ -178,6 +183,7 @@ export function InvoiceBuilder({
 
   function chooseCustomer(id: string) {
     setPartyId(id)
+    if (!dueDateByHand) setDueDate(dueDateFor(invoiceDate, termsOf(id)))
     const stateCode = customers.find((c) => c.id === id)?.stateCode
     if (stateCode && !exporting) setPlaceOfSupply(stateCode)
   }
@@ -212,6 +218,7 @@ export function InvoiceBuilder({
   // A rate that isn't a slab on the new date is cleared to the default.
   function changeInvoiceDate(date: string) {
     setInvoiceDate(date)
+    if (!dueDateByHand) setDueDate(dueDateFor(date, termsOf(partyId)))
     const allowed = slabsOn(slabPeriods, date).map(String)
     setLines((all) =>
       all.map((l) =>
@@ -330,8 +337,29 @@ export function InvoiceBuilder({
           id="dueDate"
           label="Due date"
           value={dueDate}
-          onChange={setDueDate}
+          onChange={(date) => {
+            setDueDate(date)
+            setDueDateByHand(true)
+          }}
           error={err("dueDate")}
+          hint={
+            dueDateByHand ? (
+              <button
+                type="button"
+                className="underline"
+                onClick={() => {
+                  setDueDateByHand(false)
+                  setDueDate(dueDateFor(invoiceDate, termsOf(partyId)))
+                }}
+              >
+                Use the {termsOf(partyId)}-day terms again
+              </button>
+            ) : customer?.paymentTermsDays != null ? (
+              `${customer.paymentTermsDays} days: ${customer.name}'s terms`
+            ) : (
+              `${defaultTermsDays} days: your default terms`
+            )
+          }
         />
       </section>
 
@@ -532,12 +560,14 @@ function DateField({
   value,
   onChange,
   error,
+  hint,
 }: {
   id: string
   label: string
   value: string
   onChange: (value: string) => void
   error: string | undefined
+  hint?: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -548,11 +578,17 @@ function DateField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : undefined}
+        aria-describedby={
+          error ? `${id}-error` : hint ? `${id}-hint` : undefined
+        }
       />
       {error ? (
         <p id={`${id}-error`} className="text-xs text-danger">
           {error}
+        </p>
+      ) : hint ? (
+        <p id={`${id}-hint`} className="text-xs text-fg-secondary">
+          {hint}
         </p>
       ) : null}
     </div>
