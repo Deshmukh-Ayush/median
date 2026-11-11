@@ -113,7 +113,7 @@ export default async function AcceptInvitationPage(
       {error ? (
         <p
           role="alert"
-          className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger"
+          className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger"
         >
           {error}
         </p>

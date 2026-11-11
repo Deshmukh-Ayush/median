@@ -88,7 +88,7 @@ export function InviteMemberForm({ roles }: { roles: readonly RoleOption[] }) {
       {state.inviteLink ? (
         <div
           role="status"
-          className="flex flex-col gap-2 rounded-md border border-default bg-app p-3"
+          className="flex flex-col gap-2 rounded-md border border-default bg-subtle p-3"
         >
           <p className="text-sm">
             Invite ready for{" "}

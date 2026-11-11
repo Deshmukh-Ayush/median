@@ -11,17 +11,38 @@ function LogoMark({ className, ...props }: React.ComponentProps<"svg">) {
       className={cn("size-6 shrink-0", className)}
       {...props}
     >
-      <rect width="24" height="24" rx="6" className="fill-accent-brand" />
-      <rect x="6" y="8" width="2.5" height="8" rx="1.25" fill="#fff" />
-      <rect x="10.75" y="5.5" width="2.5" height="13" rx="1.25" fill="#fff" />
-      <rect x="15.5" y="9.5" width="2.5" height="5" rx="1.25" fill="#fff" />
+      <rect width="24" height="24" rx="6" className="fill-brand" />
+      <rect
+        x="6"
+        y="8"
+        width="2.5"
+        height="8"
+        rx="1.25"
+        className="fill-on-brand"
+      />
+      <rect
+        x="10.75"
+        y="5.5"
+        width="2.5"
+        height="13"
+        rx="1.25"
+        className="fill-on-brand"
+      />
+      <rect
+        x="15.5"
+        y="9.5"
+        width="2.5"
+        height="5"
+        rx="1.25"
+        className="fill-on-brand"
+      />
       <rect
         x="4.5"
         y="11.25"
         width="15"
         height="1.5"
         rx="0.75"
-        fill="#fff"
+        className="fill-on-brand"
         opacity="0.55"
       />
     </svg>

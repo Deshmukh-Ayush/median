@@ -49,7 +49,7 @@ function Money({
       value={value.toString()}
       title={isCompacted ? full : undefined}
       className={cn(
-        "whitespace-nowrap text-fg tabular data-[tone=danger]:text-danger",
+        "tabular whitespace-nowrap text-fg data-[tone=danger]:text-danger",
         className
       )}
       {...props}

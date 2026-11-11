@@ -172,7 +172,7 @@ function Result({
                   {tally.differences.map((d) => (
                     <tr
                       key={d.accountId + d.ledgers.join()}
-                      className="border-t border-subtle [&>td]:py-1.5 [&>td]:pr-4"
+                      className="border-t border-faint [&>td]:py-1.5 [&>td]:pr-4"
                     >
                       <td>{d.ledgers.join(", ")}</td>
                       <td className="text-right">

@@ -147,7 +147,7 @@ function CommandBar({
               </CommandGroup>
             ))}
           </CommandList>
-          <div className="flex h-9 items-center gap-3 border-t border-subtle px-3 text-2xs text-fg-secondary">
+          <div className="flex h-9 items-center gap-3 border-t border-faint px-3 text-2xs text-fg-secondary">
             <span className="flex items-center gap-1">
               <Kbd>↑</Kbd>
               <Kbd>↓</Kbd> to move

@@ -15,7 +15,7 @@ export function AiTierBanner({ role }: { role: OrgRole }) {
   return (
     <div
       role="alert"
-      className="flex items-center gap-2 border-b border-default bg-danger-subtle px-6 py-2 text-sm text-danger"
+      className="flex items-center gap-2 border-b border-default bg-danger-soft px-6 py-2 text-sm text-danger"
     >
       <TriangleAlertIcon aria-hidden className="size-4 shrink-0" />
       <span className="flex-1">

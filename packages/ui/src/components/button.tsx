@@ -14,13 +14,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "border-transparent bg-accent-button font-semibold text-on-accent hover:bg-accent-button-hover active:bg-accent-button-hover disabled:opacity-50",
+          "border-transparent bg-brand font-semibold text-on-brand hover:bg-brand-hover active:bg-brand-pressed disabled:opacity-50",
         secondary:
-          "border-default bg-surface text-fg hover:bg-hover active:bg-selected disabled:border-subtle disabled:text-fg-disabled aria-expanded:bg-hover",
+          "border-default bg-surface text-fg hover:bg-hover active:bg-selected disabled:border-faint disabled:text-fg-disabled aria-expanded:bg-hover",
         ghost:
           "border-transparent bg-transparent text-fg hover:bg-hover active:bg-selected disabled:text-fg-disabled aria-expanded:bg-hover",
         danger:
-          "border-default bg-surface text-danger hover:bg-danger-subtle active:bg-danger-subtle disabled:border-subtle disabled:text-fg-disabled",
+          "border-default bg-surface text-danger hover:bg-danger-soft active:bg-danger-soft disabled:border-faint disabled:text-fg-disabled",
       },
       size: {
         sm: "h-7 px-2 text-xs [&_svg:not([class*='size-'])]:size-3.5",

@@ -306,7 +306,7 @@ export function InboxView({
                 key={row.id}
                 data-id={row.id}
                 className={cn(
-                  "flex items-start gap-3 border-b border-subtle px-3 py-3 last:border-b-0",
+                  "flex items-start gap-3 border-b border-faint px-3 py-3 last:border-b-0",
                   isActive && "bg-selected"
                 )}
               >
@@ -409,7 +409,7 @@ function InboxDetail({
         <h2 className="text-base font-semibold">{row.narration}</h2>
         <p className="text-sm text-fg-secondary">{row.reason}</p>
         {row.refund && canApprove ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-md bg-info-subtle px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-info-soft px-3 py-2 text-sm">
             <span className="flex-1 text-info">
               Refund of{" "}
               <Money value={row.refund.amount} className="text-info" /> against{" "}
@@ -434,7 +434,7 @@ function InboxDetail({
       </header>
 
       {row.flags.length > 0 ? (
-        <div className="flex flex-col gap-1 rounded-md bg-warning-subtle px-3 py-2 text-sm">
+        <div className="flex flex-col gap-1 rounded-md bg-warning-soft px-3 py-2 text-sm">
           <h3 className="text-xs font-medium text-warning">Check these</h3>
           <ul className="flex flex-col gap-0.5">
             {row.flags.map((flag) => (
@@ -474,7 +474,7 @@ function InboxDetail({
       ) : null}
 
       {canApprove || canReject ? (
-        <footer className="flex flex-wrap gap-2 border-t border-subtle pt-4">
+        <footer className="flex flex-wrap gap-2 border-t border-faint pt-4">
           {canApprove ? (
             <Button variant="primary" loading={pending} onClick={onApprove}>
               <CheckIcon aria-hidden />{" "}
@@ -488,7 +488,7 @@ function InboxDetail({
           ) : null}
         </footer>
       ) : (
-        <p className="border-t border-subtle pt-4 text-xs text-fg-secondary">
+        <p className="border-t border-faint pt-4 text-xs text-fg-secondary">
           Your role can view the inbox but not approve or reject items.
         </p>
       )}
@@ -557,7 +557,7 @@ function TaxSection({
             </Button>
           ) : null}
         </div>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-subtle px-3 py-2 text-sm">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border border-faint px-3 py-2 text-sm">
           {row.gst ? (
             <>
               <dt className="text-fg-secondary">
@@ -749,7 +749,7 @@ function LineGroup({
   return (
     <div className="flex flex-col gap-1">
       <h3 className="text-xs font-medium text-fg-secondary">{title}</h3>
-      <ul className="flex flex-col divide-y divide-subtle rounded-md border border-subtle">
+      <ul className="flex flex-col divide-y divide-faint rounded-md border border-faint">
         {lines.map((line, i) => (
           <li
             key={`${line.account}-${i}`}

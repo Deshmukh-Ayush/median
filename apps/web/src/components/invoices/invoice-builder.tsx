@@ -512,7 +512,7 @@ function SelectField({
         aria-invalid={error ? true : undefined}
         aria-describedby={`${id}-note`}
         disabled={disabled}
-        className={`${SELECT} disabled:bg-app disabled:text-fg-secondary`}
+        className={`${SELECT} disabled:bg-subtle disabled:text-fg-secondary`}
       >
         {children}
       </select>
@@ -696,7 +696,7 @@ function PreviewPanel({
               {state.preview.warnings.map((w) => (
                 <li
                   key={w}
-                  className="flex items-start gap-2 rounded-md bg-warning-subtle px-3 py-2 text-sm text-warning"
+                  className="flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning"
                 >
                   <TriangleAlertIcon
                     aria-hidden

@@ -62,7 +62,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
     <tfoot
       data-slot="table-footer"
       className={cn(
-        "bg-app font-medium [&_td]:border-t [&_td]:border-default",
+        "bg-subtle font-medium [&_td]:border-t [&_td]:border-default",
         className
       )}
       {...props}
@@ -111,7 +111,7 @@ function TableCell({
       data-slot="table-cell"
       data-numeric={numeric ? "" : undefined}
       className={cn(
-        "h-8 border-b border-subtle px-3 py-0 align-middle whitespace-nowrap data-numeric:text-right data-numeric:tabular",
+        "h-8 border-b border-faint px-3 py-0 align-middle whitespace-nowrap data-numeric:text-right data-numeric:tabular",
         className
       )}
       {...props}

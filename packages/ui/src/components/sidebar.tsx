@@ -91,7 +91,7 @@ function Sidebar({
                     {item.icon}
                     <span className="truncate">{item.label}</span>
                     {item.count ? (
-                      <span className="ml-auto text-xs text-fg-secondary tabular">
+                      <span className="ml-auto tabular text-xs text-fg-secondary">
                         {item.count}
                       </span>
                     ) : null}
@@ -125,7 +125,7 @@ function Sidebar({
         ))}
       </nav>
       {footer ? (
-        <div className="shrink-0 border-t border-subtle p-2">{footer}</div>
+        <div className="shrink-0 border-t border-faint p-2">{footer}</div>
       ) : null}
     </div>
   )

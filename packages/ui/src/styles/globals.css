@@ -1,127 +1,137 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./tokens.css";
 
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
 /*
- * Median design tokens, v1. Light theme only.
+ * Median design tokens, v2. Light theme only.
  *
- * Raw values live in :root as --bg-*, --text-*, --border-*, --accent-* and
- * --status-*. Everything else (Tailwind colours, shadcn's variables) points at
- * them. A dark theme later only needs a block that overrides the raw values:
+ * Colours come from styles/tokens.css, generated from three inputs (base,
+ * accent, contrast) by src/theme/generate.ts. Never write a hex value here or
+ * in a component: add a token to the generator instead.
  *
- *   [data-theme="dark"] { --bg-app: …; --text-primary: …; … }
- *
- * Keep these hex values in sync with src/lib/tokens.ts. A test checks.
+ * Tailwind names: bg-canvas / bg-panel / bg-subtle / bg-hover / bg-selected,
+ * border-faint / border-default / border-strong, text-title / text-fg /
+ * text-fg-secondary / text-fg-tertiary / text-fg-faint / text-icon, and the
+ * accent as bg-brand / text-brand-text (see src/lib/token-usage.test.ts for
+ * where the accent may appear).
  */
 :root {
-  /* Surfaces */
-  --bg-app: #f6f6f7;
-  --bg-sidebar: #efeff0;
-  --bg-surface: #ffffff;
-  --bg-hover: #e9e9eb;
-  --bg-selected: #e2e2e5;
-
-  /* Text */
-  --text-primary: #1c1c1f;
-  --text-secondary: #5f5f67;
-  --text-tertiary: #6b6b73;
-  --text-disabled: #a1a1a8;
-  --text-on-accent: #ffffff;
-
-  /* Borders */
-  --border-subtle: #e6e6e8;
-  --border-default: #dcdce0;
-  --border-input: #8e8e96;
-
-  /* Brand accent. Only Button's primary variant and the logo may use these
-     (enforced by src/lib/accent-usage.test.ts). */
-  --accent-brand: #6d78d5;
-  --accent-button: #5b66c9;
-  --accent-button-hover: #5560c2;
-
-  /* Status: text on a subtle background */
-  --status-success: #1f7a4d;
-  --status-success-subtle: #e8f3ed;
-  --status-warning: #8a5300;
-  --status-warning-subtle: #fbf1e1;
-  --status-danger: #b42d2a;
-  --status-danger-subtle: #fbeceb;
-  --status-info: #1f6fb2;
-  --status-info-subtle: #e9f1f9;
-
-  /* Focus: neutral, 2px at 40% with a 2px offset */
-  --focus-ring: color-mix(in srgb, var(--text-primary) 40%, transparent);
-
-  /* Elevation: overlays only (menus, dialogs, command bar) */
-  --shadow-overlay-value:
-    0 4px 12px -2px rgb(28 28 31 / 0.08), 0 1px 3px rgb(28 28 31 / 0.06);
-
   /* Motion */
   --motion-fast: 120ms;
-  --motion-panel: 180ms;
+  --motion-panel: 160ms;
 
   /* Layout */
-  --sidebar-width: 232px;
-  --topbar-height: 48px;
+  --sidebar-width: 240px;
+  --topbar-height: 44px;
+
+  /* v1 names, kept so open branches still render with v2 colours. Don't
+     use them in new code. */
+  --bg-app: var(--bg-canvas);
+  --bg-surface: var(--bg-panel);
+  --text-primary: var(--text);
+  --text-disabled: var(--text-faint);
+  --text-on-accent: var(--on-accent);
+  --border-subtle: var(--border-faint);
+  --border-default: var(--border);
+  --accent-brand: var(--accent);
+  --accent-button: var(--accent);
+  --accent-button-hover: var(--accent-hover);
+  --status-success-subtle: var(--status-success-soft);
+  --status-warning-subtle: var(--status-warning-soft);
+  --status-danger-subtle: var(--status-danger-soft);
+  --status-info-subtle: var(--status-info-soft);
+  --shadow-overlay-value: var(--shadow-menu);
 
   /* shadcn aliases, so generated components land on Median tokens.
-     --primary is neutral on purpose: the accent is not a shadcn colour. */
-  --background: var(--bg-app);
-  --foreground: var(--text-primary);
-  --card: var(--bg-surface);
-  --card-foreground: var(--text-primary);
-  --popover: var(--bg-surface);
-  --popover-foreground: var(--text-primary);
-  --primary: var(--text-primary);
-  --primary-foreground: var(--bg-surface);
+     --primary is neutral on purpose. shadcn's own --accent (a hover grey)
+     would clash with ours, so bg-accent is mapped straight to --bg-hover in
+     @theme below instead. --border comes from tokens.css as is. */
+  --background: var(--bg-panel);
+  --foreground: var(--text);
+  --card: var(--bg-panel);
+  --card-foreground: var(--text);
+  --popover: var(--bg-panel);
+  --popover-foreground: var(--text);
+  --primary: var(--text-title);
+  --primary-foreground: var(--bg-panel);
   --secondary: var(--bg-hover);
-  --secondary-foreground: var(--text-primary);
+  --secondary-foreground: var(--text-title);
   --muted: var(--bg-hover);
   --muted-foreground: var(--text-secondary);
-  --accent: var(--bg-hover);
-  --accent-foreground: var(--text-primary);
   --destructive: var(--status-danger);
-  --border: var(--border-default);
   --input: var(--border-input);
   --ring: var(--focus-ring);
   --sidebar: var(--bg-sidebar);
-  --sidebar-foreground: var(--text-primary);
-  --sidebar-primary: var(--text-primary);
-  --sidebar-primary-foreground: var(--bg-surface);
+  --sidebar-foreground: var(--text);
+  --sidebar-primary: var(--text-title);
+  --sidebar-primary-foreground: var(--bg-panel);
   --sidebar-accent: var(--bg-selected);
-  --sidebar-accent-foreground: var(--text-primary);
-  --sidebar-border: var(--border-subtle);
+  --sidebar-accent-foreground: var(--text-title);
+  --sidebar-border: var(--border-faint);
   --sidebar-ring: var(--focus-ring);
 }
 
 @theme inline {
-  /* Median colours */
-  --color-app: var(--bg-app);
-  --color-surface: var(--bg-surface);
+  /* Surfaces */
+  --color-canvas: var(--bg-canvas);
+  --color-panel: var(--bg-panel);
+  --color-subtle: var(--bg-subtle);
   --color-hover: var(--bg-hover);
   --color-selected: var(--bg-selected);
-  --color-fg: var(--text-primary);
+  --color-overlay: var(--bg-overlay);
+
+  /* Lines (border-*, divide-*) */
+  --color-faint: var(--border-faint);
+  --color-default: var(--border);
+  --color-strong: var(--border-strong);
+  --color-focus: var(--focus-ring);
+
+  /* Text and icons */
+  --color-title: var(--text-title);
+  --color-fg: var(--text);
   --color-fg-secondary: var(--text-secondary);
   --color-fg-tertiary: var(--text-tertiary);
-  --color-fg-disabled: var(--text-disabled);
-  --color-on-accent: var(--text-on-accent);
-  --color-subtle: var(--border-subtle);
-  --color-default: var(--border-default);
-  --color-accent-brand: var(--accent-brand);
-  --color-accent-button: var(--accent-button);
-  --color-accent-button-hover: var(--accent-button-hover);
+  --color-fg-faint: var(--text-faint);
+  --color-icon: var(--icon);
+
+  /* Accent: rare by design (src/lib/token-usage.test.ts) */
+  --color-brand: var(--accent);
+  --color-brand-hover: var(--accent-hover);
+  --color-brand-pressed: var(--accent-pressed);
+  --color-brand-text: var(--accent-text);
+  --color-brand-soft: var(--bg-accent-soft);
+  --color-on-brand: var(--on-accent);
+
+  /* Status: text, soft background, dot */
   --color-success: var(--status-success);
-  --color-success-subtle: var(--status-success-subtle);
+  --color-success-soft: var(--status-success-soft);
+  --color-success-dot: var(--status-success-dot);
   --color-warning: var(--status-warning);
-  --color-warning-subtle: var(--status-warning-subtle);
+  --color-warning-soft: var(--status-warning-soft);
+  --color-warning-dot: var(--status-warning-dot);
   --color-danger: var(--status-danger);
-  --color-danger-subtle: var(--status-danger-subtle);
+  --color-danger-soft: var(--status-danger-soft);
+  --color-danger-dot: var(--status-danger-dot);
   --color-info: var(--status-info);
-  --color-info-subtle: var(--status-info-subtle);
-  --color-focus: var(--focus-ring);
+  --color-info-soft: var(--status-info-soft);
+  --color-info-dot: var(--status-info-dot);
+  --color-neutral: var(--status-neutral);
+  --color-neutral-soft: var(--status-neutral-soft);
+  --color-neutral-dot: var(--status-neutral-dot);
+
+  /* v1 names (see :root) */
+  --color-app: var(--bg-canvas);
+  --color-surface: var(--bg-panel);
+  --color-fg-disabled: var(--text-faint);
+  --color-on-accent: var(--on-accent);
+  --color-success-subtle: var(--status-success-soft);
+  --color-warning-subtle: var(--status-warning-soft);
+  --color-danger-subtle: var(--status-danger-soft);
+  --color-info-subtle: var(--status-info-soft);
 
   /* shadcn colours */
   --color-background: var(--background);
@@ -136,8 +146,8 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--bg-hover);
+  --color-accent-foreground: var(--text-title);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -151,9 +161,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Type: Inter, with Inter Display (opsz 32) for page titles. The scale is
-     exactly 11, 12, 13, 14, 16, 20, 24; nothing else exists. text-sm (13px)
-     is the default UI size, text-base (14px) is for reading. */
+  /* Type: Inter, with Inter Display (opsz 32) for titles and KPI figures.
+     Prefer the type-* utilities below, which set size, line height, weight
+     and tracking together. text-sm (13/18) is the default UI size. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
   --font-display: var(--font-sans);
@@ -163,22 +173,22 @@
   --text-xs: 12px;
   --text-xs--line-height: 16px;
   --text-sm: 13px;
-  --text-sm--line-height: 20px;
+  --text-sm--line-height: 18px;
   --text-base: 14px;
-  --text-base--line-height: 22px;
+  --text-base--line-height: 20px;
   --text-md: 16px;
   --text-md--line-height: 24px;
   --text-lg: 20px;
   --text-lg--line-height: 28px;
   --text-xl: 24px;
-  --text-xl--line-height: 32px;
+  --text-xl--line-height: 30px;
   --font-weight-*: initial;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* Shape: 4 inputs and chips, 6 buttons and rows, 8 cards and dialogs,
-     12 sheets */
+  /* Shape: 4 checkbox and tags, 6 buttons, inputs and nav items, 8 panel,
+     cards and menus, 12 dialogs */
   --radius-*: initial;
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -186,11 +196,11 @@
   --radius-xl: 12px;
   --radius-full: 9999px;
 
-  /* Elevation: overlays only */
+  /* Elevation: shadow-menu, shadow-dialog and shadow-panel are utilities
+     below, since tokens.css already owns the --shadow-* names. */
   --shadow-*: initial;
-  --shadow-overlay: var(--shadow-overlay-value);
 
-  /* Motion: 120ms hover and press, 180ms panels, ease-out, no bounce */
+  /* Motion: 120ms hover and press, 160ms menus and dialogs, ease-out */
   --default-transition-duration: var(--motion-fast);
   --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
@@ -228,15 +238,78 @@
   }
 }
 
-/* Page titles use Inter Display: Inter's optical size axis at 32. */
+/* Inter Display: Inter's optical size axis at 32. */
 @utility font-display {
   font-family: var(--font-display);
   font-variation-settings: "opsz" 32;
   letter-spacing: -0.01em;
 }
 
+/* Tabular figures for amounts, so ₹ columns line up. */
 @utility tabular {
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "cv11", "ss01";
+}
+
+/* Elevation: floating layers only, plus the inset content panel. */
+@utility shadow-menu {
+  box-shadow: var(--shadow-menu);
+}
+@utility shadow-dialog {
+  box-shadow: var(--shadow-dialog);
+}
+@utility shadow-panel {
+  box-shadow: var(--shadow-panel);
+}
+/* v1 name */
+@utility shadow-overlay {
+  box-shadow: var(--shadow-menu);
+}
+
+/* The v2 type ramp (src/lib/tokens.ts lists what each is for). */
+@utility type-title-lg {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 32;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+@utility type-title {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 32;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+@utility type-heading {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+@utility type-body {
+  font-size: 14px;
+  line-height: 20px;
+}
+@utility type-ui {
+  font-size: 13px;
+  line-height: 18px;
+}
+@utility type-caption {
+  font-size: 12px;
+  line-height: 16px;
+}
+@utility type-amount-lg {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 32;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "cv11", "ss01";
 }
 
 @layer base {
@@ -247,16 +320,16 @@
     color-scheme: light;
   }
   body {
-    @apply bg-app text-sm text-fg antialiased;
+    @apply bg-canvas text-sm text-fg antialiased;
     font-variant-numeric: tabular-nums;
   }
   :focus-visible,
   [data-preview~="focus"] {
     outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
+    outline-offset: 1px;
   }
   ::selection {
-    background: var(--bg-selected);
+    background: var(--bg-accent-soft);
   }
 }
 

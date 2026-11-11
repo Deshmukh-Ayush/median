@@ -55,7 +55,7 @@ export default async function MembersPage() {
         <h2 id="members-list" className="sr-only">
           Current members
         </h2>
-        <ul className="divide-y divide-subtle">
+        <ul className="divide-y divide-faint">
           {members.map((member) => (
             <li key={member.id} className="flex h-12 items-center gap-3 px-4">
               <span className="flex min-w-0 flex-1 flex-col">

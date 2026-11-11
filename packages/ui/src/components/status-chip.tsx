@@ -8,10 +8,10 @@ const statusChipVariants = cva(
     variants: {
       tone: {
         neutral: "bg-hover text-fg-secondary",
-        success: "bg-success-subtle text-success",
-        warning: "bg-warning-subtle text-warning",
-        danger: "bg-danger-subtle text-danger",
-        info: "bg-info-subtle text-info",
+        success: "bg-success-soft text-success",
+        warning: "bg-warning-soft text-warning",
+        danger: "bg-danger-soft text-danger",
+        info: "bg-info-soft text-info",
       },
     },
     defaultVariants: { tone: "neutral" },

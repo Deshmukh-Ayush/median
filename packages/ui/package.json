@@ -7,7 +7,8 @@
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "tokens": "vitest run src/theme -u"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

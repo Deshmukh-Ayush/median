@@ -30,7 +30,7 @@ export default function SettingsPage() {
         </Link>
         <Link
           href="/settings/integrations"
-          className="flex h-12 items-center gap-3 border-t border-subtle px-4 text-sm transition-colors hover:bg-hover"
+          className="flex h-12 items-center gap-3 border-t border-faint px-4 text-sm transition-colors hover:bg-hover"
         >
           <PlugIcon aria-hidden className="size-4 text-fg-secondary" />
           <span className="flex-1">Integrations</span>
@@ -38,7 +38,7 @@ export default function SettingsPage() {
         </Link>
         <Link
           href="/settings/import"
-          className="flex h-12 items-center gap-3 border-t border-subtle px-4 text-sm transition-colors hover:bg-hover"
+          className="flex h-12 items-center gap-3 border-t border-faint px-4 text-sm transition-colors hover:bg-hover"
         >
           <FileInputIcon aria-hidden className="size-4 text-fg-secondary" />
           <span className="flex-1">Move from Tally</span>
@@ -46,7 +46,7 @@ export default function SettingsPage() {
         </Link>
         <Link
           href="/settings/ai"
-          className="flex h-12 items-center gap-3 border-t border-subtle px-4 text-sm transition-colors hover:bg-hover"
+          className="flex h-12 items-center gap-3 border-t border-faint px-4 text-sm transition-colors hover:bg-hover"
         >
           <SparklesIcon aria-hidden className="size-4 text-fg-secondary" />
           <span className="flex-1">AI provider</span>

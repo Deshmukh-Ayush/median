@@ -49,7 +49,7 @@ export default async function Page() {
       {s.freeTierInProduction ? (
         <p
           role="alert"
-          className="rounded-md bg-danger-subtle px-3 py-2 text-sm text-danger"
+          className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger"
         >
           This is production and the AI is on the free tier. Free tiers may use
           what they&apos;re sent to improve their models, so real customer data
@@ -57,7 +57,7 @@ export default async function Page() {
           provider) and set AI_PROVIDER_TIER=paid.
         </p>
       ) : null}
-      <dl className="divide-y divide-subtle rounded-lg border border-default bg-surface">
+      <dl className="divide-y divide-faint rounded-lg border border-default bg-surface">
         <Fact label="Provider">{s.provider}</Fact>
         <Fact label="Models">
           <span className="font-mono text-xs">

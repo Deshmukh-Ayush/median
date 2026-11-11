@@ -62,7 +62,7 @@ import {
   tokenValue,
   typeScale,
 } from "@workspace/ui/lib/tokens"
-import type { ColorToken } from "@workspace/ui/lib/tokens"
+import type { ColorToken, TokenName } from "@workspace/ui/lib/tokens"
 
 import { InboxView } from "@/components/inbox/inbox-view"
 
@@ -249,7 +249,7 @@ function Section({
       aria-labelledby={`${id}-title`}
       className="flex scroll-mt-6 flex-col gap-4"
     >
-      <div className="flex flex-col gap-1 border-b border-subtle pb-2">
+      <div className="flex flex-col gap-1 border-b border-faint pb-2">
         <h2 id={`${id}-title`} className="text-md font-semibold text-fg">
           {title}
         </h2>
@@ -299,14 +299,14 @@ function Ratio({
   const pass = ratio >= min
   if (note) {
     return (
-      <span className="text-xs text-fg-secondary tabular">
+      <span className="tabular text-xs text-fg-secondary">
         {ratio.toFixed(2)}:1 · {note}
       </span>
     )
   }
   return (
     <span
-      className={`text-xs tabular ${pass ? "text-fg-secondary" : "font-medium text-danger"}`}
+      className={`tabular text-xs ${pass ? "text-fg-secondary" : "font-medium text-danger"}`}
     >
       {ratio.toFixed(2)}:1{pass ? "" : " ✕"}
     </span>
@@ -323,42 +323,38 @@ interface SwatchPair {
 
 function swatchContrast(token: ColorToken): SwatchPair | null {
   const v = token.value
-  const surface = tokenValue("--bg-surface")
-  if (token.name.startsWith("--bg-"))
-    return { against: "primary text", fg: tokenValue("--text-primary"), bg: v }
-  if (token.name === "--text-on-accent")
-    return { against: "on button", fg: v, bg: tokenValue("--accent-button") }
-  if (token.name === "--text-disabled")
+  const panel = tokenValue("--bg-panel")
+  const name: string = token.name
+  if (name === "--on-accent")
+    return { against: "on accent", fg: v, bg: tokenValue("--accent") }
+  if (name === "--text-faint")
+    return { against: "on panel", fg: v, bg: panel, note: "exempt (disabled)" }
+  if (name === "--icon")
     return {
-      against: "on surface",
+      against: "on canvas (icon, 3:1)",
       fg: v,
-      bg: surface,
-      note: "exempt (disabled)",
+      bg: tokenValue("--bg-canvas"),
+      min: 3,
     }
-  if (token.name.startsWith("--text-"))
-    return { against: "on surface", fg: v, bg: surface }
-  if (token.name === "--accent-brand")
+  if (name.startsWith("--bg-"))
+    return { against: "body text", fg: tokenValue("--text"), bg: v }
+  if (name.startsWith("--text-") || name === "--accent-text")
+    return { against: "on panel", fg: v, bg: panel }
+  if (name.startsWith("--accent"))
+    return { against: "white text", fg: tokenValue("--on-accent"), bg: v }
+  if (name.endsWith("-dot"))
+    return { against: "on panel", fg: v, bg: panel, note: "beside a label" }
+  if (name.startsWith("--status-") && !name.endsWith("-soft")) {
     return {
-      against: "white text",
-      fg: "#ffffff",
-      bg: v,
-      note: "logo only, not a fill",
-    }
-  if (token.name.startsWith("--accent-"))
-    return { against: "white text", fg: "#ffffff", bg: v }
-  if (token.name.startsWith("--status-") && !token.name.endsWith("-subtle")) {
-    return {
-      against: "on subtle",
+      against: "on soft",
       fg: v,
-      bg: tokenValue(
-        `${token.name}-subtle` as Parameters<typeof tokenValue>[0]
-      ),
+      bg: tokenValue(`${token.name}-soft` as TokenName),
     }
   }
-  if (token.name === "--border-input")
-    return { against: "on surface (UI, needs 3:1)", fg: v, bg: surface, min: 3 }
-  if (token.name.startsWith("--border-"))
-    return { against: "on surface", fg: v, bg: surface, note: "decorative" }
+  if (name === "--border-input" || name === "--focus-ring")
+    return { against: "on panel (UI, 3:1)", fg: v, bg: panel, min: 3 }
+  if (name.startsWith("--border"))
+    return { against: "on panel", fg: v, bg: panel, note: "decorative" }
   return null
 }
 
@@ -367,12 +363,12 @@ function Swatch({ token }: { token: ColorToken }) {
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-default bg-surface">
       <div
-        className="h-14 border-b border-subtle"
+        className="h-14 border-b border-faint"
         style={{ background: token.value }}
       />
       <div className="flex flex-col gap-0.5 p-2.5">
         <p className="font-mono text-xs font-medium text-fg">{token.name}</p>
-        <p className="text-xs text-fg-secondary tabular">{token.value}</p>
+        <p className="tabular text-xs text-fg-secondary">{token.value}</p>
         <p className="text-2xs text-fg-secondary">{token.use}</p>
         {pair ? (
           <p className="flex items-center gap-1 text-2xs text-fg-secondary">
@@ -425,22 +421,22 @@ function StateGrid({
             <tr key={row.label}>
               <th
                 scope="row"
-                className="border-b border-subtle px-3 py-3 text-left text-xs font-medium whitespace-nowrap text-fg-secondary"
+                className="border-b border-faint px-3 py-3 text-left text-xs font-medium whitespace-nowrap text-fg-secondary"
               >
                 {row.label}
               </th>
               {STATES.map((state) => (
                 <td
                   key={state.label}
-                  className="border-b border-subtle px-3 py-3"
+                  className="border-b border-faint px-3 py-3"
                 >
                   {row.render(state.preview)}
                 </td>
               ))}
-              <td className="border-b border-subtle px-3 py-3">
+              <td className="border-b border-faint px-3 py-3">
                 {row.render("disabled")}
               </td>
-              <td className="border-b border-subtle px-3 py-3">
+              <td className="border-b border-faint px-3 py-3">
                 {row.render("loading")}
               </td>
             </tr>
@@ -564,10 +560,10 @@ export default function DesignPage() {
 
   return (
     <div className="min-h-svh bg-app">
-      <header className="sticky top-0 z-20 border-b border-subtle bg-app/90 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-faint bg-app/90 backdrop-blur">
         <div className="mx-auto flex h-12 max-w-6xl items-center gap-3 px-6">
           <LogoMark className="size-5" />
-          <span className="text-sm font-semibold">Design system v1</span>
+          <span className="text-sm font-semibold">Design system v2</span>
           <StatusChip tone="info">Dev only</StatusChip>
           <nav aria-label="Sections" className="ml-auto flex gap-1 text-xs">
             {[
@@ -642,7 +638,7 @@ export default function DesignPage() {
         <Section
           id="contrast"
           title="Text contrast"
-          description="Every text-on-background pair the system allows, checked in CI by contrast.test.ts. Tertiary text is not allowed on hover or selected backgrounds (4.36 and 4.09); rows use secondary text there."
+          description="Every text-on-background pair the system allows, checked in CI by scripts/contrast.test.ts. Tertiary text is not allowed on hover or selected backgrounds (4.32 and 4.05); rows use secondary text there."
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {contrastPairs.map((pair) => (
@@ -664,7 +660,7 @@ export default function DesignPage() {
                   <span className="font-mono text-2xs">
                     {pair.fg.replace("--", "")} / {pair.bg.replace("--", "")}
                   </span>
-                  <span className="text-xs font-medium tabular">
+                  <span className="tabular text-xs font-medium">
                     {contrastRatio(
                       tokenValue(pair.fg),
                       tokenValue(pair.bg)
@@ -686,14 +682,14 @@ export default function DesignPage() {
             <p className="font-display text-xl font-semibold">
               Page title · Inter Display 24/600
             </p>
-            <div className="flex flex-col divide-y divide-subtle">
+            <div className="flex flex-col divide-y divide-faint">
               {typeScale.map((step) => (
                 <div
                   key={step.className}
                   className="flex items-baseline gap-6 py-2"
                 >
-                  <span className="w-28 shrink-0 font-mono text-2xs text-fg-secondary">
-                    {step.className} · {step.px}px
+                  <span className="w-64 shrink-0 font-mono text-2xs text-fg-secondary">
+                    {step.className} · {step.spec}
                   </span>
                   <span className={`${step.className} text-fg`}>
                     Money owed to you ₹12,34,567
@@ -740,7 +736,7 @@ export default function DesignPage() {
               <div className="flex flex-col gap-1.5">
                 {spacing.map((px) => (
                   <div key={px} className="flex items-center gap-3">
-                    <span className="w-10 text-right text-2xs text-fg-secondary tabular">
+                    <span className="w-10 text-right tabular text-2xs text-fg-secondary">
                       {px}px
                     </span>
                     <span
@@ -799,7 +795,7 @@ export default function DesignPage() {
                 {density.map((d) => (
                   <span key={d.name} className="text-xs text-fg-secondary">
                     {d.name}{" "}
-                    <span className="font-medium text-fg tabular">
+                    <span className="tabular font-medium text-fg">
                       {d.px}px
                     </span>
                   </span>
@@ -922,7 +918,7 @@ export default function DesignPage() {
               </thead>
               <tbody>
                 {moneySamples.map((sample) => (
-                  <tr key={sample.label} className="border-t border-subtle">
+                  <tr key={sample.label} className="border-t border-faint">
                     <td className="py-1.5 text-fg-secondary">{sample.label}</td>
                     <td className="py-1.5 text-right">
                       <Money value={sample.value} />
@@ -938,7 +934,7 @@ export default function DesignPage() {
                     </td>
                   </tr>
                 ))}
-                <tr className="border-t border-subtle">
+                <tr className="border-t border-faint">
                   <td className="py-1.5 text-fg-secondary">
                     Real problem (overdue)
                   </td>

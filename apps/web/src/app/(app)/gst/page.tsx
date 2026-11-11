@@ -66,7 +66,7 @@ async function Deadlines({
     )
   }
   return (
-    <ul className="flex flex-col divide-y divide-subtle rounded-lg border border-default bg-surface">
+    <ul className="flex flex-col divide-y divide-faint rounded-lg border border-default bg-surface">
       {deadlines.map((d) => {
         const days = daysUntil(today, d.due)
         return (

@@ -79,7 +79,7 @@ export function GstProfileForm({
           {(["yes", "no"] as const).map((option) => (
             <label
               key={option}
-              className="flex flex-1 cursor-default items-center gap-2 rounded-md border border-default p-3 text-sm transition-colors hover:bg-app has-checked:border-fg has-checked:bg-app has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus"
+              className="flex flex-1 cursor-default items-center gap-2 rounded-md border border-default p-3 text-sm transition-colors hover:bg-subtle has-checked:border-fg has-checked:bg-subtle has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus"
             >
               <input
                 type="radio"
