@@ -69,6 +69,8 @@ export type Decision =
       readonly dimensions?: Readonly<Record<number, Record<string, string>>>
       /** The invoice this receipt pays: applied when the entry posts. */
       readonly invoiceId?: string | null
+      /** The vendor bill this payment settles: applied when it posts. */
+      readonly billId?: string | null
     }
   | {
       readonly action: "inbox"
@@ -688,10 +690,29 @@ export interface VendorCandidate {
   readonly name: string
 }
 
+/** An open vendor bill a bank debit could pay. */
+export interface BillCandidate {
+  readonly id: string
+  readonly number: string
+  readonly partyId: string
+  readonly date: string
+  readonly outstanding: Money
+}
+
+/** A bill payment recorded by hand that no bank line has confirmed yet. */
+export interface RecordedPaymentCandidate {
+  readonly entryId: string
+  readonly amountPaise: bigint
+  readonly date: string
+}
+
 export type BankMatch =
   | { readonly kind: "settlement"; readonly settlement: SettlementCandidate }
   | { readonly kind: "invoice"; readonly invoice: OpenInvoice }
   | { readonly kind: "vendor"; readonly vendor: VendorCandidate }
+  | { readonly kind: "bill"; readonly bill: BillCandidate }
+  /** The debit confirms a payment already in the books. */
+  | { readonly kind: "recorded_payment"; readonly entryId: string }
   /** Several candidates fit equally: never guess. */
   | { readonly kind: "ambiguous"; readonly what: string }
   | { readonly kind: "none" }
@@ -767,6 +788,23 @@ export function bankLineRule(
       kind: "bank_line",
     })
   }
+  if (match.kind === "recorded_payment" && !inflow)
+    return { action: "link", entryId: match.entryId }
+  if (match.kind === "bill" && !inflow) {
+    const b = match.bill
+    return {
+      action: "post",
+      entry: {
+        entryDate,
+        narration: `Payment for bill ${b.number}: ${narration}`.slice(0, 500),
+        lines: [
+          dr(ctx.payables, amount, null, b.partyId),
+          cr(bankAccountId, amount),
+        ],
+      },
+      billId: b.id,
+    }
+  }
   if (match.kind === "vendor" && !inflow) {
     return inbox(
       {
@@ -806,8 +844,10 @@ export function normalizeForMatch(text: string): string {
 /**
  * Picks the bank line's match. Order: a Razorpay settlement (amount within
  * −1/+5 days, UTR in the narration wins), then an invoice (number in the
- * narration, else a unique amount or TDS match), then a known vendor named
- * in the narration.
+ * narration, else a unique amount or TDS match). Debits: a bill payment
+ * already recorded from this bank (amount within ±5 days), then an open bill
+ * whose number is in the narration, then the one open bill of a vendor named
+ * in the narration for exactly this amount, then that vendor.
  */
 export function findBankMatch(
   line: {
@@ -824,6 +864,8 @@ export function findBankMatch(
     })[]
     readonly invoices: readonly (OpenInvoice & { readonly date: string })[]
     readonly vendors: readonly VendorCandidate[]
+    readonly bills?: readonly BillCandidate[]
+    readonly recordedPayments?: readonly RecordedPaymentCandidate[]
   }
 ): BankMatch {
   const text = normalizeForMatch(line.text)
@@ -878,12 +920,46 @@ export function findBankMatch(
       }
     return { kind: "none" }
   }
+  const recorded = (candidates.recordedPayments ?? []).filter(
+    (r) =>
+      r.amountPaise === line.amountPaise &&
+      Math.abs(daysBetween(r.date, line.date)) <= 5
+  )
+  const [onlyR] = recorded
+  if (recorded.length === 1 && onlyR)
+    return { kind: "recorded_payment", entryId: onlyR.entryId }
+  if (recorded.length > 1)
+    return {
+      kind: "ambiguous",
+      what: `one of ${recorded.length} bill payments already recorded`,
+    }
+
+  const bills = (candidates.bills ?? []).filter((b) => b.date <= line.date)
+  const byBillNumber = bills.filter((b) => {
+    const n = normalizeForMatch(b.number)
+    return n.length >= 3 && text.includes(n)
+  })
+  const [onlyB] = byBillNumber
+  if (
+    byBillNumber.length === 1 &&
+    onlyB &&
+    line.amountPaise <= onlyB.outstanding
+  )
+    return { kind: "bill", bill: onlyB }
+
   const vendors = candidates.vendors.filter((v) => {
     const n = normalizeForMatch(v.name)
     return n.length >= 4 && text.includes(n)
   })
   const [onlyV] = vendors
-  if (vendors.length === 1 && onlyV) return { kind: "vendor", vendor: onlyV }
+  if (vendors.length === 1 && onlyV) {
+    const exact = bills.filter(
+      (b) => b.partyId === onlyV.partyId && b.outstanding === line.amountPaise
+    )
+    const [onlyE] = exact
+    if (exact.length === 1 && onlyE) return { kind: "bill", bill: onlyE }
+    return { kind: "vendor", vendor: onlyV }
+  }
   if (vendors.length > 1)
     return { kind: "ambiguous", what: `a payment to ${vendors.length} vendors` }
   return { kind: "none" }

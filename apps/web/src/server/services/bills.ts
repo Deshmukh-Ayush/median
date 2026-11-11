@@ -321,6 +321,22 @@ async function assertBankAccount(tx: Tx, orgId: string, accountId: string) {
     })
 }
 
+/**
+ * A bank debit matched to a bill was posted: record it against the bill in
+ * the same transaction. Internal: the bank import calls it.
+ */
+export async function applyBillPayment(
+  tx: Tx,
+  orgId: string,
+  billId: string,
+  entryId: string,
+  amount: Money
+): Promise<void> {
+  const bill = await lockBill(tx, orgId, billId)
+  assertWithinOutstanding(bill, amount)
+  await allocate(tx, orgId, bill, "payment", entryId, amount)
+}
+
 const actorOf = (ctx: OrgContext): LedgerActor => ({
   orgId: ctx.orgId,
   userId: ctx.userId,
