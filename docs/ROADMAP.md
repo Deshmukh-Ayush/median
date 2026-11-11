@@ -23,33 +23,33 @@ LLMs read, classify, explain and propose rules, and do no arithmetic.
 
 ## Phase 1: unblock onboarding
 
-| #    | Item                                                                                                       | Owner  | Branch                        | PR                                                        | Status    |
-| ---- | ---------------------------------------------------------------------------------------------------------- | ------ | ----------------------------- | --------------------------------------------------------- | --------- |
-| 1.1a | Parties: schema, GST checks (GSTIN check digit, PAN, registration type), TDS/MSME fields                   | Vedant | `feat/parties-schema-service` | [#96](https://github.com/Deshmukh-Ayush/median/pull/96)   | in review |
-| 1.1b | Parties: edit with field locks, archive, opening balance (stacked on #96)                                  | Vedant | `feat/parties-edit-archive`   | [#97](https://github.com/Deshmukh-Ayush/median/pull/97)   | in review |
-| 1.1c | Parties: list in the sidebar (stacked on #97)                                                              | Vedant | `feat/parties-screens`        | [#98](https://github.com/Deshmukh-Ayush/median/pull/98)   | in review |
-| 1.1d | Parties: create/edit form, archive, "new customer" from the invoice form (stacked on #98)                  | Vedant | `feat/parties-form`           | [#99](https://github.com/Deshmukh-Ayush/median/pull/99)   | in review |
-| 1.1e | Invoices and credit notes keep the customer as issued (snapshot; replaces the field locks; stacked on #99) | Vedant | `feat/invoice-party-snapshot` | [#101](https://github.com/Deshmukh-Ayush/median/pull/101) | in review |
-| 1.2  | Due date follows invoice date and the customer's payment terms (stacked on #101)                           | Vedant | `feat/invoice-due-date-terms` | [#102](https://github.com/Deshmukh-Ayush/median/pull/102) | in review |
-| 1.3  | Credit note PDF with Rule 53 particulars                                                                   |        |                               |                                                           | todo      |
-| 1.4  | Database resilience: retries, readable errors, real error logging, batched settlement import               |        |                               |                                                           | todo      |
-| 1.5  | Readable audit-log labels                                                                                  |        |                               |                                                           | todo      |
+| #    | Item                                                                                                                                 | Owner  | Branch                            | PR                                                        | Status           |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------ | ------ | --------------------------------- | --------------------------------------------------------- | ---------------- |
+| 1.1a | Parties: schema, GST checks (GSTIN check digit, PAN, registration type), TDS/MSME fields                                             | Vedant | `feat/parties-schema-service`     | [#96](https://github.com/Deshmukh-Ayush/median/pull/96)   | in review        |
+| 1.1b | Parties: edit with field locks, archive, opening balance (stacked on #96)                                                            | Vedant | `feat/parties-edit-archive`       | [#97](https://github.com/Deshmukh-Ayush/median/pull/97)   | in review        |
+| 1.1c | Parties: list in the sidebar (stacked on #97)                                                                                        | Vedant | `feat/parties-screens`            | [#98](https://github.com/Deshmukh-Ayush/median/pull/98)   | in review        |
+| 1.1d | Parties: create/edit form, archive, "new customer" from the invoice form (stacked on #98)                                            | Vedant | `feat/parties-form`               | [#99](https://github.com/Deshmukh-Ayush/median/pull/99)   | in review        |
+| 1.1e | Invoices and credit notes keep the customer as issued (snapshot; replaces the field locks; stacked on #99)                           | Vedant | `feat/invoice-party-snapshot`     | [#101](https://github.com/Deshmukh-Ayush/median/pull/101) | in review        |
+| 1.2  | Due date follows invoice date and the customer's payment terms (stacked on #101)                                                     | Vedant | `feat/invoice-due-date-terms`     | [#102](https://github.com/Deshmukh-Ayush/median/pull/102) | in review        |
+| 1.3  | Credit note PDF with Rule 53 particulars                                                                                             |        |                                   |                                                           | todo             |
+| 1.4  | Database resilience: bulk posting for the settlement import (500 payments 610.8 s → 11.5 s); retries and readable errors still to do | Vedant | `perf/settlement-import-batching` | [#110](https://github.com/Deshmukh-Ayush/median/pull/110) | in review (part) |
+| 1.5  | Readable audit-log labels                                                                                                            |        |                                   |                                                           | todo             |
 
 ## Phase 2: CA P0
 
-| #    | Item                                                                                                                  | Owner | Branch | PR  | Status |
-| ---- | --------------------------------------------------------------------------------------------------------------------- | ----- | ------ | --- | ------ |
-| 2.1a | Bills: schema (bills, lines, payments, advances, allocations)                                                         |       |        |     | todo   |
-| 2.1b | Bills: entry (manual and from the AI bill reader) and posting                                                         |       |        |     | todo   |
-| 2.1c | Bills: payments matched to bank lines; vendor advances                                                                |       |        |     | todo   |
-| 2.1d | Bills: payables ageing, vendor statement, duplicate-bill warning, bills page                                          |       |        |     | todo   |
-| 2.2a | TDS: dated section master (194C/J/I/H/Q, 192), 206AA, lower-deduction certificates                                    |       |        |     | todo   |
-| 2.2b | TDS: posting on bills, challan tracker                                                                                |       |        |     | todo   |
-| 2.2c | TDS: 26Q quarterly export                                                                                             |       |        |     | todo   |
-| 2.3  | Manual journal screen (multi-line, attachments, period locks, auto-reversal date)                                     |       |        |     | todo   |
-| 2.3b | Recurring journal templates                                                                                           |       |        |     | todo   |
-| 2.4  | Reports: day book, general ledger, party ledger, trial balance and Schedule III with prior-year columns, .xlsx export |       |        |     | todo   |
-| 2.5  | GSTR-2B import and matching; 17(5) blocked credit; Rule 37 reversal; 3B Table 4                                       |       |        |     | todo   |
+| #    | Item                                                                                                        | Owner  | Branch                     | PR                                                                                                                                                                              | Status    |
+| ---- | ----------------------------------------------------------------------------------------------------------- | ------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 2.1a | Bills: schema, bills from approved inbox items, payments, vendor advances, payables ageing, party statement | Vedant | `feat/bills-payables`      | [#104](https://github.com/Deshmukh-Ayush/median/pull/104)                                                                                                                       | in review |
+| 2.1b | Bills: entry (manual and from the AI bill reader) and posting                                               |        |                            |                                                                                                                                                                                 | todo      |
+| 2.1c | Bills: bank debits pay bills and confirm recorded payments (stacked on #104)                                | Vedant | `feat/bills-bank-matching` | [#105](https://github.com/Deshmukh-Ayush/median/pull/105)                                                                                                                       | in review |
+| 2.1d | Bills: payables ageing, vendor statement, duplicate-bill warning, bills page                                |        |                            |                                                                                                                                                                                 | todo      |
+| 2.2a | TDS: dated section master (194C/J/I/H/Q, 192), 206AA, lower-deduction certificates                          |        |                            |                                                                                                                                                                                 | todo      |
+| 2.2b | TDS: posting on bills, challan tracker                                                                      |        |                            |                                                                                                                                                                                 | todo      |
+| 2.2c | TDS: 26Q quarterly export                                                                                   |        |                            |                                                                                                                                                                                 | todo      |
+| 2.3  | Manual journal screen (multi-line, attachments, period locks, auto-reversal date)                           |        |                            |                                                                                                                                                                                 | todo      |
+| 2.3b | Recurring journal templates                                                                                 |        |                            |                                                                                                                                                                                 | todo      |
+| 2.4  | Reports: comparatives and cash flow (#107), day book and ledgers (#108), Excel export (#109)                | Vedant | `feat/reports-*`           | [#107](https://github.com/Deshmukh-Ayush/median/pull/107), [#108](https://github.com/Deshmukh-Ayush/median/pull/108), [#109](https://github.com/Deshmukh-Ayush/median/pull/109) | in review |
+| 2.5  | GSTR-2B import and matching; 17(5) blocked credit; Rule 37 reversal; 3B Table 4                             |        |                            |                                                                                                                                                                                 | todo      |
 
 ## Phase 3: earned autonomy
 
@@ -71,9 +71,9 @@ LLMs read, classify, explain and propose rules, and do no arithmetic.
 
 ## Ask Median (chat)
 
-| #   | Item                                                                                                                 | Owner  | Branch | PR  | Status              |
-| --- | -------------------------------------------------------------------------------------------------------------------- | ------ | ------ | --- | ------------------- |
-| C.1 | Chat schema: `conversations` (org, user, title, page context) and `messages` (role, content, tool calls, created_at) | Vedant |        |     | todo (next session) |
+| #   | Item                                              | Owner  | Branch                    | PR                                                        | Status    |
+| --- | ------------------------------------------------- | ------ | ------------------------- | --------------------------------------------------------- | --------- |
+| C.1 | Chat schema and services: conversations, messages | Vedant | `feat/chat-conversations` | [#103](https://github.com/Deshmukh-Ayush/median/pull/103) | in review |
 
 ## Housekeeping and test data
 
