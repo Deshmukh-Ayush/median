@@ -67,6 +67,22 @@ export const accountType = pgEnum("account_type", [
 
 export const partyKind = pgEnum("party_kind", ["customer", "vendor"])
 
+/** GST registration of a customer or vendor. */
+export const partyRegistrationType = pgEnum("party_registration_type", [
+  "regular",
+  "composition",
+  "unregistered",
+  "sez",
+  "overseas",
+])
+
+/** Udyam category. Section 43B(h) covers micro and small, not medium. */
+export const msmeCategory = pgEnum("msme_category", [
+  "micro",
+  "small",
+  "medium",
+])
+
 export const journalSourceType = pgEnum("journal_source_type", [
   "manual",
   "razorpay",
@@ -413,10 +429,24 @@ export const parties = pgTable(
     organizationId: organizationId(),
     kind: partyKind().notNull(),
     name: text().notNull(),
+    /** As on the GST certificate or PAN, when it differs from `name`. */
+    legalName: text(),
     gstin: text(),
+    /** Derived from the GSTIN when there is one. */
+    pan: text(),
+    registrationType: partyRegistrationType().notNull().default("unregistered"),
     stateCode: text(),
+    billingAddress: text(),
     email: text(),
     phone: text(),
+    /** Null → the organisation's default terms. */
+    paymentTermsDays: integer(),
+    /** Vendors only: TDS section usually deducted, e.g. "194J(b)". */
+    defaultTdsSection: text(),
+    msmeCategory: msmeCategory(),
+    udyamNumber: text(),
+    /** Archived parties are hidden from pickers; their history stays. */
+    archivedAt: timestamp({ withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -431,6 +461,22 @@ export const parties = pgTable(
     check(
       "parties_state_code_check",
       sql`${t.stateCode} is null or ${t.stateCode} ~ '^[0-9]{2}$'`
+    ),
+    check(
+      "parties_pan_check",
+      sql`${t.pan} is null or ${t.pan} ~ '^[A-Z]{5}[0-9]{4}[A-Z]$'`
+    ),
+    check(
+      "parties_gstin_registration_check",
+      sql`(${t.gstin} is not null) = (${t.registrationType} in ('regular', 'composition', 'sez'))`
+    ),
+    check(
+      "parties_payment_terms_check",
+      sql`${t.paymentTermsDays} is null or ${t.paymentTermsDays} between 0 and 365`
+    ),
+    check(
+      "parties_tds_vendor_only_check",
+      sql`${t.defaultTdsSection} is null or ${t.kind} = 'vendor'`
     ),
   ]
 )
