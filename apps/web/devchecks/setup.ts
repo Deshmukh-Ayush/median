@@ -13,37 +13,31 @@ export async function devOrg(): Promise<OrgContext> {
   const db = getDb()
   const [u] = await db.select().from(user).where(eq(user.id, DEV_USER))
   if (!u) {
-    await db
-      .insert(user)
-      .values({
-        id: DEV_USER,
-        name: "Backend dev check",
-        email: "backend-devcheck@example.invalid",
-        emailVerified: true,
-      })
+    await db.insert(user).values({
+      id: DEV_USER,
+      name: "Backend dev check",
+      email: "backend-devcheck@example.invalid",
+      emailVerified: true,
+    })
   }
   const [o] = await db
     .select()
     .from(organization)
     .where(eq(organization.id, DEV_ORG))
   if (!o) {
-    await db
-      .insert(organization)
-      .values({
-        id: DEV_ORG,
-        name: "Backend dev checks",
-        slug: "backend-devcheck",
-        createdAt: new Date(),
-      })
-    await db
-      .insert(member)
-      .values({
-        id: "backend-devcheck-member",
-        organizationId: DEV_ORG,
-        userId: DEV_USER,
-        role: "owner",
-        createdAt: new Date(),
-      })
+    await db.insert(organization).values({
+      id: DEV_ORG,
+      name: "Backend dev checks",
+      slug: "backend-devcheck",
+      createdAt: new Date(),
+    })
+    await db.insert(member).values({
+      id: "backend-devcheck-member",
+      organizationId: DEV_ORG,
+      userId: DEV_USER,
+      role: "owner",
+      createdAt: new Date(),
+    })
     await seedOrganization({
       orgId: DEV_ORG,
       industry: "saas",
@@ -58,6 +52,16 @@ export async function devOrg(): Promise<OrgContext> {
       })
       .onConflictDoNothing()
   }
+  // Consent is per version: record the current one even for an org created
+  // under an older version.
+  await db
+    .insert(consents)
+    .values({
+      organizationId: DEV_ORG,
+      userId: DEV_USER,
+      consentVersion: CURRENT_CONSENT_VERSION,
+    })
+    .onConflictDoNothing()
   return { orgId: DEV_ORG, userId: DEV_USER, role: "owner" }
 }
 
