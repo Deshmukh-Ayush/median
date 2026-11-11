@@ -14,7 +14,8 @@ export default defineConfig(
         {
           patterns: [
             {
-              group: ["@ai-sdk/*", "@openrouter/*"],
+              // @ai-sdk/react is the chat UI hook, not a model provider.
+              group: ["@ai-sdk/*", "!@ai-sdk/react", "@openrouter/*"],
               message:
                 "Import fastModel/smartModel from @/server/ai/models instead of a provider.",
             },
@@ -46,7 +47,8 @@ export default defineConfig(
           ],
           patterns: [
             {
-              group: ["@ai-sdk/*", "@openrouter/*"],
+              // @ai-sdk/react is the chat UI hook, not a model provider.
+              group: ["@ai-sdk/*", "!@ai-sdk/react", "@openrouter/*"],
               message:
                 "Import fastModel/smartModel from @/server/ai/models instead of a provider.",
             },
