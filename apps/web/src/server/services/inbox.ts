@@ -42,6 +42,7 @@ import {
   parties,
   sourceRecords,
 } from "../db/schema"
+import { recordApprovedBill } from "./bills"
 import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import { documentPath } from "./documents"
@@ -466,6 +467,14 @@ export async function approveInboxItem(
         item.row.invoiceId,
         { id: posted.id, lines: edited.entry.lines }
       )
+    if (item.row.kind === "bill" && item.row.sourceType === "document")
+      await recordApprovedBill(tx, ctx.orgId, {
+        id: item.row.id,
+        documentId: item.row.sourceId,
+        entryId: posted.id,
+        entryDate: edited.entry.entryDate,
+        lines: edited.entry.lines,
+      })
     if (item.row.sourceType === "source_record") {
       await tx
         .update(sourceRecords)
