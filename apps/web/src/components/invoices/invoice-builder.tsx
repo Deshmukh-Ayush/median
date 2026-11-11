@@ -92,12 +92,15 @@ export function InvoiceBuilder({
   orgStateCode,
   slabPeriods,
   today,
+  initialCustomerId,
 }: {
   customers: readonly Customer[]
   states: readonly { code: string; name: string }[]
   orgStateCode: string | null
   slabPeriods: readonly SlabPeriod[]
   today: string
+  /** Picked first, e.g. a customer just added from this form. */
+  initialCustomerId?: string | undefined
 }) {
   const [state, action, pending] = useActionState(
     createInvoiceFromForm,
@@ -105,7 +108,8 @@ export function InvoiceBuilder({
   )
   const errors = state.fieldErrors ?? {}
 
-  const first = customers[0]
+  const first =
+    customers.find((c) => c.id === initialCustomerId) ?? customers[0]
   const [partyId, setPartyId] = useState(first?.id ?? "")
   const [placeOfSupply, setPlaceOfSupply] = useState(
     first?.stateCode ?? orgStateCode ?? ""
