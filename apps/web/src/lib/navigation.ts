@@ -4,6 +4,7 @@ import {
   HomeIcon,
   InboxIcon,
   LandmarkIcon,
+  MessageSquareIcon,
   PercentIcon,
   PieChartIcon,
   ReceiptIcon,
@@ -47,6 +48,13 @@ export const NAVIGATION: readonly NavSection[] = [
         icon: HomeIcon,
         requires: READ_REPORTS,
         keywords: ["dashboard"],
+      },
+      {
+        label: "Ask Median",
+        href: "/ask",
+        icon: MessageSquareIcon,
+        requires: READ_LEDGER,
+        keywords: ["chat", "question", "ai", "assistant"],
       },
       {
         label: "AI inbox",
