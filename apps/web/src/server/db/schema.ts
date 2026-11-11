@@ -217,6 +217,8 @@ export const organizationSettings = pgTable(
     compositionScheme: boolean().notNull().default(false),
     /** Rate for sales with no invoice or mapping, in basis points. Null → inbox. */
     defaultGstRateBps: integer(),
+    /** Invoices fall due this many days after issue unless the customer has terms. */
+    defaultPaymentTermsDays: integer().notNull().default(30),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -228,6 +230,10 @@ export const organizationSettings = pgTable(
     check(
       "organization_settings_default_rate_check",
       sql`${t.defaultGstRateBps} is null or ${t.defaultGstRateBps} between 0 and 10000`
+    ),
+    check(
+      "organization_settings_payment_terms_check",
+      sql`${t.defaultPaymentTermsDays} between 0 and 365`
     ),
     check(
       "organization_settings_gstin_when_registered_check",
