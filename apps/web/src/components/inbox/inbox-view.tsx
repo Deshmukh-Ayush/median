@@ -28,6 +28,8 @@ import { cn } from "cn"
 
 import type { InboxActionResult, TaxEditsForm } from "@/app/(app)/inbox/actions"
 
+import { useAskSelection } from "@/components/ask/ask-selection"
+
 export interface InboxLineView {
   account: string
   amount: MoneyValue
@@ -120,6 +122,8 @@ export function InboxView({
   const [activeId, setActiveId] = React.useState<string | null>(
     rows[0]?.id ?? null
   )
+  // The Ask sheet answers about the item open in the panel.
+  useAskSelection(activeId)
   const [checked, setChecked] = React.useState<ReadonlySet<string>>(new Set())
   const [rejecting, setRejecting] = React.useState<InboxRowView | null>(null)
   const [pending, startTransition] = React.useTransition()

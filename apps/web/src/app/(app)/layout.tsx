@@ -1,5 +1,6 @@
 import { headers } from "next/headers"
 import Link from "next/link"
+import { Suspense } from "react"
 import { ArrowLeftRightIcon, LogOutIcon, UserPlusIcon } from "lucide-react"
 
 import { AppShell, TopBar } from "@workspace/ui/components/app-shell"
@@ -10,10 +11,12 @@ import { Toaster } from "@workspace/ui/components/sonner"
 import type { SidebarSection } from "@workspace/ui/components/sidebar"
 
 import { signOut } from "@/app/(auth)/actions"
+import { AskSelectionProvider } from "@/components/ask/ask-selection"
+import { AskSheet } from "@/components/ask/ask-sheet"
 import { AiTierBanner } from "@/components/shell/ai-tier-banner"
 import { AppCommandBar } from "@/components/shell/app-command-bar"
 import { AppSidebar } from "@/components/shell/app-sidebar"
-import { navigationFor } from "@/lib/navigation"
+import { canOpen, navigationFor } from "@/lib/navigation"
 import { ROLE_LABELS, can } from "@/lib/permissions"
 import { getAuth } from "@/server/auth"
 
@@ -83,53 +86,67 @@ export default async function AppLayout({
   ]
 
   return (
-    <AppShell
-      sidebar={
-        <AppSidebar
-          sections={sections}
-          header={
-            <Link href="/" aria-label="Median home" className="rounded-md">
-              <Logo />
-            </Link>
-          }
-          footer={
-            <div className="flex items-center gap-2 px-2 py-1">
-              <Link
-                href="/onboarding"
-                className="flex min-w-0 flex-1 flex-col rounded-md hover:text-fg"
-                title="Switch organisation"
-              >
-                <span className="truncate text-sm font-medium">
-                  {organizationName}
-                </span>
-                <span className="text-xs text-fg-secondary">
-                  {ROLE_LABELS[ctx.role]}
-                </span>
+    <AskSelectionProvider>
+      <AppShell
+        sidebar={
+          <AppSidebar
+            sections={sections}
+            header={
+              <Link href="/" aria-label="Median home" className="rounded-md">
+                <Logo />
               </Link>
-              <form action={signOut}>
-                <Button
-                  type="submit"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Sign out"
-                  title="Sign out"
+            }
+            footer={
+              <div className="flex items-center gap-2 px-2 py-1">
+                <Link
+                  href="/onboarding"
+                  className="flex min-w-0 flex-1 flex-col rounded-md hover:text-fg"
+                  title="Switch organisation"
                 >
-                  <LogOutIcon aria-hidden />
-                </Button>
-              </form>
-            </div>
-          }
-        />
-      }
-      topBar={
-        <TopBar actions={<AppCommandBar groups={commandGroups} />}>
-          <span className="truncate text-fg">{organizationName}</span>
-        </TopBar>
-      }
-    >
-      <AiTierBanner role={ctx.role} />
-      {children}
-      <Toaster />
-    </AppShell>
+                  <span className="truncate text-sm font-medium">
+                    {organizationName}
+                  </span>
+                  <span className="text-xs text-fg-secondary">
+                    {ROLE_LABELS[ctx.role]}
+                  </span>
+                </Link>
+                <form action={signOut}>
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Sign out"
+                    title="Sign out"
+                  >
+                    <LogOutIcon aria-hidden />
+                  </Button>
+                </form>
+              </div>
+            }
+          />
+        }
+        topBar={
+          <TopBar
+            actions={
+              <>
+                {canOpen(ctx.role, "/ask") ? (
+                  // useSearchParams: render on the client below a boundary.
+                  <Suspense fallback={null}>
+                    <AskSheet />
+                  </Suspense>
+                ) : null}
+                <AppCommandBar groups={commandGroups} />
+              </>
+            }
+          >
+            <span className="truncate text-fg">{organizationName}</span>
+          </TopBar>
+        }
+      >
+        <AiTierBanner role={ctx.role} />
+        {children}
+        <Toaster />
+      </AppShell>
+    </AskSelectionProvider>
   )
 }
