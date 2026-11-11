@@ -1,10 +1,10 @@
 "use client"
 
-import { useChat } from "@ai-sdk/react"
+import { Chat, useChat } from "@ai-sdk/react"
 import { DefaultChatTransport } from "ai"
 import type { UIMessage } from "ai"
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowUpIcon,
   CircleAlertIcon,
@@ -160,6 +160,21 @@ const transport = new DefaultChatTransport({
 })
 
 /**
+ * One Chat per conversation for the life of the tab, so closing the sheet,
+ * changing page or opening the same conversation on /ask keeps its messages
+ * (and an answer still streaming).
+ */
+const chats = new Map<string, Chat<UIMessage>>()
+function chatFor(id: string, initialMessages: readonly UIMessage[]) {
+  let chat = chats.get(id)
+  if (!chat) {
+    chat = new Chat({ id, messages: [...initialMessages], transport })
+    chats.set(id, chat)
+  }
+  return chat
+}
+
+/**
  * Ask Median's chat: questions, the steps taken to answer, the answer and
  * its sources. Used by /ask and the top-bar sheet; both talk to /api/ask.
  */
@@ -171,14 +186,19 @@ export function AskChat({
   onAnswered,
   onStart,
 }: AskChatProps) {
+  const [chat] = useState(() => chatFor(conversationId, initialMessages))
   const { messages, sendMessage, status, stop, error, regenerate } = useChat({
-    id: conversationId,
-    messages: [...initialMessages],
-    transport,
-    onFinish: () => onAnswered?.(),
+    chat,
   })
   const [input, setInput] = useState("")
   const busy = status === "submitted" || status === "streaming"
+
+  // An answer finished: busy → ready.
+  const wasBusy = useRef(busy)
+  useEffect(() => {
+    if (wasBusy.current && status === "ready") onAnswered?.()
+    wasBusy.current = busy
+  }, [busy, status, onAnswered])
 
   // Sent with each request, so the sheet always sends the page it's open on.
   const requestOptions = { body: pageContext ? { pageContext } : {} }
