@@ -1,0 +1,2 @@
+ALTER TABLE "organization_settings" ADD COLUMN "default_payment_terms_days" integer DEFAULT 30 NOT NULL;--> statement-breakpoint
+ALTER TABLE "organization_settings" ADD CONSTRAINT "organization_settings_payment_terms_check" CHECK ("organization_settings"."default_payment_terms_days" between 0 and 365);

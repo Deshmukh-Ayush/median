@@ -20,7 +20,7 @@ it("revenue by customer and stream, and the cash position", async () => {
   const db = getDb()
   await db
     .update(organizationSettings)
-    .set({ gstRegistered: true, gstin: "29ABCDE1234F1Z5", stateCode: "29" })
+    .set({ gstRegistered: true, gstin: "29ABCDE1234F1ZW", stateCode: "29" })
     .where(eq(organizationSettings.organizationId, ctx.orgId))
   const accounts = await db
     .select({ id: ledgerAccounts.id, code: ledgerAccounts.code })

@@ -39,6 +39,7 @@ const MATCH_LABELS: Record<
   razorpay_settlement: "Razorpay settlement",
   invoice_payment: "Invoice payment",
   known_vendor: "Known vendor",
+  bill_payment: "Bill payment",
 }
 
 export function BankStatementUpload({

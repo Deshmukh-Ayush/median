@@ -196,6 +196,9 @@ export function invoiceDocument({
           <View style={[s.box, s.half]}>
             <Text style={[s.bold, { marginBottom: 2 }]}>Bill to</Text>
             <Text>{invoice.party.name}</Text>
+            {invoice.party.address ? (
+              <Text>{invoice.party.address}</Text>
+            ) : null}
             <Text>GSTIN: {invoice.party.gstin ?? "Unregistered"}</Text>
           </View>
           <View style={[s.box, s.half]}>

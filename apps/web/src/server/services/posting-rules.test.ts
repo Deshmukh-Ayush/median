@@ -626,6 +626,82 @@ describe("bank lines", () => {
     })
   })
 
+  it("pays a vendor bill by its number, or the vendor's one bill of that amount", () => {
+    const vendors = [{ partyId: "lotus", name: "Lotus Peak Cloud" }]
+    const bill = {
+      id: "bill-118",
+      number: "LPC/118",
+      partyId: "lotus",
+      date: "2025-09-01",
+      outstanding: paise(11_800_00n),
+    }
+    const other = {
+      ...bill,
+      id: "bill-119",
+      number: "LPC/119",
+      outstanding: paise(5_900_00n),
+    }
+    // By number, even a part payment.
+    expect(
+      find("outflow", 5_000_00n, "NEFT LOTUS LPC/118", {
+        vendors,
+        bills: [bill, other],
+      })
+    ).toMatchObject({ kind: "bill", bill: { id: "bill-118" } })
+    // More than the bill's outstanding: not this bill.
+    expect(
+      find("outflow", 20_000_00n, "NEFT LPC/118", { bills: [bill] }).kind
+    ).toBe("none")
+    // No number: the vendor's one bill for exactly this amount.
+    const byAmount = find("outflow", 5_900_00n, "NEFT LOTUS PEAK CLOUD", {
+      vendors,
+      bills: [bill, other],
+    })
+    expect(byAmount).toMatchObject({ kind: "bill", bill: { id: "bill-119" } })
+    // A bill dated after the payment isn't a candidate.
+    expect(
+      find("outflow", 11_800_00n, "NEFT LPC/118", {
+        bills: [{ ...bill, date: "2025-10-01" }],
+      }).kind
+    ).toBe("none")
+    const d = bankLineRule(line("outflow", 5_900_00n), {
+      ...base,
+      match: byAmount,
+    })
+    expect(d).toMatchObject({ action: "post", billId: "bill-119" })
+    expect(lines(d as Decision)).toEqual({
+      "Dr payables": 5_900_00n,
+      "Cr hdfc": 5_900_00n,
+    })
+  })
+
+  it("confirms a bill payment recorded by hand instead of booking it again", () => {
+    const recorded = [
+      { entryId: "pay-1", amountPaise: 5_000_00n, date: "2025-09-20" },
+    ]
+    const match = find("outflow", 5_000_00n, "NEFT LOTUS", {
+      recordedPayments: recorded,
+    })
+    expect(match).toEqual({ kind: "recorded_payment", entryId: "pay-1" })
+    expect(
+      bankLineRule(line("outflow", 5_000_00n), { ...base, match })
+    ).toEqual({
+      action: "link",
+      entryId: "pay-1",
+    })
+    // Outside ±5 days, or two that fit: no guess.
+    expect(
+      find("outflow", 5_000_00n, "NEFT", {
+        recordedPayments: [{ ...recorded[0]!, date: "2025-09-10" }],
+      }).kind
+    ).toBe("none")
+    expect(
+      find("outflow", 5_000_00n, "NEFT", {
+        recordedPayments: [...recorded, { ...recorded[0]!, entryId: "pay-2" }],
+      }).kind
+    ).toBe("ambiguous")
+  })
+
   it("proposes known vendor payments and parks the rest in suspense", () => {
     const vendors = [{ partyId: "aws", name: "AWS India" }]
     const match = find("outflow", 11_800_00n, "UPI-AWS INDIA-PAYMENT", {
