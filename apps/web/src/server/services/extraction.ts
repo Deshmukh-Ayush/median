@@ -4,7 +4,7 @@ import {
   ServiceError,
   billExtractionSchema,
   billReviewSchema,
-  gstinSchema,
+  checkedGstinSchema,
   idSchema,
   parseInput,
 } from "@workspace/contracts"
@@ -98,7 +98,7 @@ async function resolveVendor(
   ctx: OrgContext,
   vendor: { readonly name: string; readonly gstin: string | null }
 ): Promise<{ partyId: string | null; isNew: boolean }> {
-  const gstin = gstinSchema.safeParse(vendor.gstin?.trim().toUpperCase())
+  const gstin = checkedGstinSchema.safeParse(vendor.gstin?.trim().toUpperCase())
   if (gstin.success) {
     const [found] = await tx
       .select({ id: parties.id })

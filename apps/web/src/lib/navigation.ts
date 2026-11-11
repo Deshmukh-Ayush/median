@@ -9,6 +9,7 @@ import {
   ReceiptIcon,
   SettingsIcon,
   TrendingUpIcon,
+  UsersIcon,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -86,6 +87,13 @@ export const NAVIGATION: readonly NavSection[] = [
         icon: ReceiptIcon,
         requires: READ_LEDGER,
         keywords: ["expenses", "vendors", "payables"],
+      },
+      {
+        label: "Customers and vendors",
+        href: "/parties",
+        icon: UsersIcon,
+        requires: READ_LEDGER,
+        keywords: ["parties", "clients", "suppliers", "gstin", "contacts"],
       },
     ],
   },

@@ -10,7 +10,9 @@ import { EmptyState } from "@workspace/ui/components/empty-state"
 import { InvoiceBuilder } from "@/components/invoices/invoice-builder"
 import type { SlabPeriod } from "@/components/invoices/invoice-builder"
 import { todayIso } from "@/lib/format-date"
+import type { SearchParams } from "@/lib/page-props"
 import { can } from "@/lib/permissions"
+import { idParam } from "@/lib/report-params"
 import { GST_RATES_BPS, getGstProfile, listParties } from "@/server/services"
 
 import { getPageContext } from "../../org-context"
@@ -30,8 +32,18 @@ const SLAB_PERIODS: readonly SlabPeriod[] = GST_SLAB_PERIODS.map((p) => ({
   slabsBps: p.slabsBps.filter((r) => ACCEPTED.has(r)),
 }))
 
-export default async function Page() {
-  const { ctx, allowed } = await getPageContext("/invoices")
+/** Adds a customer, then comes back here with them picked. */
+const NEW_CUSTOMER = `/parties/new?kind=customer&next=${encodeURIComponent("/invoices/new")}`
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}) {
+  const [{ ctx, allowed }, params] = await Promise.all([
+    getPageContext("/invoices"),
+    searchParams,
+  ])
   if (!allowed || !can(ctx.role, { resource: "ledger", action: "post" })) {
     return (
       <div className="flex flex-col gap-6 p-6">
@@ -57,15 +69,23 @@ export default async function Page() {
       <PageHeader
         title="New invoice"
         description="Tax and totals are worked out when you create it, from the place of supply and each line's rate."
+        actions={
+          <Link href={NEW_CUSTOMER} className={buttonVariants({ size: "sm" })}>
+            New customer
+          </Link>
+        }
       />
       {customers.items.length === 0 ? (
         <div className="rounded-lg border border-default bg-surface">
           <EmptyState
             title="No customers yet"
-            description="Customers appear here once you've added them or imported sales."
+            description="Add the customer you're billing, or import your sales from Tally."
             action={
-              <Link href="/invoices" className={buttonVariants({ size: "sm" })}>
-                Back to invoices
+              <Link
+                href={NEW_CUSTOMER}
+                className={buttonVariants({ variant: "primary", size: "sm" })}
+              >
+                Add a customer
               </Link>
             }
           />
@@ -82,6 +102,7 @@ export default async function Page() {
           orgStateCode={profile.stateCode}
           slabPeriods={SLAB_PERIODS}
           today={todayIso()}
+          initialCustomerId={idParam(params.customer)}
         />
       )}
     </div>

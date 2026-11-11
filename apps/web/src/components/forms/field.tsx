@@ -11,12 +11,15 @@ export function Field({
   hint,
   error,
   className,
+  inputClassName,
   ...inputProps
 }: Omit<React.ComponentProps<"input">, "name"> & {
   name: string
   label: string
   hint?: React.ReactNode
   error?: string | undefined
+  /** Classes for the input itself; `className` styles the wrapper. */
+  inputClassName?: string
 }) {
   const id = `field-${name}`
   const describedBy =
@@ -31,6 +34,7 @@ export function Field({
         name={name}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
+        className={inputClassName}
         {...inputProps}
       />
       {hint && !error ? (
