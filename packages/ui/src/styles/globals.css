@@ -239,6 +239,52 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Utilities shadcn's chat components (message-scroller, trace) expect. */
+
+/* A running step's title: a soft highlight sweeping across the text. */
+@utility shimmer {
+  background: linear-gradient(
+      90deg,
+      var(--text-tertiary) 0%,
+      var(--text-primary) 50%,
+      var(--text-tertiary) 100%
+    )
+    0 0 / 200% 100% text;
+  color: transparent;
+  animation: median-shimmer 1.6s linear infinite;
+}
+@utility shimmer-none {
+  background: none;
+  color: inherit;
+  animation: none;
+}
+@keyframes median-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* Fades the last 24px of a scroll area so cut-off content reads as more. */
+@utility scroll-fade-b {
+  mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent);
+}
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+@utility scrollbar-gutter-stable {
+  scrollbar-gutter: stable;
+}
+@utility scrollbar-thumb-transparent {
+  scrollbar-color: transparent transparent;
+}
+@utility scrollbar-track-transparent {
+  scrollbar-color: var(--border-default) transparent;
+}
+
 @layer base {
   * {
     @apply border-default;
