@@ -9,7 +9,7 @@ import { z } from "zod"
 import { askPageContextSchema } from "@/lib/ask-context"
 import type { AskPageContext } from "@/lib/ask-context"
 
-import { smartModel } from "../models"
+import { getAskModel } from "../models"
 import type { OrgContext } from "@/server/services"
 
 import { askInstructions } from "./instructions"
@@ -67,7 +67,7 @@ export interface AskInput {
 export async function ask(ctx: OrgContext, input: AskInput) {
   const tools = createAskTools(ctx)
   return streamText({
-    model: smartModel,
+    model: getAskModel(),
     instructions: askInstructions({
       today: input.today,
       role: ctx.role,
