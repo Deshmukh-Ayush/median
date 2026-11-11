@@ -1,6 +1,6 @@
 import "server-only"
 
-import { ServiceError } from "@workspace/contracts"
+import { ServiceError, gstinCheckCharOk } from "@workspace/contracts"
 import type { TallyImportReport } from "@workspace/contracts"
 import { formatInr, paise } from "@workspace/ledger"
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm"
@@ -293,7 +293,10 @@ async function createTargets(
               {
                 kind: t.partyKind,
                 name: t.name.slice(0, 200),
-                ...(t.gstin ? { gstin: t.gstin } : {}),
+                // A GSTIN with a typo is left off rather than failing the import.
+                ...(t.gstin && gstinCheckCharOk(t.gstin)
+                  ? { gstin: t.gstin }
+                  : {}),
               }
             )
           ).id
