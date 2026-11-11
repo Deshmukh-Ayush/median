@@ -134,6 +134,13 @@
       "when": 1794403826859,
       "tag": "0018_party_details",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794426718935,
+      "tag": "0019_bills_payables",
+      "breakpoints": true
     }
   ]
 }

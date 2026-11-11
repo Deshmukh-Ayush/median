@@ -1254,6 +1254,91 @@ export const deletionTombstones = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// Bills (payables). A bill is created when a vendor bill's inbox item is
+// approved; payments and advance adjustments are allocations against it.
+
+export const billAllocationKind = pgEnum("bill_allocation_kind", [
+  "payment",
+  "advance",
+])
+
+export const bills = pgTable(
+  "bills",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    partyId: uuid().notNull(),
+    /** The vendor's own bill number. */
+    number: text().notNull(),
+    billDate: isoDate().notNull(),
+    dueDate: isoDate().notNull(),
+    /** Owed to the vendor: the bill's credit to trade payables. */
+    totalPaise: paise().notNull(),
+    /** Paid or adjusted from advances so far. */
+    settledPaise: paise()
+      .notNull()
+      .default(sql`0`),
+    journalEntryId: uuid().notNull(),
+    inboxItemId: uuid(),
+    documentId: uuid(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("bills_org_id_uq").on(t.organizationId, t.id),
+    unique("bills_org_entry_uq").on(t.organizationId, t.journalEntryId),
+    foreignKey({
+      name: "bills_party_fk",
+      columns: [t.organizationId, t.partyId],
+      foreignColumns: [parties.organizationId, parties.id],
+    }),
+    foreignKey({
+      name: "bills_entry_fk",
+      columns: [t.organizationId, t.journalEntryId],
+      foreignColumns: [journalEntries.organizationId, journalEntries.id],
+    }),
+    index("bills_org_party_date_idx").on(
+      t.organizationId,
+      t.partyId,
+      t.billDate,
+      t.id
+    ),
+    index("bills_org_date_idx").on(t.organizationId, t.billDate, t.id),
+    check(
+      "bills_amounts_check",
+      sql`${t.totalPaise} > 0 and ${t.settledPaise} between 0 and ${t.totalPaise}`
+    ),
+  ]
+)
+
+export const billAllocations = pgTable(
+  "bill_allocations",
+  {
+    id: id(),
+    organizationId: organizationId(),
+    billId: uuid().notNull(),
+    kind: billAllocationKind().notNull(),
+    /** The payment or advance-adjustment entry. */
+    journalEntryId: uuid().notNull(),
+    amountPaise: paise().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "bill_allocations_bill_fk",
+      columns: [t.organizationId, t.billId],
+      foreignColumns: [bills.organizationId, bills.id],
+    }),
+    foreignKey({
+      name: "bill_allocations_entry_fk",
+      columns: [t.organizationId, t.journalEntryId],
+      foreignColumns: [journalEntries.organizationId, journalEntries.id],
+    }),
+    index("bill_allocations_org_bill_idx").on(t.organizationId, t.billId),
+    check("bill_allocations_amount_check", sql`${t.amountPaise} > 0`),
+  ]
+)
+
+// ---------------------------------------------------------------------------
 // Relations (for the relational query API)
 
 export const journalEntriesRelations = relations(

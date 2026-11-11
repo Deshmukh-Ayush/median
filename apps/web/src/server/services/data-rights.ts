@@ -70,6 +70,8 @@ const ORG_TABLES: readonly {
   { name: "credit_note_series", id: false },
   { name: "credit_notes", id: true },
   { name: "credit_note_lines", id: true },
+  { name: "bills", id: true },
+  { name: "bill_allocations", id: true },
   { name: "gst_rate_mappings", id: true },
   { name: "organization_default_gst_rates", id: true },
   // Credentials never leave the database, even encrypted.
@@ -241,6 +243,8 @@ const RETAINED = [
   "invoice_lines",
   "credit_notes",
   "credit_note_lines",
+  "bills",
+  "bill_allocations",
   "parties",
   "audit_log",
   "consents",
