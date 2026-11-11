@@ -10,6 +10,7 @@ import { Skeleton } from "@workspace/ui/components/skeleton"
 
 import { Journal } from "@/components/ledger/journal"
 import { TrialBalanceView } from "@/components/ledger/trial-balance"
+import { ExcelLink } from "@/components/reports/excel-link"
 import { LedgerTabs } from "@/components/ledger/ledger-tabs"
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import { todayIso } from "@/lib/format-date"
@@ -116,7 +117,7 @@ function JournalFilters({ filters }: { filters: JournalLink }) {
   )
 }
 
-function AsOfForm({ asOf }: { asOf: string }) {
+function AsOfForm({ asOf, canExport }: { asOf: string; canExport: boolean }) {
   return (
     <form
       action="/ledger"
@@ -131,6 +132,9 @@ function AsOfForm({ asOf }: { asOf: string }) {
       <button type="submit" className={buttonVariants()}>
         Show
       </button>
+      {canExport ? (
+        <ExcelLink params={{ report: "trial_balance", asOf }} />
+      ) : null}
     </form>
   )
 }
@@ -180,7 +184,10 @@ export default async function Page({
       />
       {showTb ? (
         <>
-          <AsOfForm asOf={asOf} />
+          <AsOfForm
+            asOf={asOf}
+            canExport={can(ctx.role, { resource: "report", action: "export" })}
+          />
           <Suspense key={asOf} fallback={<TableSkeleton />}>
             <TrialBalanceView ctx={ctx} asOf={asOf} />
           </Suspense>

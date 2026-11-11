@@ -189,3 +189,24 @@ export interface CashPosition {
   readonly heldByRazorpay: Money
   readonly accounts: readonly CashAccountPosition[]
 }
+
+// ---------------------------------------------------------------------------
+// Excel export
+
+/** Which report to download as .xlsx, with its dates. */
+export const reportExportInputSchema = z.discriminatedUnion("report", [
+  z.object({ report: z.literal("trial_balance"), asOf: isoDateSchema }),
+  z.object({
+    report: z.literal("profit_and_loss"),
+    from: isoDateSchema,
+    to: isoDateSchema,
+  }),
+  z.object({ report: z.literal("balance_sheet"), asOf: isoDateSchema }),
+  z.object({ report: z.literal("receivables_ageing") }),
+])
+export type ReportExportInput = z.input<typeof reportExportInputSchema>
+
+export interface ReportExport {
+  readonly fileName: string
+  readonly bytes: Uint8Array
+}
