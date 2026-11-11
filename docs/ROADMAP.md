@@ -17,9 +17,9 @@ LLMs read, classify, explain and propose rules, and do no arithmetic.
 
 ## Phase 0: direction and tracking
 
-| #   | Item                                                                 | Owner  | Branch                          | PR  | Status      |
-| --- | -------------------------------------------------------------------- | ------ | ------------------------------- | --- | ----------- |
-| 0   | Direction change in CLAUDE.md, this tracker, ledger invariant checks | Vedant | `chore/roadmap-earned-autonomy` |     | in progress |
+| #   | Item                                                                 | Owner  | Branch                          | PR                                                      | Status    |
+| --- | -------------------------------------------------------------------- | ------ | ------------------------------- | ------------------------------------------------------- | --------- |
+| 0   | Direction change in CLAUDE.md, this tracker, ledger invariant checks | Vedant | `chore/roadmap-earned-autonomy` | [#95](https://github.com/Deshmukh-Ayush/median/pull/95) | in review |
 
 ## Phase 1: unblock onboarding
 
