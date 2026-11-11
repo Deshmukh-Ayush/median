@@ -99,10 +99,19 @@ export {
   buildProfitAndLoss,
   buildTrialBalance,
   classifyAccount,
+  dayBefore,
   financialYearStart,
+  sameDayLastYear,
   isDebitNatured,
   naturalBalance,
   profitOf,
 } from "./reports"
 export type { SetOffResult, TaxHeads } from "./gst-setoff"
 export { setOffGst } from "./gst-setoff"
+export { buildCashFlow } from "./cash-flow"
+export type {
+  CashFlowAccount,
+  CashFlowLine,
+  CashFlowResult,
+  CashFlowSection,
+} from "./cash-flow"

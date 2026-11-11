@@ -14,7 +14,9 @@ import {
   buildProfitAndLoss,
   buildTrialBalance,
   classifyAccount,
+  dayBefore,
   financialYearStart,
+  sameDayLastYear,
 } from "./reports"
 import type { AccountType } from "./types"
 
@@ -186,6 +188,15 @@ describe("buildBalanceSheet", () => {
     )
     expect(bs.equityAndLiabilities[0]?.rows).toHaveLength(1)
     expect(bs.totalAssets).toBe(bs.totalEquityAndLiabilities)
+  })
+})
+
+describe("sameDayLastYear and dayBefore", () => {
+  it("steps back a year, and a day", () => {
+    expect(sameDayLastYear("2027-03-31")).toBe("2026-03-31")
+    expect(sameDayLastYear("2028-02-29")).toBe("2027-02-28")
+    expect(dayBefore("2026-04-01")).toBe("2026-03-31")
+    expect(dayBefore("2026-01-01")).toBe("2025-12-31")
   })
 })
 
