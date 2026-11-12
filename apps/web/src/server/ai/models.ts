@@ -71,6 +71,7 @@ const envSchema = z.object({
   AI_PROVIDER_TIER: z.enum(["paid", "free"]).optional().catch(undefined),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().trim().min(1).optional().catch(undefined),
   VERCEL_ENV: z.string().optional(),
 })
 
@@ -81,7 +82,9 @@ export function aiProviderStatusFrom(
   const e = envSchema.parse(env)
   const askProvider: AskProvider = e.AI_PROVIDER ?? "gemini"
   const askModel =
-    askProvider === "openrouter" ? OPENROUTER_ASK_MODEL_ID : SMART_MODEL_ID
+    askProvider === "openrouter"
+      ? (e.OPENROUTER_MODEL ?? OPENROUTER_ASK_MODEL_ID)
+      : SMART_MODEL_ID
   const askFallbackModels =
     askProvider === "openrouter" ? [...OPENROUTER_ASK_FALLBACK_IDS] : []
   const freeModel = [askModel, ...askFallbackModels].some((id) =>
@@ -154,7 +157,7 @@ export function getAskModel(
       ? createOpenRouter({
           // Read here, never logged.
           apiKey: env.OPENROUTER_API_KEY ?? "",
-        }).chat(OPENROUTER_ASK_MODEL_ID, {
+        }).chat(status.askModel, {
           models: [...OPENROUTER_ASK_FALLBACK_IDS],
           provider: {
             // Only providers that support every parameter we send (tools)…
