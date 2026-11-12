@@ -7,9 +7,10 @@ const labels = (role: Parameters<typeof navigationFor>[0]) =>
   navigationFor(role).flatMap((s) => s.items.map((i) => i.label))
 
 describe("navigation", () => {
-  it("lists the eleven destinations in order", () => {
+  it("lists the twelve destinations in order", () => {
     expect(NAVIGATION.flatMap((s) => s.items.map((i) => i.label))).toEqual([
       "Home",
+      "Ask Median",
       "AI inbox",
       "Revenue",
       "Cash",
@@ -25,7 +26,7 @@ describe("navigation", () => {
 
   it("shows owners, finance and CAs everything", () => {
     for (const role of ["owner", "finance", "ca"] as const) {
-      expect(labels(role)).toHaveLength(11)
+      expect(labels(role)).toHaveLength(12)
     }
   })
 
