@@ -42,7 +42,7 @@ import { outstandingOf } from "./invoice-build"
 import { creditInvoiceForRefund } from "./credit-notes"
 import { applyBillPayment } from "./bills"
 import { applyInvoiceReceipt } from "./invoices"
-import { postEntry } from "./ledger"
+import { postEntries, postEntry } from "./ledger"
 import {
   bankLineRule,
   feeRule,
@@ -659,6 +659,96 @@ async function decideAndApply(
   }
 }
 
+/** Records per bulk transaction when posting rule-matched records. */
+const POST_CHUNK = 200
+
+/**
+ * Posts plain "post" decisions (no invoice receipt or reversal) in
+ * chunks, each in one transaction with a fixed number of round trips: the
+ * entries in bulk, then every record marked posted in one UPDATE. If a chunk
+ * fails for any reason (a locked month, a record booked meanwhile), it rolls
+ * back and its records go through decideAndApply one by one, which sends
+ * refusals to the inbox as before.
+ */
+async function postInBulk(
+  orgId: string,
+  items: readonly { record: StoredRow; decision: BankDecision }[],
+  source: string,
+  tally: Tally
+): Promise<void> {
+  const bulk: {
+    record: StoredRow
+    decision: Extract<BankDecision, { action: "post" }>
+  }[] = []
+  const single: (typeof items)[number][] = []
+  for (const item of items) {
+    const d = item.decision
+    if (d.action === "post" && !d.invoiceId && !d.reversesEntryId)
+      bulk.push({ record: item.record, decision: d })
+    else single.push(item)
+  }
+  for (let i = 0; i < bulk.length; i += POST_CHUNK) {
+    const chunk = bulk.slice(i, i + POST_CHUNK)
+    try {
+      const posted = await withTransaction(async (tx) => {
+        const results = await postEntries(
+          tx,
+          { orgId, userId: null, source },
+          chunk.map(({ record, decision }) => ({
+            entryDate: decision.entry.entryDate,
+            narration: decision.entry.narration,
+            sourceType: record.kind === "bank_line" ? "bank" : "razorpay",
+            sourceId: record.id,
+            lines: decision.entry.lines.map((l, n) => ({
+              accountId: l.accountId,
+              partyId: l.partyId,
+              debit: l.debit,
+              credit: l.credit,
+              description: l.description,
+              dimensions: decision.dimensions?.[n] ?? null,
+            })),
+          }))
+        )
+        const pairs = chunk.map(({ record }, n) => ({
+          recordId: record.id,
+          entryId: results[n]?.id ?? "",
+        }))
+        const marked = await tx.execute(sql`
+          update ${sourceRecords} as s
+          set status = 'posted', journal_entry_id = v.entry_id::uuid
+          from (values ${sql.join(
+            pairs.map((p) => sql`(${p.recordId}::uuid, ${p.entryId}::uuid)`),
+            sql`, `
+          )}) as v(record_id, entry_id)
+          where s.organization_id = ${orgId}
+            and s.id = v.record_id
+            and s.status = 'new'
+          returning s.id
+        `)
+        // Someone else booked one of these meanwhile: roll back the chunk.
+        if (marked.rows.length !== chunk.length)
+          throw new ServiceError("CONFLICT", ALREADY_BOOKED)
+        return pairs
+      })
+      for (const p of posted) {
+        tally.posted++
+        tally.outcomes.set(p.recordId, {
+          status: "posted",
+          entryId: p.entryId,
+          inboxItemId: null,
+          matchKind: null,
+        })
+      }
+    } catch (error) {
+      if (!(error instanceof ServiceError)) throw error
+      for (const { record, decision } of chunk)
+        await decideAndApply(orgId, record, decision, source, tally)
+    }
+  }
+  for (const { record, decision } of single)
+    await decideAndApply(orgId, record, decision, source, tally)
+}
+
 async function openInvoicesByNumber(
   orgId: string,
   numbers: readonly string[]
@@ -758,6 +848,7 @@ export async function postNewRecords(
     ),
   ]
   const openInvoices = await openInvoicesByNumber(orgId, invoiceNumbers)
+  const decided: { record: StoredRow; decision: BankDecision }[] = []
   for (const record of payments) {
     let decision: Decision
     if (record.kind === "fee") {
@@ -782,8 +873,9 @@ export async function postNewRecords(
         }),
       })
     }
-    await decideAndApply(orgId, record, decision, source, tally)
+    decided.push({ record, decision })
   }
+  await postInBulk(orgId, decided, source, tally)
 
   // Phase 2: refunds, against their (now booked) payments.
   const refunds = await newRecords(orgId, connectionId, ["refund"])
