@@ -35,7 +35,9 @@ export function askSteps(message: UIMessage): AskStep[] {
           : "running"
     // While it runs: "Reading profit and loss…"; once done: "Read profit and loss".
     const shown =
-      status === "running" ? `${label.replace(/^Read /, "Reading ")}…` : label
+      status === "running"
+        ? `${label.replace(/^Read /, "Reading ").replace(/^Propose /, "Proposing ")}…`
+        : label
     return { id: part.toolCallId, label: shown, status }
   })
 }

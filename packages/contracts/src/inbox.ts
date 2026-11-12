@@ -7,7 +7,11 @@ import type { BillReview } from "./extraction"
 import type { ProposedEntryView } from "./proposed-entry"
 
 export type InboxItemKind =
-  "bill" | "bank_line" | "razorpay_record" | "settlement_gap"
+  | "bill"
+  | "bank_line"
+  | "razorpay_record"
+  | "settlement_gap"
+  | "ask_proposal"
 export type InboxStatus = "pending" | "approved" | "rejected"
 
 /**
@@ -53,7 +57,7 @@ export interface InboxItem {
   /** Why this needs a human, in plain words. */
   readonly reason: string
   readonly sourceRef: {
-    readonly type: "document" | "source_record"
+    readonly type: "document" | "source_record" | "conversation"
     readonly id: string
   }
   /** Signed, short-lived URL of the source document (bill, statement); null for API records. */
@@ -79,6 +83,8 @@ export interface InboxItem {
     readonly invoiceNumber: string
     readonly amount: Money
   } | null
+  /** ask_proposal only: the Ask Median conversation that proposed it. */
+  readonly conversationId?: string | null
   /** Set once approved and posted. */
   readonly postedEntryId: string | null
   readonly createdAt: IsoTimestamp
@@ -87,7 +93,13 @@ export interface InboxItem {
 export const listInboxFiltersSchema = z.object({
   status: z.enum(["pending", "approved", "rejected"]).default("pending"),
   kind: z
-    .enum(["bill", "bank_line", "razorpay_record", "settlement_gap"])
+    .enum([
+      "bill",
+      "bank_line",
+      "razorpay_record",
+      "settlement_gap",
+      "ask_proposal",
+    ])
     .optional(),
 })
 export type ListInboxFilters = z.input<typeof listInboxFiltersSchema>

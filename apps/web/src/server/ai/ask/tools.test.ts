@@ -39,13 +39,16 @@ beforeEach(() => {
 })
 
 describe("Ask Median tools", () => {
-  it("are exactly the read-only services from the spec, each labelled", () => {
-    expect(Object.keys(tools).sort()).toEqual(Object.keys(services).sort())
+  it("are the read-only services from the spec plus the two propose tools, each labelled", () => {
+    expect(Object.keys(tools).sort()).toEqual(
+      [...Object.keys(services), "proposeInvoice", "proposeJournal"].sort()
+    )
     expect(Object.keys(ASK_TOOL_LABELS).sort()).toEqual(
       Object.keys(tools).sort()
     )
     for (const name of Object.keys(tools)) {
-      expect(name).toMatch(/^(get|list)[A-Z]/)
+      // Reads, or proposals that only reach the inbox; nothing posts.
+      expect(name).toMatch(/^(get|list|propose)[A-Z]/)
     }
   })
 

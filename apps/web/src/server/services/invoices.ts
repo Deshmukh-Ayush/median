@@ -14,11 +14,13 @@ import type {
   Invoice,
   InvoiceLine,
   InvoiceListItem,
+  InboxGstSplit,
   InvoicePreview,
   ListInvoicesFilters,
   Page,
   PageOptions,
   PartyAgeing,
+  ProposedEntry,
   ReceivablesAgeing,
 } from "@workspace/contracts"
 import type { SystemAccountKey } from "@workspace/ledger"
@@ -59,6 +61,7 @@ import type { OrgContext } from "./context"
 import { assertCan } from "./context"
 import {
   buildInvoice,
+  gstSplitOf,
   documentNumber,
   invoiceStatusFor,
   outstandingOf,
@@ -306,6 +309,44 @@ async function nextInvoiceNumber(tx: Tx, orgId: string, fy: string) {
 }
 
 /**
+ * The entry createInvoice would post (Dr receivables, Cr revenue and output
+ * GST), as an inbox proposal, plus its GST split. Pure GST code
+ * (buildInvoice); saves nothing. Throws NOT_FOUND (customer), VALIDATION.
+ */
+export async function invoiceProposalEntry(
+  ctx: OrgContext,
+  input: CreateInvoiceInput,
+  customerName: string
+): Promise<{ entry: ProposedEntry; gst: InboxGstSplit }> {
+  assertCan(ctx, "ledger", "read")
+  const i = parseInput(createInvoiceInputSchema, input)
+  const db = getDb()
+  const [{ party, built }, accounts] = await Promise.all([
+    prepare(db, ctx.orgId, i),
+    salesAccounts(db, ctx.orgId),
+  ])
+  const lines = salesEntryLines("invoice", built, accounts, {
+    partyId: party.id,
+    documentId: "00000000-0000-0000-0000-000000000000",
+    number: "Invoice (number on approval)",
+  })
+  return {
+    entry: {
+      entryDate: i.invoiceDate,
+      narration: `Invoice to ${customerName}`,
+      lines: lines.map((l) => ({
+        accountId: l.accountId,
+        partyId: l.partyId ?? null,
+        debit: l.debit,
+        credit: l.credit,
+        description: l.description ?? null,
+      })),
+    },
+    gst: gstSplitOf(built),
+  }
+}
+
+/**
  * Creates and posts a sales invoice: next number in the financial-year
  * series (rule 5), CGST+SGST or IGST from the place of supply (rule 6), GST
  * per line and the total rounded to the rupee (rule 7). The entry (Dr
@@ -319,7 +360,24 @@ export async function createInvoice(
 ): Promise<Invoice> {
   assertCan(ctx, "ledger", "post")
   const i = parseInput(createInvoiceInputSchema, input)
-  const id = await withTransaction(async (tx) => {
+  const { id } = await withTransaction((tx) => insertInvoice(tx, ctx, i, "web"))
+  const invoice = await getInvoice(ctx, id)
+  if (!invoice) throw new Error("unreachable: invoice just created")
+  return invoice
+}
+
+/**
+ * createInvoice's writes inside the caller's transaction (e.g. approving an
+ * Ask Median proposal from the inbox). The caller checks the role.
+ */
+export async function insertInvoice(
+  tx: Tx,
+  ctx: OrgContext,
+  input: CreateInvoiceInput,
+  source: string
+): Promise<{ id: string; number: string; journalEntryId: string }> {
+  const i = parseInput(createInvoiceInputSchema, input)
+  {
     const [{ party, built }, accounts] = await Promise.all([
       prepare(tx, ctx.orgId, i),
       salesAccounts(tx, ctx.orgId),
@@ -400,13 +458,10 @@ export async function createInvoice(
         total: String(t.total),
         journalEntryId: entry.id,
       },
-      source: "web",
+      source,
     })
-    return invoiceId
-  })
-  const invoice = await getInvoice(ctx, id)
-  if (!invoice) throw new Error("unreachable: invoice just created")
-  return invoice
+    return { id: invoiceId, number, journalEntryId: entry.id }
+  }
 }
 
 const headerColumns = {

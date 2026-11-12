@@ -34,6 +34,7 @@ import type { AskToolName } from "@/lib/ask-tools"
 
 import { sources } from "./sources"
 import type { AskSource } from "./sources"
+import { createDraftTools } from "../tools/drafts"
 import { toModelJson } from "./to-model-json"
 import type { ModelJson } from "./to-model-json"
 
@@ -81,7 +82,13 @@ async function run<T>(
  * context. Each wraps one existing service, which checks the organisation and
  * the role itself. None of them posts, approves or changes anything.
  */
-export function createAskTools(ctx: OrgContext) {
+export function createAskTools(
+  ctx: OrgContext,
+  draft: { conversationId: string | null; today: string } = {
+    conversationId: null,
+    today: "",
+  }
+) {
   return {
     getDashboardSummary: tool({
       description:
@@ -256,6 +263,7 @@ export function createAskTools(ctx: OrgContext) {
           ]
         ),
     }),
+    ...createDraftTools(ctx, draft.conversationId, draft.today),
   }
 }
 

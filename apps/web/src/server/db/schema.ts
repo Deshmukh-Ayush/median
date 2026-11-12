@@ -155,11 +155,13 @@ export const inboxItemKind = pgEnum("inbox_item_kind", [
   "bank_line",
   "razorpay_record",
   "settlement_gap",
+  "ask_proposal",
 ])
 
 export const inboxSourceType = pgEnum("inbox_source_type", [
   "document",
   "source_record",
+  "conversation",
 ])
 
 export const inboxStatus = pgEnum("inbox_status", [
@@ -854,6 +856,10 @@ export const inboxItems = pgTable(
      * "create credit note". Approval never applies it as a receipt.
      */
     refundInvoiceId: uuid(),
+    /** ask_proposal only: what Ask Median proposed (AskProposal, paise strings). */
+    proposal: jsonb(),
+    /** ask_proposal only: the Ask conversation it came from. */
+    conversationId: text(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

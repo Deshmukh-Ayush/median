@@ -76,6 +76,7 @@ export async function POST(request: Request): Promise<Response> {
           const result = await ask(ctx, {
             messages,
             pageContext,
+            conversationId,
             today: todayIso(),
             abortSignal: request.signal,
           })

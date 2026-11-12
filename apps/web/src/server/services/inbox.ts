@@ -36,11 +36,13 @@ import { z } from "zod"
 import { getDb, withTransaction } from "../db"
 import type { Tx } from "../db"
 import {
+  auditLog,
   inboxItems,
   invoices,
   ledgerAccounts,
   parties,
   sourceRecords,
+  user,
 } from "../db/schema"
 import { recordApprovedBill } from "./bills"
 import type { OrgContext } from "./context"
@@ -48,7 +50,8 @@ import { assertCan } from "./context"
 import { documentPath } from "./documents"
 import { applyInboxEdits } from "./inbox-edits"
 import type { TaxAccounts } from "./inbox-edits"
-import { applyInvoiceReceipt } from "./invoices"
+import { askProposalSchema, toCreateInvoiceInput } from "./ask-proposal-schema"
+import { applyInvoiceReceipt, insertInvoice } from "./invoices"
 import { postEntry } from "./ledger"
 import { decodeCursor, encodeCursor } from "./pagination"
 import { encodeProposedEntry, toProposedEntryView } from "./proposed-entry"
@@ -95,6 +98,8 @@ const itemColumns = {
   postedEntryId: inboxItems.postedEntryId,
   invoiceId: inboxItems.invoiceId,
   refundInvoiceId: inboxItems.refundInvoiceId,
+  proposal: inboxItems.proposal,
+  conversationId: inboxItems.conversationId,
   createdAt: inboxItems.createdAt,
 }
 
@@ -104,7 +109,7 @@ interface ItemRow {
   readonly status: InboxItem["status"]
   readonly confidence: number
   readonly reason: string
-  readonly sourceType: "document" | "source_record"
+  readonly sourceType: "document" | "source_record" | "conversation"
   readonly sourceId: string
   readonly proposedEntry: unknown
   readonly gst: unknown
@@ -116,6 +121,8 @@ interface ItemRow {
   readonly postedEntryId: string | null
   readonly invoiceId: string | null
   readonly refundInvoiceId: string | null
+  readonly proposal: unknown
+  readonly conversationId: string | null
   readonly createdAt: Date
 }
 
@@ -277,6 +284,7 @@ async function viewsFor(
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
     reviewNote: row.reviewNote,
     refund: refundOf(row),
+    conversationId: row.conversationId,
     postedEntryId: row.postedEntryId,
     createdAt: row.createdAt.toISOString(),
   }))
@@ -423,27 +431,50 @@ export async function approveInboxItem(
       e,
       await taxAccounts(tx, ctx.orgId)
     )
-    const posted = await postEntry(
-      { orgId: ctx.orgId, userId: ctx.userId, source: "inbox" },
-      {
-        entryDate: edited.entry.entryDate,
-        narration: edited.entry.narration,
-        sourceType: "inbox",
-        sourceId: item.row.id,
-        lines: edited.entry.lines.map((l) => ({ ...l })),
-      },
-      { tx }
-    ).catch((error: unknown) => {
-      if (error instanceof ServiceError && error.code === "UNBALANCED")
-        throw new ServiceError(
-          "UNBALANCED",
-          e.gst || e.tds !== undefined || e.lines
-            ? "These edits don't balance. Check the amounts."
-            : "This entry doesn't balance. Check the amounts.",
-          error.details
-        )
-      throw error
-    })
+    // Ask Median invoice proposals become a real invoice (number, GST and
+    // entry from createInvoice's code); everything else posts the entry.
+    const ask =
+      item.row.kind === "ask_proposal"
+        ? askProposalSchema.parse(item.row.proposal)
+        : null
+    if (ask?.type === "invoice" && (e.gst || e.tds !== undefined || e.lines))
+      throw new ServiceError(
+        "VALIDATION",
+        "An invoice proposal can't be edited here. Reject it and ask again."
+      )
+    const posted =
+      ask?.type === "invoice"
+        ? {
+            id: (
+              await insertInvoice(
+                tx,
+                ctx,
+                toCreateInvoiceInput(ask),
+                "ask_proposal"
+              )
+            ).journalEntryId,
+          }
+        : await postEntry(
+            { orgId: ctx.orgId, userId: ctx.userId, source: "inbox" },
+            {
+              entryDate: edited.entry.entryDate,
+              narration: edited.entry.narration,
+              sourceType: "inbox",
+              sourceId: item.row.id,
+              lines: edited.entry.lines.map((l) => ({ ...l })),
+            },
+            { tx }
+          ).catch((error: unknown) => {
+            if (error instanceof ServiceError && error.code === "UNBALANCED")
+              throw new ServiceError(
+                "UNBALANCED",
+                e.gst || e.tds !== undefined || e.lines
+                  ? "These edits don't balance. Check the amounts."
+                  : "This entry doesn't balance. Check the amounts.",
+                error.details
+              )
+            throw error
+          })
     const [row] = await tx
       .update(inboxItems)
       .set({
@@ -460,6 +491,27 @@ export async function approveInboxItem(
       )
       .returning(itemColumns)
     if (!row) throw new ServiceError("CONFLICT", "Inbox item changed.")
+    if (ask) {
+      const [approver] = await tx
+        .select({ name: user.name })
+        .from(user)
+        .where(eq(user.id, ctx.userId))
+      await tx.insert(auditLog).values({
+        organizationId: ctx.orgId,
+        actorId: ctx.userId,
+        action: "inbox.approve_ask_proposal",
+        entity: "inbox_item",
+        entityId: item.row.id,
+        before: null,
+        after: {
+          note: `proposed by Ask Median (conversation ${item.row.conversationId ?? "unknown"}), approved by ${approver?.name ?? ctx.userId}`,
+          type: ask.type,
+          conversationId: item.row.conversationId,
+          journalEntryId: posted.id,
+        },
+        source: "ask_median",
+      })
+    }
     if (item.row.invoiceId)
       await applyInvoiceReceipt(
         tx,

@@ -169,6 +169,13 @@
       "when": 1794437879546,
       "tag": "0023_source_records_entry_index",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794476789992,
+      "tag": "0024_ask_proposals",
+      "breakpoints": true
     }
   ]
 }

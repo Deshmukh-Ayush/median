@@ -46,6 +46,7 @@ import type { AskPageContext } from "@/lib/ask-context"
 import { askSources, askSteps, askText } from "@/lib/ask-parts"
 
 import { AnswerText } from "./answer-text"
+import { ProposalCards } from "./proposal-card"
 
 export const ASK_SUGGESTIONS = [
   "How much money came in last month?",
@@ -124,6 +125,7 @@ function Answer({ message }: { message: UIMessage }) {
     <Message>
       <MessageContent>
         <Steps message={message} />
+        <ProposalCards message={message} />
         {text ? (
           <Bubble variant="ghost">
             <BubbleContent>

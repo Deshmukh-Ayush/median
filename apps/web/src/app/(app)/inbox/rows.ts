@@ -9,11 +9,13 @@ export const KIND_LABELS: Record<InboxItemKind, string> = {
   bank_line: "Bank line",
   razorpay_record: "Razorpay payment",
   settlement_gap: "Settlement gap",
+  ask_proposal: "Proposed by Ask Median",
 }
 
 const SOURCE_LABELS: Record<InboxItem["sourceRef"]["type"], string> = {
   document: "Source document",
   source_record: "Source record",
+  conversation: "Ask Median conversation",
 }
 
 /** "18%" from 1800 basis points; no rounding, it's integer division. */

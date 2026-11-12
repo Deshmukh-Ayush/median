@@ -3,7 +3,11 @@
 // so every rule here is unit-tested.
 
 import { ServiceError } from "@workspace/contracts"
-import type { InvoiceStatus, InvoiceSupplyType } from "@workspace/contracts"
+import type {
+  InboxGstSplit,
+  InvoiceStatus,
+  InvoiceSupplyType,
+} from "@workspace/contracts"
 import {
   computeDocument,
   formatInr,
@@ -487,4 +491,27 @@ export function planRefundCredit(
 
 function byIdRate(lines: readonly CreditableLine[], id: string): number {
   return lines.find((l) => l.id === id)?.gstRateBps ?? 0
+}
+
+/** The GST split behind a built invoice, as the inbox shows it. Pure. */
+export function gstSplitOf(built: {
+  readonly lines: readonly Pick<BuiltLine, "gstRateBps">[]
+  readonly totals: DocumentTotals
+  readonly supplyType: string
+}): InboxGstSplit {
+  const t = built.totals
+  const rates = new Set(built.lines.map((l) => l.gstRateBps))
+  return {
+    taxable: t.taxable,
+    cgst: t.cgst,
+    sgst: t.sgst,
+    igst: t.igst,
+    rateBps: rates.size === 1 ? ([...rates][0] ?? null) : null,
+    supplyType:
+      built.supplyType === "intrastate"
+        ? "intrastate"
+        : t.igst > 0n
+          ? "interstate"
+          : null,
+  }
 }

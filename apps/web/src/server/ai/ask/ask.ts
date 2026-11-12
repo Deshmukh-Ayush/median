@@ -56,6 +56,8 @@ export interface AskInput {
   readonly messages: readonly UIMessage[]
   readonly pageContext?: AskPageContext | undefined
   readonly today: IsoDate
+  /** Recorded on anything Ask Median proposes to the inbox. */
+  readonly conversationId?: string | undefined
   readonly abortSignal?: AbortSignal | undefined
 }
 
@@ -65,7 +67,10 @@ export interface AskInput {
  * quote comes from a service.
  */
 export async function ask(ctx: OrgContext, input: AskInput) {
-  const tools = createAskTools(ctx)
+  const tools = createAskTools(ctx, {
+    conversationId: input.conversationId ?? null,
+    today: input.today,
+  })
   // Server console only: no question text or figures, just shape and timing.
   const started = Date.now()
   let stepStarted = started
