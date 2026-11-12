@@ -20,6 +20,8 @@ import {
 import { formatDate } from "@/lib/format-date"
 import { getReceivablesAgeing } from "@/server/services"
 import type { OrgContext } from "@/server/services"
+import { ExcelLink } from "@/components/reports/excel-link"
+import { can } from "@/lib/permissions"
 
 const BUCKETS: readonly {
   key: Exclude<keyof AgeingBuckets, "total">
@@ -76,8 +78,11 @@ export async function ReceivablesAgeing({
         <h2 id="ageing" className="text-sm font-semibold">
           Owed to you
         </h2>
-        <span className="text-xs text-fg-secondary">
+        <span className="flex items-baseline gap-2 text-xs text-fg-secondary">
           Days past due, as of {formatDate(ageing.asOf)}
+          {can(ctx.role, { resource: "report", action: "export" }) ? (
+            <ExcelLink params={{ report: "receivables_ageing" }} />
+          ) : null}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">

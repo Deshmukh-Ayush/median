@@ -11,10 +11,12 @@ import {
   BalanceSheetView,
   ProfitAndLossView,
 } from "@/components/reports/financial-statements"
+import { ExcelLink } from "@/components/reports/excel-link"
 import { ViewTabs } from "@/components/reports/view-tabs"
 import { PlaceholderPage } from "@/components/shell/placeholder-page"
 import { todayIso } from "@/lib/format-date"
 import type { SearchParams } from "@/lib/page-props"
+import { can } from "@/lib/permissions"
 import { dateParam, financialYearStart, firstParam } from "@/lib/report-params"
 
 import { getPageContext } from "../org-context"
@@ -87,6 +89,7 @@ export default async function Page({
   // Default: this financial year to date. A 'from' after 'to' is ignored.
   const from = fromParam && fromParam <= to ? fromParam : financialYearStart(to)
   const asOf = dateParam(params.asOf) ?? today
+  const canExport = can(ctx.role, { resource: "report", action: "export" })
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -114,6 +117,9 @@ export default async function Page({
             <button type="submit" className={buttonVariants()}>
               Show
             </button>
+            {canExport ? (
+              <ExcelLink params={{ report: "balance_sheet", asOf }} />
+            ) : null}
           </form>
           <Suspense key={asOf} fallback={<StatementSkeleton />}>
             <BalanceSheetView
@@ -131,6 +137,9 @@ export default async function Page({
             <button type="submit" className={buttonVariants()}>
               Show
             </button>
+            {canExport ? (
+              <ExcelLink params={{ report: "profit_and_loss", from, to }} />
+            ) : null}
           </form>
           <Suspense key={`${from}:${to}`} fallback={<StatementSkeleton />}>
             <ProfitAndLossView ctx={ctx} from={from} to={to} />
