@@ -13,6 +13,7 @@
     "test": "vitest run",
     "eval:bills:generate": "vitest run --config evals/vitest.config.ts evals/bills/generate",
     "eval:bills": "vitest run --config evals/vitest.config.ts evals/bills/run",
+    "eval:ask": "vitest run --config evals/vitest.config.ts evals/ask/run",
     "analyze": "cross-env ANALYZE=true next build --webpack",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/migrate.ts",
