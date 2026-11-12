@@ -1,0 +1,127 @@
+{
+  "meta": {
+    "date": "2026-11-12",
+    "model": "openrouter nvidia/nemotron-3.5-super-vl, fallback google/gemma-4-31b-it:free (tier: free)",
+    "cases": "4 run of 4 planned (30 in the suite)",
+    "database": "ep-lucky-leaf-aogpumm9-pooler.c-2.ap-southeast-1.aws.neon.tech (dev-app), org devcheck-ask-eval-1794473086354, synthetic",
+    "cases with ground truth not found in the services": "none"
+  },
+  "results": [
+    {
+      "id": "pnl-revenue",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "What was our revenue in October 2026?",
+      "answer": "Your revenue in October 2026 was ₹2,00,000.00, all from subscription revenue ([Revenue, 1 Oct 2026 to 31 Oct 2026](/revenue?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getRevenueBreakdown"
+      ],
+      "expected": [
+        [
+          "₹2,00,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 3499,
+      "requests": 2,
+      "cost": 0.00110664,
+      "servedBy": [
+        "nvidia/nemotron-3.5-super-vl"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    },
+    {
+      "id": "pnl-net",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "Did we make a profit or a loss in October 2026, and how much?",
+      "answer": "You made a **loss of ₹52,000.00** in October 2026. Income was ₹2,00,000.00 and expenses were ₹2,52,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹52,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 3314,
+      "requests": 2,
+      "cost": 0.0019442700000000001,
+      "servedBy": [
+        "nvidia/nemotron-3.5-super-vl"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    },
+    {
+      "id": "pnl-rent",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "How much did we spend on rent in October 2026?",
+      "answer": "You spent ₹40,000.00 on rent in October 2026 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹40,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 3922,
+      "requests": 2,
+      "cost": 0.0013125699999999999,
+      "servedBy": [
+        "nvidia/nemotron-3.5-super-vl"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    },
+    {
+      "id": "pnl-salaries",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "What did salaries cost us in October 2026?",
+      "answer": "Salaries cost ₹2,00,000.00 in October 2026, under \"Salaries and wages\" in employee benefits expense ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹2,00,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 2433,
+      "requests": 2,
+      "cost": 0.0009242499999999999,
+      "servedBy": [
+        "nvidia/nemotron-3.5-super-vl"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    }
+  ]
+}

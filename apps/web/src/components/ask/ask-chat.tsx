@@ -212,7 +212,15 @@ export function AskChat({
   }
 
   const last = messages.at(-1)
-  const waiting = status === "submitted" || (busy && last?.role === "user")
+  // Nothing visibly moving (before the first tool, or the model thinking
+  // between steps): show a spinner so the wait feels alive.
+  const waiting =
+    status === "submitted" ||
+    (busy &&
+      (last?.role === "user" ||
+        (last !== undefined &&
+          askText(last) === "" &&
+          !askSteps(last).some((s) => s.status === "running"))))
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -259,7 +267,7 @@ export function AskChat({
                         <TraceIcon>
                           <Spinner />
                         </TraceIcon>
-                        <TraceTitle>Reading your books</TraceTitle>
+                        <TraceTitle>Reading your books…</TraceTitle>
                       </TraceLine>
                     </Trace>
                   </MessageScrollerItem>

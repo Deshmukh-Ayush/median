@@ -66,6 +66,9 @@ export interface AskInput {
  */
 export async function ask(ctx: OrgContext, input: AskInput) {
   const tools = createAskTools(ctx)
+  // Server console only: no question text or figures, just shape and timing.
+  const started = Date.now()
+  let stepStarted = started
   return streamText({
     model: getAskModel(),
     instructions: askInstructions({
@@ -78,6 +81,38 @@ export async function ask(ctx: OrgContext, input: AskInput) {
     stopWhen: isStepCount(MAX_STEPS),
     temperature: 0,
     timeout: TIMEOUT,
+    onStepEnd: (step) => {
+      const now = Date.now()
+      console.info("[ask] step", {
+        model: step.response.modelId,
+        finishReason: step.finishReason,
+        inputTokens: step.usage.inputTokens,
+        outputTokens: step.usage.outputTokens,
+        reasoningTokens: step.usage.outputTokenDetails.reasoningTokens,
+        tools: step.toolCalls.map((c) => c.toolName),
+        textChars: step.text.length,
+        ms: now - stepStarted,
+      })
+      stepStarted = now
+    },
+    onEnd: (end) => {
+      console.info("[ask] done", {
+        finishReason: end.finishReason,
+        steps: end.steps.length,
+        inputTokens: end.totalUsage.inputTokens,
+        outputTokens: end.totalUsage.outputTokens,
+        textChars: end.text.length,
+        ms: Date.now() - started,
+      })
+    },
     ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
   })
+}
+
+/** Shown instead of a blank bubble when the model gives no usable answer. */
+export const ASK_EMPTY_ANSWER = "I couldn't find that. Try rephrasing."
+
+/** A usable answer: some text, and the model stopped on its own. */
+export function isCompleteAnswer(text: string, finishReason: string): boolean {
+  return text.trim().length > 0 && finishReason === "stop"
 }

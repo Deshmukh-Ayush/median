@@ -63,7 +63,7 @@ describe("Ask message parts", () => {
     expect(askSteps(answer)).toEqual([
       { id: "t1", label: "Read profit and loss", status: "done" },
       { id: "t2", label: "Read the trial balance", status: "error" },
-      { id: "t3", label: "Read customers and vendors", status: "running" },
+      { id: "t3", label: "Reading customers and vendors…", status: "running" },
       { id: "t4", label: "Read invoices", status: "done" },
     ])
   })

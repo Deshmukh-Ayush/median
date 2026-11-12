@@ -72,6 +72,15 @@ const envSchema = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().trim().min(1).optional().catch(undefined),
+  OPENROUTER_REASONING_EFFORT: z
+    .enum(["none", "minimal", "low", "medium", "high"])
+    .catch("low"),
+  OPENROUTER_MAX_TOKENS: z.coerce
+    .number()
+    .int()
+    .min(256)
+    .max(32_000)
+    .catch(8192),
   VERCEL_ENV: z.string().optional(),
 })
 
@@ -152,6 +161,7 @@ export function getAskModel(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): LanguageModel {
   const status = aiProviderStatusFrom(env)
+  const e = envSchema.parse(env)
   const model =
     status.askProvider === "openrouter"
       ? createOpenRouter({
@@ -168,6 +178,10 @@ export function getAskModel(
           },
           // Report tokens and cost (providerMetadata.openrouter.usage).
           usage: { include: true },
+          // Reasoning models can spend the whole budget thinking and return
+          // no text: keep thinking short and leave room for the answer.
+          reasoning: { effort: e.OPENROUTER_REASONING_EFFORT },
+          maxTokens: e.OPENROUTER_MAX_TOKENS,
         })
       : google(SMART_MODEL_ID)
   const gapMs = gapSchema.parse(env.AI_MIN_REQUEST_GAP_MS ?? 0)

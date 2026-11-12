@@ -447,7 +447,12 @@ it("Ask Median answers from the books", async () => {
   process.env["AI_MIN_REQUEST_GAP_MS"] ??= String(GAP_MS)
   // ASK_EVAL_LIMIT=5: only the first N questions.
   const limit = Number(env("ASK_EVAL_LIMIT") ?? CASES.length)
-  const cases = CASES.slice(
+  // ASK_EVAL_IDS=pnl-rent,pnl-net: only these cases (then ASK_EVAL_LIMIT).
+  const ids = env("ASK_EVAL_IDS")
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const cases = CASES.filter((c) => !ids?.length || ids.includes(c.id)).slice(
     0,
     Number.isInteger(limit) && limit > 0 ? limit : CASES.length
   )

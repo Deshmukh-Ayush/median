@@ -1,12 +1,18 @@
 import { isServiceError } from "@workspace/contracts"
 import {
   createIdGenerator,
+  createUIMessageStream,
   createUIMessageStreamResponse,
   toUIMessageStream,
 } from "ai"
 
 import { todayIso } from "@/lib/format-date"
-import { ask, askRequestSchema } from "@/server/ai/ask/ask"
+import {
+  ASK_EMPTY_ANSWER,
+  ask,
+  askRequestSchema,
+  isCompleteAnswer,
+} from "@/server/ai/ask/ask"
 import {
   getAskConversation,
   saveAskConversation,
@@ -16,6 +22,9 @@ import { requireOrgContext } from "@/server/services"
 
 // A question can take a few tool rounds.
 export const maxDuration = 60
+
+/** One retry when the model ends without a usable answer. */
+const ATTEMPTS = 2
 
 function errorResponse(status: number, message: string): Response {
   return Response.json(
@@ -53,19 +62,50 @@ export async function POST(request: Request): Promise<Response> {
   const history = getAskConversation(ctx, conversationId)?.messages ?? []
   const messages = [...history, message]
 
-  const result = await ask(ctx, {
-    messages,
-    pageContext,
-    today: todayIso(),
-    abortSignal: request.signal,
-  })
-
   return createUIMessageStreamResponse({
     headers: { "Cache-Control": "no-store" },
-    stream: toUIMessageStream({
-      stream: result.stream,
+    stream: createUIMessageStream({
       originalMessages: messages,
-      generateMessageId: createIdGenerator({ prefix: "ask", size: 16 }),
+      generateId: createIdGenerator({ prefix: "ask", size: 16 }),
+      execute: async ({ writer }) => {
+        writer.write({ type: "start" })
+        // An empty or cut-off answer (a reasoning model that spent its
+        // budget thinking) is retried once, then replaced by a plain
+        // message, never a blank bubble.
+        for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+          const result = await ask(ctx, {
+            messages,
+            pageContext,
+            today: todayIso(),
+            abortSignal: request.signal,
+          })
+          writer.merge(
+            toUIMessageStream({
+              stream: result.stream,
+              sendStart: false,
+              sendFinish: false,
+            })
+          )
+          const [text, finishReason] = await Promise.all([
+            result.text,
+            result.finishReason,
+          ])
+          if (isCompleteAnswer(text, finishReason)) break
+          console.warn("[ask] incomplete answer", {
+            attempt,
+            finishReason,
+            textChars: text.trim().length,
+          })
+          if (attempt === ATTEMPTS) {
+            const id = "ask-empty"
+            writer.write({ type: "text-start", id })
+            writer.write({ type: "text-delta", id, delta: ASK_EMPTY_ANSWER })
+            writer.write({ type: "text-end", id })
+          }
+        }
+        writer.write({ type: "finish" })
+        writer.setOutcome({ status: "completed" })
+      },
       onEnd: ({ messages: all }) => {
         saveAskConversation(ctx, conversationId, all)
       },

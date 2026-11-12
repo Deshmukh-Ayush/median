@@ -33,7 +33,10 @@ export function askSteps(message: UIMessage): AskStep[] {
         : part.state === "output-available"
           ? "done"
           : "running"
-    return { id: part.toolCallId, label, status }
+    // While it runs: "Reading profit and loss…"; once done: "Read profit and loss".
+    const shown =
+      status === "running" ? `${label.replace(/^Read /, "Reading ")}…` : label
+    return { id: part.toolCallId, label: shown, status }
   })
 }
 

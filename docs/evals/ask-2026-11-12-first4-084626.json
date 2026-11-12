@@ -1,0 +1,127 @@
+{
+  "meta": {
+    "date": "2026-11-12",
+    "model": "openrouter google/gemini-3.8-flash, fallback google/gemma-4-31b-it:free (tier: free)",
+    "cases": "4 run of 4 planned (30 in the suite)",
+    "database": "ep-lucky-leaf-aogpumm9-pooler.c-2.ap-southeast-1.aws.neon.tech (dev-app), org devcheck-ask-eval-1794473145352, synthetic",
+    "cases with ground truth not found in the services": "none"
+  },
+  "results": [
+    {
+      "id": "pnl-revenue",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "What was our revenue in October 2026?",
+      "answer": "Your revenue from operations in October 2026 was ₹2,00,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)), coming entirely from Subscription revenue of ₹2,00,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)). Total income was ₹2,00,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹2,00,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 5927,
+      "requests": 2,
+      "cost": 0.006600075,
+      "servedBy": [
+        "google/gemini-3.8-flash"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    },
+    {
+      "id": "pnl-net",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "Did we make a profit or a loss in October 2026, and how much?",
+      "answer": "You made a loss in October 2026, with a net profit of -₹52,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)). Total income was ₹2,00,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)) against total expenses of ₹2,52,000.00 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹52,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 5496,
+      "requests": 2,
+      "cost": 0.006614175,
+      "servedBy": [
+        "google/gemini-3.8-flash"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    },
+    {
+      "id": "pnl-rent",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "How much did we spend on rent in October 2026?",
+      "answer": "You spent ₹40,000.00 on rent in October 2026 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹40,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 4641,
+      "requests": 2,
+      "cost": 0.00607755,
+      "servedBy": [
+        "google/gemini-3.8-flash"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    },
+    {
+      "id": "pnl-salaries",
+      "topic": "P&L",
+      "kind": "figure",
+      "question": "What did salaries cost us in October 2026?",
+      "answer": "Salaries and wages cost ₹2,00,000.00 in October 2026 ([Profit and loss, 1 Oct 2026 to 31 Oct 2026](/reports?from=2026-10-01&to=2026-10-31)).",
+      "tools": [
+        "getProfitAndLoss"
+      ],
+      "expected": [
+        [
+          "₹2,00,000.00"
+        ]
+      ],
+      "truthOk": true,
+      "error": null,
+      "ms": 4864,
+      "requests": 2,
+      "cost": 0.0060871499999999995,
+      "servedBy": [
+        "google/gemini-3.8-flash"
+      ],
+      "correct": true,
+      "nearMiss": false,
+      "cited": true,
+      "unsupported": [],
+      "inventedLinks": [],
+      "pass": true
+    }
+  ]
+}
